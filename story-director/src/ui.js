@@ -71,23 +71,37 @@ export function mountUI(ctx, adapter) {
 }
 
 export function bindUI(ctx, adapter) {
-    document.getElementById('sd_enabled')?.addEventListener('change', (e) => {
+    const enabledEl = document.getElementById('sd_enabled');
+    if (enabledEl) enabledEl.checked = !!adapter.settings.enabled;
+    enabledEl?.addEventListener('change', (e) => {
         adapter.settings.enabled = e.target.checked;
         ctx.saveSettingsDebounced?.();
         adapter.director.refreshInjection();
     });
     document.getElementById('sd_generate')?.addEventListener('click', async () => {
-        await adapter.director.generate({ userRequest: '' });
-        adapter.renderOutline();
+        try {
+            await adapter.director.generate({ userRequest: '' });
+            adapter.renderOutline();
+        } catch (e) {
+            renderReport({ verdict: 'major-drift', changed: false, reason: `生成失败：${e?.message || e}` });
+        }
     });
     document.getElementById('sd_revise')?.addEventListener('click', async () => {
-        await adapter.director.revise();
-        adapter.renderOutline();
+        try {
+            await adapter.director.revise();
+            adapter.renderOutline();
+        } catch (e) {
+            renderReport({ verdict: 'major-drift', changed: false, reason: `修订失败：${e?.message || e}` });
+        }
     });
     document.getElementById('sd_check')?.addEventListener('click', async () => {
-        const report = await adapter.director.check();
-        renderReport(report);
-        adapter.renderOutline();
+        try {
+            const report = await adapter.director.check();
+            renderReport(report);
+            adapter.renderOutline();
+        } catch (e) {
+            renderReport({ verdict: 'major-drift', changed: false, reason: `体检失败：${e?.message || e}` });
+        }
     });
     document.getElementById('sd_clear')?.addEventListener('click', () => {
         adapter.setOutline(createEmptyOutline());
