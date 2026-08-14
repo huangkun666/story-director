@@ -1,0 +1,63 @@
+// story-director/test/prompts.test.js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+    OUTLINE_SCHEMA, CHECK_SCHEMA,
+    buildGeneratePrompt, buildRevisePrompt, buildCheckPrompt, buildDirectorInstruction,
+} from '../src/prompts.js';
+import { createEmptyOutline } from '../src/outline-store.js';
+
+test('OUTLINE_SCHEMA describes required top-level fields', () => {
+    assert.equal(OUTLINE_SCHEMA.type, 'object');
+    const required = OUTLINE_SCHEMA.required;
+    assert.ok(required.includes('theme'));
+    assert.ok(required.includes('beats'));
+    assert.ok(required.includes('focus'));
+});
+
+test('CHECK_SCHEMA describes verdict and changed', () => {
+    const required = CHECK_SCHEMA.required;
+    assert.ok(required.includes('verdict'));
+    assert.ok(required.includes('changed'));
+});
+
+test('buildGeneratePrompt includes character card and user request', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: { name: 'Alice', description: 'a witch' },
+        userRequest: '悲剧结局',
+        detail: 'medium',
+    });
+    assert.ok(prompt.includes('Alice'));
+    assert.ok(prompt.includes('a witch'));
+    assert.ok(prompt.includes('悲剧结局'));
+});
+
+test('buildRevisePrompt includes dialogue and outline', () => {
+    const o = createEmptyOutline();
+    o.theme = '复仇';
+    const { prompt } = buildRevisePrompt({ recentDialogue: 'A: 你好', outline: o });
+    assert.ok(prompt.includes('你好'));
+    assert.ok(prompt.includes('复仇'));
+});
+
+test('buildCheckPrompt includes dialogue and outline', () => {
+    const o = createEmptyOutline();
+    o.world = '魔法大陆';
+    const { prompt } = buildCheckPrompt({ recentDialogue: 'B: 再见', outline: o });
+    assert.ok(prompt.includes('再见'));
+    assert.ok(prompt.includes('魔法大陆'));
+});
+
+test('buildDirectorInstruction includes focus fields and strength', () => {
+    const o = createEmptyOutline();
+    o.focus.currentBeat = 'b1';
+    o.focus.nextStep = '进入森林';
+    o.focus.activeForeshadow = ['f1'];
+    o.focus.avoidOffTopic = '别聊天气';
+    const s = buildDirectorInstruction(o, 'strong');
+    assert.ok(s.includes('b1'));
+    assert.ok(s.includes('进入森林'));
+    assert.ok(s.includes('f1'));
+    assert.ok(s.includes('别聊天气'));
+    assert.ok(s.includes('必须'));
+});
