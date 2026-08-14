@@ -27,10 +27,17 @@ test('stripCodeFence removes surrounding fences', () => {
 });
 
 test('makeStructuredGenerator returns parsed object on success', async () => {
-    const fakeGen = async () => '{"theme":"X"}';
-    const gen = makeStructuredGenerator(fakeGen, { type: 'object' });
+    let received = null;
+    const fakeGen = async (args) => { received = args; return '{"theme":"X"}'; };
+    const schema = { type: 'object' };
+    const gen = makeStructuredGenerator(fakeGen, schema);
     const r = await gen({ system: 's', prompt: 'p' });
     assert.deepEqual(r, { theme: 'X' });
+    assert.equal(received.prompt, 'p');
+    assert.equal(received.systemPrompt, 's');
+    assert.equal(received.jsonSchema.name, 'story_director_output');
+    assert.equal(received.jsonSchema.value, schema);
+    assert.equal(received.jsonSchema.strict, true);
 });
 
 test('makeStructuredGenerator returns null on parse failure', async () => {
