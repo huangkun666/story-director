@@ -22,9 +22,10 @@ import { mountUI, bindUI } from './src/ui.js';
     }
 
     async function bootstrap() {
+        if (adapter) return; // 防止 APP_READY 与兜底重试双重初始化
         const ctx = getCtx();
         if (!ctx) {
-            console.warn('[story-director] SillyTavern context not ready, retrying on APP_READY.');
+            console.warn('[story-director] SillyTavern context not ready yet; will retry via APP_READY/DOM fallback.');
             return;
         }
         ensureSettings(ctx);
@@ -107,16 +108,16 @@ import { mountUI, bindUI } from './src/ui.js';
         }));
     }
 
-    // 等待酒馆就绪
-    const es = window.SillyTavern?.getContext?.()?.eventSource;
+    // 等待酒馆就绪（bootstrap 内部有 adapter 守卫，重复触发安全）
+    const es = getCtx()?.eventSource;
     if (es) {
-        const et = window.SillyTavern.getContext().eventTypes || window.SillyTavern.getContext().event_types;
+        const et = getCtx().eventTypes || getCtx().event_types;
         es.on(et.APP_READY, bootstrap);
     }
     // 兜底：DOM 就绪后重试
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => { if (!adapter) bootstrap(); }, { once: true });
+        document.addEventListener('DOMContentLoaded', () => bootstrap(), { once: true });
     } else {
-        setTimeout(() => { if (!adapter) bootstrap(); }, 500);
+        setTimeout(() => bootstrap(), 500);
     }
 })();

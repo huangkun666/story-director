@@ -58,16 +58,16 @@ function renderReport(report) {
 export function mountUI(ctx, adapter) {
     const target = document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
     if (!target) return;
-    if (document.getElementById('story_director_panel')) return;
 
-    target.insertAdjacentHTML('beforeend', `<!-- 面板由 settings.html 通过模板加载（见 index.js 组装） -->`);
-    // 实际面板 HTML 由 index.js 用 renderExtensionTemplateAsync 注入，此处仅注册渲染回调与事件
+    // 注册渲染回调必须在面板已存在的守卫之前，否则 index.js 注入面板后回调永远不被注册
     adapter.setRenderCallback((outline) => {
         renderOverview(outline);
         renderFocus(outline);
     });
 
-    // 事件绑定由 index.js 在模板注入后调用 bindUI
+    if (document.getElementById('story_director_panel')) return;
+
+    target.insertAdjacentHTML('beforeend', `<!-- 面板由 settings.html 通过模板加载（见 index.js 组装） -->`);
 }
 
 export function bindUI(ctx, adapter) {
