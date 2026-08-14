@@ -43,7 +43,6 @@ import { mountUI, bindUI } from './src/ui.js';
 
         mountUI(ctx, adapter);
         bindUI(ctx, adapter);
-        adapter.setRenderCallback(() => { /* renderOutline 内部已用 */ });
         adapter.load();
 
         // 每轮发言后异步修订
