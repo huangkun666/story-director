@@ -93,7 +93,7 @@ export function createSillyTavernAdapter(ctx) {
         getSettings: () => settings,
         getRecentDialogue,
         getCharacterCard,
-        renderOutline: () => { /* 由 ui 层注入回调覆盖 */ },
+        renderOutline,
     });
 
     function renderOutline() {
@@ -110,7 +110,7 @@ export function createSillyTavernAdapter(ctx) {
         settings,
         getOutline,
         setOutline,
-        load: () => { director.refreshInjection(); setRenderCallback && 0; },
+        load: () => { director.refreshInjection(); renderOutline(); },
         save: () => { director.refreshInjection(); },
         getCharacterCard,
         getRecentDialogue,
