@@ -47,16 +47,16 @@ test('director.generate writes outline and refreshes', async () => {
 });
 
 test('director.revise skips when already running (concurrency guard)', async () => {
-    let running = true;
     const { deps } = makeDeps({
         generateRaw: async () => { await new Promise(r => setTimeout(r, 20)); return JSON.stringify(createEmptyOutline()); },
     });
     const d = createDirector(deps);
     const p1 = d.revise();
-    running = false;
     const p2 = d.revise();
-    await Promise.all([p1, p2]);
-    assert.equal(deps.getOutline().meta.revisionCount, 1); // 第二次被并发守卫丢弃
+    const r1 = await p1;
+    const r2 = await p2;
+    assert.notEqual(r1, null);
+    assert.equal(r2, null); // 第二次被并发守卫丢弃
 });
 
 test('director.revise keeps old outline when LLM returns null', async () => {
@@ -65,4 +65,36 @@ test('director.revise keeps old outline when LLM returns null', async () => {
     const before = deps.getOutline();
     await d.revise();
     assert.equal(deps.getOutline(), before);
+});
+
+test('director.check applies modified outline when changed is true', async () => {
+    const calls = [];
+    const newOutline = createEmptyOutline();
+    newOutline.theme = 'updated';
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            verdict: 'major-drift',
+            changed: true,
+            changes: '调整主题',
+            reason: '剧情已偏离',
+            updatedOutline: newOutline,
+        }),
+    });
+    deps.renderOutline = () => { calls.push('render'); };
+    const d = createDirector(deps);
+    const report = await d.check();
+    assert.equal(report.verdict, 'major-drift');
+    assert.equal(report.changed, true);
+    assert.equal(deps.getOutline().theme, 'updated');
+    assert.ok(calls.includes('render'));
+});
+
+test('director.check keeps outline and reports sync on null result', async () => {
+    const { deps } = makeDeps({ generateRaw: async () => 'garbage' });
+    const before = deps.getOutline();
+    const d = createDirector(deps);
+    const report = await d.check();
+    assert.equal(deps.getOutline(), before);
+    assert.equal(report.verdict, 'sync');
+    assert.equal(report.changed, false);
 });
