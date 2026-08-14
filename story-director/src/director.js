@@ -75,6 +75,10 @@ export function createDirector(deps) {
             const outline = deps.getOutline();
             const bundle = buildCheckPrompt({ recentDialogue: dialogue, outline });
             const report = await genCheck(bundle);
+            if (!report) {
+                refreshInjection();
+                return null; // LLM 调用失败，信号与 generate/revise 一致
+            }
             const { outline: updated, report: normalizedReport } = applyCheckResult(outline, report);
             if (normalizedReport.changed) {
                 deps.setOutline(updated);

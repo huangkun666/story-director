@@ -37,7 +37,7 @@ test('makeStructuredGenerator returns parsed object on success', async () => {
     assert.equal(received.systemPrompt, 's');
     assert.equal(received.jsonSchema.name, 'story_director_output');
     assert.equal(received.jsonSchema.value, schema);
-    assert.equal(received.jsonSchema.strict, true);
+    assert.equal(received.jsonSchema.strict, false);
 });
 
 test('makeStructuredGenerator returns null on parse failure', async () => {

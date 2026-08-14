@@ -38,7 +38,7 @@ export function makeStructuredGenerator(generateRaw, schema) {
                     name: 'story_director_output',
                     description: 'Structured output for story-director',
                     value: schema,
-                    strict: true,
+                    strict: false,
                 },
             });
             return extractJson(result);

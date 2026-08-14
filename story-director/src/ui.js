@@ -80,7 +80,10 @@ export function bindUI(ctx, adapter) {
     });
     document.getElementById('sd_generate')?.addEventListener('click', async () => {
         try {
-            await adapter.director.generate({ userRequest: '' });
+            const r = await adapter.director.generate({ userRequest: '' });
+            if (r === null) {
+                renderReport({ verdict: 'major-drift', changed: false, reason: '生成失败，已沿用旧大纲' });
+            }
             adapter.renderOutline();
         } catch (e) {
             renderReport({ verdict: 'major-drift', changed: false, reason: `生成失败：${e?.message || e}` });
@@ -88,7 +91,10 @@ export function bindUI(ctx, adapter) {
     });
     document.getElementById('sd_revise')?.addEventListener('click', async () => {
         try {
-            await adapter.director.revise();
+            const r = await adapter.director.revise();
+            if (r === null) {
+                renderReport({ verdict: 'major-drift', changed: false, reason: '修订失败，已沿用旧大纲' });
+            }
             adapter.renderOutline();
         } catch (e) {
             renderReport({ verdict: 'major-drift', changed: false, reason: `修订失败：${e?.message || e}` });
@@ -97,7 +103,11 @@ export function bindUI(ctx, adapter) {
     document.getElementById('sd_check')?.addEventListener('click', async () => {
         try {
             const report = await adapter.director.check();
-            renderReport(report);
+            if (report === null) {
+                renderReport({ verdict: 'major-drift', changed: false, reason: '体检调用失败，已沿用旧大纲' });
+            } else {
+                renderReport(report);
+            }
             adapter.renderOutline();
         } catch (e) {
             renderReport({ verdict: 'major-drift', changed: false, reason: `体检失败：${e?.message || e}` });

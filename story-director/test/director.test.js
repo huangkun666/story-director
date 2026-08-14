@@ -89,12 +89,11 @@ test('director.check applies modified outline when changed is true', async () =>
     assert.ok(calls.includes('render'));
 });
 
-test('director.check keeps outline and reports sync on null result', async () => {
+test('director.check returns null and keeps outline on null result', async () => {
     const { deps } = makeDeps({ generateRaw: async () => 'garbage' });
     const before = deps.getOutline();
     const d = createDirector(deps);
     const report = await d.check();
+    assert.equal(report, null);
     assert.equal(deps.getOutline(), before);
-    assert.equal(report.verdict, 'sync');
-    assert.equal(report.changed, false);
 });

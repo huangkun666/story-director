@@ -83,6 +83,7 @@ export const CHECK_SCHEMA = {
         changed: { type: 'boolean' },
         changes: { type: 'string' },
         reason: { type: 'string' },
+        updatedOutline: OUTLINE_SCHEMA,
     },
 };
 
@@ -135,7 +136,7 @@ ${recentDialogue}
 【当前大纲】
 ${serializeOutline(outline)}
 
-请判断大纲是否仍与剧情同步。verdict 取 sync / minor-drift / major-drift。若需要修改，changed=true 并在 changes 里说明改了什么；若无需修改，changed=false 且 reason 说明为何仍适用。`;
+请判断大纲是否仍与剧情同步。verdict 取 sync / minor-drift / major-drift。若需要修改，changed=true，在 changes 里说明改了什么，并在 updatedOutline 字段输出修改后的完整大纲（结构与当前大纲一致）；若无需修改，changed=false，省略 updatedOutline，并在 reason 说明为何仍适用。`;
     return { system, prompt };
 }
 

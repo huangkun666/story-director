@@ -85,17 +85,17 @@ import { mountUI, bindUI } from './src/ui.js';
                 if (!adapter) return '';
                 const sub = String(value ?? '').trim().toLowerCase();
                 if (sub === 'generate') {
-                    await adapter.director.generate({ userRequest: '' });
+                    const r = await adapter.director.generate({ userRequest: '' });
                     adapter.renderOutline();
-                    return '大纲已生成';
+                    return r === null ? '大纲生成失败，已沿用旧大纲' : '大纲已生成';
                 } else if (sub === 'revise') {
-                    await adapter.director.revise();
+                    const r = await adapter.director.revise();
                     adapter.renderOutline();
-                    return '大纲已修订';
+                    return r === null ? '大纲修订失败，已沿用旧大纲' : '大纲已修订';
                 } else if (sub === 'check') {
                     const report = await adapter.director.check();
                     adapter.renderOutline();
-                    return `体检完成：${report?.verdict ?? 'sync'}`;
+                    return report === null ? '体检调用失败，已沿用旧大纲' : `体检完成：${report?.verdict ?? 'sync'}`;
                 } else {
                     return '用法：/director generate|revise|check|status';
                 }

@@ -48,6 +48,11 @@ test('buildCheckPrompt includes dialogue and outline', () => {
     assert.ok(prompt.includes('魔法大陆'));
 });
 
+test('CHECK_SCHEMA exposes optional updatedOutline', () => {
+    assert.ok(CHECK_SCHEMA.properties.updatedOutline);
+    assert.ok(!CHECK_SCHEMA.required.includes('updatedOutline'));
+});
+
 test('buildDirectorInstruction includes focus fields and strength', () => {
     const o = createEmptyOutline();
     o.focus.currentBeat = 'b1';
