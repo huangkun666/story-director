@@ -1,2 +1,11 @@
-/* story-director 样式占位，后续 Task 补充 */
 #story_director_panel { padding: 8px; }
+.sd_toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.sd_toolbar .menu_button { cursor: pointer; }
+.sd_enable { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.sd_overview, .sd_focus, .sd_report { font-size: 0.9em; }
+.sd_field { margin: 3px 0; }
+.sd_world { white-space: pre-wrap; }
+.sd_beat { cursor: pointer; padding: 2px 0; }
+.sd_beat:hover { background: rgba(128,128,128,0.1); }
+.sd_badge { font-size: 0.85em; }
+.sd_report { border-top: 1px dashed #888; margin-top: 8px; padding-top: 6px; }
