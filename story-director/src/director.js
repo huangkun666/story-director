@@ -54,7 +54,19 @@ export function createDirector(deps) {
                 card.cast ? `角色与关系：${card.cast}` : '',
                 deps.getOutline().focus?.nextStep || deps.getOutline().theme || '',
             ].filter(q => String(q || '').trim());
-            const vectorContext = useVector ? (await deps.getVectorMemoryContext?.(vectorQueries) || '') : '';
+            let vectorContext = '';
+            let vectorHits = [];
+            if (useVector) {
+                const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
+                if (retrieval) {
+                    vectorContext = retrieval.text || '';
+                    vectorHits = Array.isArray(retrieval.hits) ? retrieval.hits : [];
+                } else {
+                    // 兼容旧 deps：只有 getVectorMemoryContext 的宿主
+                    vectorContext = await deps.getVectorMemoryContext?.(vectorQueries) || '';
+                }
+            }
+            deps.setRetrievalHits?.(vectorHits);
 
             const bundle = buildGeneratePrompt({
                 characterCard: card,
@@ -104,7 +116,9 @@ export function createDirector(deps) {
                 [outline.timeline?.start, outline.timeline?.end, outline.timeline?.note].filter(Boolean).join(' '),
                 activeForeshadow,
             ].filter(q => String(q || '').trim());
-            const vectorContext = await deps.getVectorMemoryContext?.(vectorQueries) || '';
+            const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
+            const vectorContext = retrieval ? (retrieval.text || '') : (await deps.getVectorMemoryContext?.(vectorQueries) || '');
+            deps.setRetrievalHits?.(retrieval ? (Array.isArray(retrieval.hits) ? retrieval.hits : []) : []);
             const bundle = buildRevisePrompt({
                 recentDialogue: dialogue,
                 outline,
@@ -142,7 +156,9 @@ export function createDirector(deps) {
                 [outline.timeline?.start, outline.timeline?.end, outline.timeline?.note].filter(Boolean).join(' '),
                 activeForeshadow,
             ].filter(q => String(q || '').trim());
-            const vectorContext = await deps.getVectorMemoryContext?.(vectorQueries) || '';
+            const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
+            const vectorContext = retrieval ? (retrieval.text || '') : (await deps.getVectorMemoryContext?.(vectorQueries) || '');
+            deps.setRetrievalHits?.(retrieval ? (Array.isArray(retrieval.hits) ? retrieval.hits : []) : []);
             const bundle = buildCheckPrompt({
                 recentDialogue: dialogue,
                 outline,

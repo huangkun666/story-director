@@ -246,17 +246,20 @@ export function createSillyTavernAdapter(ctx) {
 
     // 向量检索：复用柚月已经向量化好的资料库。
     // 支持多路 query（时间线/角色关系/当前焦点），合并去重后返回相关 chunk。
-    async function getVectorMemoryContext(query) {
-        if (settings.useVectorMemory === false) return '';
+    // 返回 { text, hits }：text 是注入 prompt 的合并文本；hits 是结构化命中清单
+    // （[{ query, source, text }]），供 UI 展示「本次命中了哪些资料」。
+    async function searchVectorMemory(query) {
+        if (settings.useVectorMemory === false) return { text: '', hits: [] };
         try {
             const store = (typeof window !== 'undefined') ? window.YuzukiMemory?.VectorStore : null;
-            if (!store || typeof store.search !== 'function') return '';
+            if (!store || typeof store.search !== 'function') return { text: '', hits: [] };
             const queries = (Array.isArray(query) ? query : [query])
                 .map(q => String(q || '').trim().slice(0, 2000))
                 .filter(Boolean);
-            if (!queries.length) return '';
+            if (!queries.length) return { text: '', hits: [] };
             const seen = new Set();
             const blocks = [];
+            const hits = [];
             for (const sourceQuery of queries) {
                 let results;
                 try {
@@ -271,14 +274,36 @@ export function createSillyTavernAdapter(ctx) {
                     if (!text || seen.has(text)) continue;
                     seen.add(text);
                     blocks.push(`【${r.source || '向量资料'}】${text}`);
+                    hits.push({ query: sourceQuery, source: String(r.source || '向量资料'), text });
                 }
             }
-            if (!blocks.length) return '';
+            if (!blocks.length) return { text: '', hits: [] };
             const limit = Math.max(1000, Number(settings.vectorMemoryLimit) || 6000);
-            return blocks.join('\n').slice(0, limit);
+            return { text: blocks.join('\n').slice(0, limit), hits };
         } catch (err) {
             console.warn('[story-director] vector memory search failed:', err);
-            return '';
+            return { text: '', hits: [] };
+        }
+    }
+
+    async function getVectorMemoryContext(query) {
+        return (await searchVectorMemory(query)).text;
+    }
+
+    async function getVectorMemoryHits(query) {
+        return (await searchVectorMemory(query)).hits;
+    }
+
+    // 检索命中回调：director 每次生成/修订/体检后把命中清单推给 UI 展示
+    let retrievalCallback = null;
+    function setRetrievalCallback(fn) {
+        retrievalCallback = fn;
+    }
+    function setRetrievalHits(hits) {
+        try {
+            retrievalCallback?.(Array.isArray(hits) ? hits : []);
+        } catch (err) {
+            console.warn('[story-director] retrieval callback failed:', err);
         }
     }
 
@@ -330,7 +355,8 @@ export function createSillyTavernAdapter(ctx) {
         getRecentDialogue,
         getCharacterCard,
         getMemoryContext,
-        getVectorMemoryContext,
+        getVectorMemory: searchVectorMemory,
+        setRetrievalHits,
         recordHistory,
         renderOutline,
     });
@@ -358,6 +384,8 @@ export function createSillyTavernAdapter(ctx) {
         getRecentDialogue,
         getMemoryContext,
         getVectorMemoryContext,
+        getVectorMemoryHits,
+        setRetrievalCallback,
         renderOutline,
         setRenderCallback,
     };

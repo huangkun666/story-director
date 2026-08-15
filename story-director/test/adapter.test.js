@@ -156,6 +156,79 @@ test('getVectorMemoryContext searches yuzuki vector store', async () => {
     }
 });
 
+test('getVectorMemoryHits returns structured hits with query/source/text', async () => {
+    const originalWindow = globalThis.window;
+    const searchCalls = [];
+    globalThis.window = {
+        YuzukiMemory: {
+            VectorStore: {
+                search: async (query) => {
+                    searchCalls.push(query);
+                    if (query.includes('时间线')) return [{ text: '赤壁之战资料', source: '三国资料 #1' }, { text: '赤壁之战资料', source: '三国资料 #1' }];
+                    return [{ text: '诸葛亮与周瑜的联盟', source: '人物关系' }];
+                },
+            },
+        },
+    };
+    try {
+        const ctx = makeCtx();
+        ctx.extensionSettings.story_director = { useVectorMemory: true, vectorMemoryLimit: 6000 };
+        const adapter = createSillyTavernAdapter(ctx);
+        const hits = await adapter.getVectorMemoryHits(['时间线：建安十三年', '角色：诸葛亮']);
+        assert.equal(hits.length, 2);
+        assert.deepEqual(hits[0], { query: '时间线：建安十三年', source: '三国资料 #1', text: '赤壁之战资料' });
+        assert.deepEqual(hits[1], { query: '角色：诸葛亮', source: '人物关系', text: '诸葛亮与周瑜的联盟' });
+        assert.equal(searchCalls.length, 2); // 每个查询独立检索
+        // 同一文本只保留一条（去重）
+        assert.equal(hits.filter(h => h.text === '赤壁之战资料').length, 1);
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('getVectorMemoryHits returns empty when vector memory disabled', async () => {
+    const ctx = makeCtx();
+    ctx.extensionSettings.story_director = { useVectorMemory: false };
+    const adapter = createSillyTavernAdapter(ctx);
+    const hits = await adapter.getVectorMemoryHits(['随便']);
+    assert.deepEqual(hits, []);
+});
+
+test('director retrieval hits reach setRetrievalCallback end to end', async () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            VectorStore: {
+                search: async () => [{ text: '赤壁之战资料', source: '三国资料 #1' }],
+            },
+        },
+    };
+    try {
+        const ctx = makeCtx();
+        ctx.extensionSettings.story_director = { useVectorMemory: true, vectorMemoryLimit: 6000 };
+        const adapter = createSillyTavernAdapter(ctx);
+        let received = 'unset';
+        adapter.setRetrievalCallback((hits) => { received = hits; });
+        await adapter.director.generate({ userRequest: '测试' });
+        assert.ok(Array.isArray(received));
+        assert.equal(received.length, 1);
+        assert.equal(received[0].source, '三国资料 #1');
+        assert.equal(received[0].text, '赤壁之战资料');
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('director pushes empty hits when vector store is absent', async () => {
+    const ctx = makeCtx();
+    ctx.extensionSettings.story_director = { useVectorMemory: true };
+    const adapter = createSillyTavernAdapter(ctx);
+    let received = 'unset';
+    adapter.setRetrievalCallback((hits) => { received = hits; });
+    await adapter.director.generate({ userRequest: '测试' });
+    assert.deepEqual(received, []);
+});
+
 test('adapter records and restores outline history snapshots', () => {    const ctx = makeCtx();
     const adapter = createSillyTavernAdapter(ctx);
     const first = adapter.getOutline();

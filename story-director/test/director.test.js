@@ -128,3 +128,45 @@ test('director.check returns null and keeps outline on null result', async () =>
     assert.equal(report, null);
     assert.equal(deps.getOutline(), before);
 });
+
+test('director.generate forwards retrieval hits to setRetrievalHits', async () => {
+    const hits = [{ query: 'q1', source: '资料A', text: '内容A' }];
+    const received = [];
+    const { deps } = makeDeps({
+        getVectorMemory: async () => ({ text: '【资料A】内容A', hits }),
+        setRetrievalHits: (h) => { received.push(h); },
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    assert.equal(received.length, 1);
+    assert.deepEqual(received[0], hits);
+});
+
+test('director.revise falls back to getVectorMemoryContext when getVectorMemory absent', async () => {
+    let receivedPrompt = '';
+    let receivedHits = 'unset';
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify(createEmptyOutline());
+        },
+        getVectorMemoryContext: async () => '【旧接口资料】兜底内容',
+        setRetrievalHits: (h) => { receivedHits = h; },
+    });
+    const d = createDirector(deps);
+    await d.revise();
+    assert.ok(receivedPrompt.includes('兜底内容'));
+    assert.deepEqual(receivedHits, []); // 旧接口没有结构化命中，清空展示
+});
+
+test('director.generate passes empty hits when vector memory disabled', async () => {
+    const received = [];
+    const { deps } = makeDeps({
+        getVectorMemory: async () => ({ text: '', hits: [] }),
+        setRetrievalHits: (h) => { received.push(h); },
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    assert.equal(received.length, 1);
+    assert.deepEqual(received[0], []);
+});
