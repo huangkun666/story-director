@@ -543,6 +543,7 @@ export function bindUI(ctx, adapter) {
     setSelect('sd_revise_frequency', adapter.settings.reviseFrequency);
     setSelect('sd_drift_tolerance', adapter.settings.driftTolerance);
     setSelect('sd_outline_detail', adapter.settings.outlineDetail);
+    setSelect('sd_beat_pacing', adapter.settings.beatPacing || 'balanced');
     setSelect('sd_generate_memory_mode', adapter.settings.generateMemoryMode || 'auto');
     const setNumber = (id, value) => {
         const el = document.getElementById(id);
@@ -579,6 +580,7 @@ export function bindUI(ctx, adapter) {
     bindNumber('sd_revise_every_n', 'reviseEveryN', { min: 1, max: 20 });
     bindSelect('sd_drift_tolerance', 'driftTolerance');
     bindSelect('sd_outline_detail', 'outlineDetail');
+    bindSelect('sd_beat_pacing', 'beatPacing');
     bindSelect('sd_generate_memory_mode', 'generateMemoryMode');
     bindNumber('sd_recent_turns', 'recentTurns', { min: 1, max: 50 });
     bindNumber('sd_card_context_limit', 'cardContextLimit', { min: 2000, max: 200000 });

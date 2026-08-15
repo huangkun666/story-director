@@ -99,6 +99,15 @@
                                     <span class="sd_setting_label">必读设定</span>
                                     <textarea id="sd_timeline_must_read" rows="2" placeholder="最高优先级设定，例如：这个世界魔法会消耗寿命"></textarea>
                                 </label>
+                                <label class="sd_setting sd_setting_wide">
+                                    <span class="sd_setting_label">节点节奏</span>
+                                    <select id="sd_beat_pacing">
+                                        <option value="balanced">均衡（均匀分布）</option>
+                                        <option value="dense">紧凑（事件密集，时间感压缩）</option>
+                                        <option value="sparse">宽松（时间跳跃与留白）</option>
+                                    </select>
+                                    <small>节点间隔相对大纲总跨度：跨度长则间隔长、跨度短则间隔短，不按绝对时间硬套</small>
+                                </label>
                             </div>
                         </div>
                     </div>

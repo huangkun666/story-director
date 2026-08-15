@@ -29,6 +29,7 @@ test('normalizeSettings adds missing defaults including llm block', () => {
     assert.equal(s.llm.baseUrl, '');
     assert.equal(s.injectTokenLimit, DEFAULT_SETTINGS.injectTokenLimit);
     assert.equal(s.outlineDetail, 'medium');
+    assert.equal(s.beatPacing, 'balanced');
     assert.equal(s.lockOutline, false);
 });
 

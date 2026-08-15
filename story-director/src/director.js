@@ -73,6 +73,7 @@ export function createDirector(deps) {
                 userRequest,
                 detail: settings.outlineDetail || 'medium',
                 timeline: requestedTimeline,
+                pacing: settings.beatPacing || 'balanced',
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
             });
@@ -133,6 +134,7 @@ export function createDirector(deps) {
                     outline,
                     driftTolerance: settings.driftTolerance || 'loose',
                     locked: false,
+                    pacing: settings.beatPacing || 'balanced',
                     memoryContext: deps.getMemoryContext?.(),
                     vectorContext,
                 });
@@ -173,6 +175,7 @@ export function createDirector(deps) {
             const bundle = buildCheckPrompt({
                 recentDialogue: dialogue,
                 outline,
+                pacing: settings.beatPacing || 'balanced',
                 memoryContext: deps.getMemoryContext?.(),
                 vectorContext,
             });

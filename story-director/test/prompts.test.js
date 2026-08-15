@@ -193,3 +193,37 @@ test('buildRevisePatchPrompt asks for minimal patch, not full outline', () => {
     assert.ok(prompt.includes('锁定'));
     assert.ok(!prompt.includes('更新后的完整大纲'));
 });
+
+test('buildGeneratePrompt includes relative pacing instruction with balanced default', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        timeline: { start: '建安五年', end: '建安十三年' },
+    });
+    assert.ok(prompt.includes('节点节奏'));
+    assert.ok(prompt.includes('总跨度 ÷ 节点数'));
+    assert.ok(prompt.includes('均衡'));
+    assert.ok(prompt.includes('不要用绝对时间硬套')); // 相对跨度而非绝对时间
+});
+
+test('buildGeneratePrompt honors dense and sparse pacing bands', () => {
+    const dense = buildGeneratePrompt({ characterCard: {}, pacing: 'dense' });
+    assert.ok(dense.prompt.includes('紧凑'));
+    assert.ok(dense.prompt.includes('时间感被压缩'));
+    const sparse = buildGeneratePrompt({ characterCard: {}, pacing: 'sparse' });
+    assert.ok(sparse.prompt.includes('宽松'));
+    assert.ok(sparse.prompt.includes('时间跳跃与留白'));
+});
+
+test('buildRevisePrompt instructs pacing-aware new beats', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o, pacing: 'dense' });
+    assert.ok(prompt.includes('节点节奏档位（紧凑）'));
+    assert.ok(prompt.includes('不要与既有节点全部扎堆'));
+});
+
+test('buildCheckPrompt checks pacing distribution across the span', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildCheckPrompt({ recentDialogue: '', outline: o });
+    assert.ok(prompt.includes('节点时间分布'));
+    assert.ok(prompt.includes('异常大的时间跳跃'));
+});

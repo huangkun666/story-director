@@ -115,6 +115,26 @@ export const CHECK_SCHEMA = {
     },
 };
 
+// 节点节奏档位：间隔相对大纲总跨度（跨度/节点数为基准），不写绝对时间
+const PACING_META = {
+    balanced: {
+        label: '均衡',
+        desc: '相邻节点间隔接近基准（总跨度 ÷ 节点数），避免全部扎堆在一小段时间内，也避免出现异常大跳跃',
+    },
+    dense: {
+        label: '紧凑',
+        desc: '节点明显密集于基准间隔，事件在较短时间内连续发生，时间感被压缩',
+    },
+    sparse: {
+        label: '宽松',
+        desc: '节点明显稀疏于基准间隔，允许时间跳跃与留白，强调岁月流逝与旅途沉淀',
+    },
+};
+
+function pacingInfo(key) {
+    return PACING_META[key] || PACING_META.balanced;
+}
+
 function cardToText(card) {
     const c = card || {};
     return [
@@ -131,7 +151,7 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, memoryContext = '', vectorContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -152,6 +172,13 @@ ${t.note ? `- 补充约束：${t.note}` : ''}
         : `【时间线约束】
 用户未指定时间线。请根据角色卡与题材自行推定一个合理的故事时间范围，并在 JSON 的 timeline 字段中填写 start/end/note；所有分幕与节点都必须有明确的时间归属。`;
 
+    const pacingMeta = pacingInfo(pacing);
+    const pacingBlock = `【节点节奏（档位：${pacingMeta.label}）】
+总跨度内共 6-8 个节点，相邻节点间隔以「总跨度 ÷ 节点数」为基准，按「${pacingMeta.label}」档位分布：
+- ${pacingMeta.desc}；
+- 间隔是相对总跨度的比例：跨度长则间隔长、跨度短则间隔短，不要用绝对时间硬套；
+- 每个 beat 的 summary 写清该节点发生时间，时间随节点顺序自然递增，不得回退。`;
+
     const system = '你是一位擅长群像叙事的小说家，同时接受过严格的剧情架构训练。你先像小说家一样构思各方人物的欲望、对抗与命运，再像架构师一样把构思收敛成严格的 JSON 大纲。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `请为以下角色扮演构建一份${detailWord}的完整故事大纲。题材不限（历史、科幻、奇幻、现代、悬疑等），按角色卡和用户要求来。
 
@@ -162,6 +189,8 @@ ${t.note ? `- 补充约束：${t.note}` : ''}
 4) 世界/势力线：背景局势的演变，即使主角不在场也在发生。
 
 ${mustReadBlock}${timelineBlock}
+
+${pacingBlock}
 
 ${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
@@ -219,7 +248,7 @@ export function compactOutlineForRevision(outline) {
     };
 }
 
-export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, memoryContext = '', vectorContext = '' }) {
+export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, pacing = 'balanced', memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
@@ -239,7 +268,7 @@ ${serializeOutline(compactOutlineForRevision(outline))}
 
 （注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题。输出时请原样保留这些节点及其全部字段——它们已经发生，不要改写或补写它们的 summary/cast/type。）
 
-请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。${lockInstruction ? `\n\n${lockInstruction}` : ''}
+请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。7) 新增节点的时间点遵循当前节点节奏档位（${pacingInfo(pacing).label}）：间隔相对总跨度合理分布，不要与既有节点全部扎堆在同一时刻。${lockInstruction ? `\n\n${lockInstruction}` : ''}
 
 严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
     return { system, prompt };
@@ -286,7 +315,7 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
     return { system, prompt };
 }
 
-export function buildCheckPrompt({ recentDialogue = '', outline, memoryContext = '', vectorContext = '' }) {
+export function buildCheckPrompt({ recentDialogue = '', outline, pacing = 'balanced', memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。对比最近对话与当前大纲（含时间线约束），输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
@@ -309,7 +338,7 @@ ${serializeOutline(outline)}
   "updatedOutline": { ...完整大纲，结构与当前大纲一致... }
 }
 
-检查要点：1) 对话中体现的剧情时间是否还在 timeline.start 与 timeline.end 之间；2) 时间若已越过 timeline.end，应在 issues 中标注时间线漂移，并在 updatedOutline 中顺延 timeline 或补过渡节点；3) 分幕与节点是否仍然合理。
+检查要点：1) 对话中体现的剧情时间是否还在 timeline.start 与 timeline.end 之间；2) 时间若已越过 timeline.end，应在 issues 中标注时间线漂移，并在 updatedOutline 中顺延 timeline 或补过渡节点；3) 分幕与节点是否仍然合理；4) 节点时间分布是否与总跨度匹配（当前节奏档位：${pacingInfo(pacing).label}）：是否存在全部节点扎堆在同一时间段、或相邻节点出现异常大的时间跳跃；若有，在 issues 中标明。
 
 若需要修改，changed=true 且 updatedOutline 输出修改后的完整大纲；若无需修改，changed=false，省略 updatedOutline。`;
     return { system, prompt };
