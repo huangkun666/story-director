@@ -29,6 +29,7 @@ test('normalizeSettings adds missing defaults including llm block', () => {
     assert.equal(s.llm.baseUrl, '');
     assert.equal(s.injectTokenLimit, DEFAULT_SETTINGS.injectTokenLimit);
     assert.equal(s.outlineDetail, 'medium');
+    assert.equal(s.lockOutline, false);
 });
 
 test('normalizeSettings handles missing llm block from older installs', () => {
@@ -65,6 +66,25 @@ test('getCharacterCard reads depth_prompt and chat-level overrides', () => {
     assert.equal(card.scenario, '手动开场');
     assert.equal(card.mes_example, '手动示例');
     assert.equal(card.system_prompt, '手动系统');
+});
+
+test('adapter records and restores outline history snapshots', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    const first = adapter.getOutline();
+    first.theme = '旧主题';
+    adapter.recordHistory(first, 'manual');
+
+    const second = adapter.getOutline();
+    second.theme = '新主题';
+    adapter.setOutline(second);
+
+    const history = adapter.getHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].outline.theme, '旧主题');
+
+    assert.equal(adapter.restoreHistory(0), true);
+    assert.equal(adapter.getOutline().theme, '旧主题');
 });
 
 test('custom LLM mode calls OpenAI-compatible endpoint and never main generateRaw', async () => {

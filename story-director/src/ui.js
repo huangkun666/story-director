@@ -20,6 +20,21 @@ const VERDICT_META = {
     'major-drift': { label: '严重脱节', cls: 'sd_verdict_major', icon: 'fa-solid fa-circle-xmark' },
 };
 
+const BEAT_TYPE_META = {
+    setup: { label: '铺垫', cls: 'sd_type_setup', icon: 'fa-solid fa-seedling' },
+    conflict: { label: '冲突', cls: 'sd_type_conflict', icon: 'fa-solid fa-bolt' },
+    twist: { label: '转折', cls: 'sd_type_twist', icon: 'fa-solid fa-shuffle' },
+    climax: { label: '高潮', cls: 'sd_type_climax', icon: 'fa-solid fa-fire' },
+    resolution: { label: '收束', cls: 'sd_type_resolution', icon: 'fa-solid fa-flag-checkered' },
+    '': { label: '节点', cls: 'sd_type_plain', icon: 'fa-regular fa-circle' },
+};
+
+const ARC_META = {
+    pending: { label: '未启动', cls: 'sd_badge_pending', icon: 'fa-regular fa-circle' },
+    active: { label: '进行中', cls: 'sd_badge_active', icon: 'fa-solid fa-play' },
+    done: { label: '已完成', cls: 'sd_badge_done', icon: 'fa-solid fa-check' },
+};
+
 function escapeHtml(s) {
     return String(s ?? '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -34,17 +49,27 @@ function foreshadowMeta(status) {
     return FORESHADOW_META[status] || { label: status || '未知', cls: 'sd_badge_pending', icon: 'fa-regular fa-clock' };
 }
 
+function beatTypeMeta(type) {
+    return BEAT_TYPE_META[type] || BEAT_TYPE_META[''];
+}
+
+function arcMeta(status) {
+    return ARC_META[status] || ARC_META.pending;
+}
+
 function hasOutlineContent(o) {
     return !!(o.theme || o.tone || o.world || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
 }
 
 function renderBeatItem(b) {
     const m = beatMeta(b.status);
-    return `<div class="sd_beat_item sd_beat_${escapeHtml(b.status)}" data-beat-id="${escapeHtml(b.id)}" title="点击编辑节点标题">
+    const tm = beatTypeMeta(b.type);
+    return `<div class="sd_beat_item sd_beat_${escapeHtml(b.status)}" data-beat-id="${escapeHtml(b.id)}" title="点击编辑节点">
         <div class="sd_beat_rail"><span class="sd_beat_dot"></span></div>
         <div class="sd_beat_body">
             <div class="sd_beat_head">
                 <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
+                <span class="sd_type_badge ${tm.cls}"><i class="${tm.icon}"></i>${tm.label}</span>
                 <span class="sd_beat_title">${escapeHtml(b.title || b.id)}</span>
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
             </div>
@@ -64,91 +89,125 @@ function renderEmptyState() {
     </div>`;
 }
 
+function storyCardHtml(o) {
+    const rows = [];
+    if (o.timeline?.start || o.timeline?.end) {
+        const range = [o.timeline.start, o.timeline.end].filter(Boolean).join(' → ');
+        rows.push(`<div class="sd_kv sd_kv_timeline"><span class="sd_kv_key">时间线</span><span class="sd_kv_value">${escapeHtml(range)}${o.timeline.note ? `（${escapeHtml(o.timeline.note)}）` : ''}</span></div>`);
+    }
+    if (o.theme) rows.push(`<div class="sd_kv"><span class="sd_kv_key">主题</span><span class="sd_kv_value">${escapeHtml(o.theme)}</span></div>`);
+    if (o.tone) rows.push(`<div class="sd_kv"><span class="sd_kv_key">基调</span><span class="sd_kv_value">${escapeHtml(o.tone)}</span></div>`);
+    if (o.world) rows.push(`<div class="sd_kv sd_kv_world"><span class="sd_kv_key">世界观</span><span class="sd_kv_value">${escapeHtml(o.world)}</span></div>`);
+    if (!rows.length) return '';
+    return `<section class="sd_card sd_card_story">
+        <header class="sd_card_header"><i class="fa-solid fa-book-open"></i>故事总览</header>
+        <div class="sd_card_body">${rows.join('')}</div>
+    </section>`;
+}
+
+function arcsCardHtml(o) {
+    if (!o.arcs.length) return '';
+    const arcs = o.arcs.map(a => {
+        const m = arcMeta(a.status);
+        const meta = [];
+        if (a.desire) meta.push(`<span class="sd_arc_meta"><b>欲望</b>${escapeHtml(a.desire)}</span>`);
+        if (a.flaw) meta.push(`<span class="sd_arc_meta"><b>缺陷</b>${escapeHtml(a.flaw)}</span>`);
+        return `<div class="sd_arc_item">
+            <div class="sd_arc_char"><i class="fa-solid fa-user-large"></i>${escapeHtml(a.char)}<span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span></div>
+            ${meta.length ? `<div class="sd_arc_meta_row">${meta.join('')}</div>` : ''}
+            ${a.growth ? `<div class="sd_arc_growth"><i class="fa-solid fa-arrow-trend-up"></i>${escapeHtml(a.growth)}</div>` : ''}
+        </div>`;
+    }).join('');
+    return `<section class="sd_card sd_card_arcs">
+        <header class="sd_card_header"><i class="fa-solid fa-users"></i>角色弧光</header>
+        <div class="sd_card_body sd_arc_list">${arcs}</div>
+    </section>`;
+}
+
+function foreshadowCardHtml(o) {
+    if (!o.foreshadowing.length) return '';
+    const items = o.foreshadowing.map(f => {
+        const m = foreshadowMeta(f.status);
+        const beat = f.beatId ? o.beats.find(b => b.id === f.beatId) : null;
+        return `<div class="sd_fs_item">
+            <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
+            <span class="sd_fs_hint">${escapeHtml(f.hint || f.id)}${beat ? `<small class="sd_fs_payoff">回收于 ${escapeHtml(beat.title || beat.id)}</small>` : ''}</span>
+        </div>`;
+    }).join('');
+    return `<section class="sd_card sd_card_foreshadow">
+        <header class="sd_card_header"><i class="fa-solid fa-eye"></i>伏笔</header>
+        <div class="sd_card_body">${items}</div>
+    </section>`;
+}
+
+function outlineSectionHtml(o) {
+    if (!o.acts.length && !o.beats.length) return '';
+    const usedBeatIds = new Set();
+    const actSections = o.acts.map(act => {
+        const beats = o.beats.filter(b => b.actId === act.id || (act.beats || []).includes(b.id));
+        beats.forEach(b => usedBeatIds.add(b.id));
+        return `<div class="sd_act" data-act-id="${escapeHtml(act.id)}">
+            <div class="sd_act_head" title="双击编辑幕">
+                <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
+                ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
+                <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
+            </div>
+            ${beats.length ? `<div class="sd_timeline">${beats.map(renderBeatItem).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>'}
+        </div>`;
+    }).join('');
+
+    const unassigned = o.beats.filter(b => !usedBeatIds.has(b.id));
+    const unassignedSection = unassigned.length
+        ? `<div class="sd_act"><div class="sd_act_head"><span class="sd_act_title">未分幕节点</span></div><div class="sd_timeline">${unassigned.map(renderBeatItem).join('')}</div></div>`
+        : '';
+
+    return `<section class="sd_card sd_card_beats sd_card_outline">
+        <header class="sd_card_header"><i class="fa-solid fa-timeline"></i>故事大纲</header>
+        <div class="sd_card_body">${actSections}${unassignedSection}</div>
+    </section>`;
+}
+
 function renderOverview(outline) {
     const el = document.getElementById('sd_overview');
     if (!el) return;
     const o = normalizeOutline(outline);
+
+    const sideStory = document.getElementById('sd_sidebar_story');
+    const sideArcs = document.getElementById('sd_sidebar_arcs');
+    const sideForeshadow = document.getElementById('sd_sidebar_foreshadow');
+
     if (!hasOutlineContent(o)) {
+        if (sideStory) sideStory.innerHTML = '';
+        if (sideArcs) sideArcs.innerHTML = '';
+        if (sideForeshadow) sideForeshadow.innerHTML = '';
         el.innerHTML = renderEmptyState();
         return;
     }
 
-    const cards = [];
-
-    if (o.theme || o.tone || o.world || o.timeline?.start || o.timeline?.end) {
-        const rows = [];
-        if (o.timeline?.start || o.timeline?.end) {
-            const range = [o.timeline.start, o.timeline.end].filter(Boolean).join(' → ');
-            rows.push(`<div class="sd_kv sd_kv_timeline"><span class="sd_kv_key">时间线</span><span class="sd_kv_value">${escapeHtml(range)}${o.timeline.note ? `（${escapeHtml(o.timeline.note)}）` : ''}</span></div>`);
-        }
-        if (o.theme) rows.push(`<div class="sd_kv"><span class="sd_kv_key">主题</span><span class="sd_kv_value">${escapeHtml(o.theme)}</span></div>`);
-        if (o.tone) rows.push(`<div class="sd_kv"><span class="sd_kv_key">基调</span><span class="sd_kv_value">${escapeHtml(o.tone)}</span></div>`);
-        if (o.world) rows.push(`<div class="sd_kv sd_kv_world"><span class="sd_kv_key">世界观</span><span class="sd_kv_value">${escapeHtml(o.world)}</span></div>`);
-        cards.push(`<section class="sd_card sd_card_story">
-            <header class="sd_card_header"><i class="fa-solid fa-book-open"></i>故事总览</header>
-            <div class="sd_card_body">${rows.join('')}</div>
-        </section>`);
+    if (sideStory || sideArcs || sideForeshadow) {
+        if (sideStory) sideStory.innerHTML = storyCardHtml(o);
+        if (sideArcs) sideArcs.innerHTML = arcsCardHtml(o);
+        if (sideForeshadow) sideForeshadow.innerHTML = foreshadowCardHtml(o);
+        el.innerHTML = outlineSectionHtml(o);
+        return;
     }
 
-    if (o.arcs.length) {
-        const arcs = o.arcs.map(a => {
-            const meta = [];
-            if (a.desire) meta.push(`<span class="sd_arc_meta"><b>欲望</b>${escapeHtml(a.desire)}</span>`);
-            if (a.flaw) meta.push(`<span class="sd_arc_meta"><b>缺陷</b>${escapeHtml(a.flaw)}</span>`);
-            return `<div class="sd_arc_item">
-                <div class="sd_arc_char"><i class="fa-solid fa-user-large"></i>${escapeHtml(a.char)}</div>
-                ${meta.length ? `<div class="sd_arc_meta_row">${meta.join('')}</div>` : ''}
-                ${a.growth ? `<div class="sd_arc_growth"><i class="fa-solid fa-arrow-trend-up"></i>${escapeHtml(a.growth)}</div>` : ''}
-            </div>`;
-        }).join('');
-        cards.push(`<section class="sd_card sd_card_arcs">
-            <header class="sd_card_header"><i class="fa-solid fa-users"></i>角色弧光</header>
-            <div class="sd_card_body sd_arc_list">${arcs}</div>
-        </section>`);
-    }
+    // 旧版单栏兜底：全部塞进主区域
+    el.innerHTML = `<div class="sd_grid">${storyCardHtml(o)}${arcsCardHtml(o)}${foreshadowCardHtml(o)}</div>${outlineSectionHtml(o)}`;
+}
 
-    if (o.foreshadowing.length) {
-        const items = o.foreshadowing.map(f => {
-            const m = foreshadowMeta(f.status);
-            return `<div class="sd_fs_item">
-                <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
-                <span class="sd_fs_hint">${escapeHtml(f.hint || f.id)}</span>
-            </div>`;
-        }).join('');
-        cards.push(`<section class="sd_card sd_card_foreshadow">
-            <header class="sd_card_header"><i class="fa-solid fa-eye"></i>伏笔</header>
-            <div class="sd_card_body">${items}</div>
-        </section>`);
-    }
-
-    // 真正的大纲：分幕（acts）+ 每幕下的情节节点
-    let outlineSection = '';
-    if (o.acts.length || o.beats.length) {
-        const usedBeatIds = new Set();
-        const actSections = o.acts.map(act => {
-            const beats = o.beats.filter(b => b.actId === act.id || (act.beats || []).includes(b.id));
-            beats.forEach(b => usedBeatIds.add(b.id));
-            return `<div class="sd_act">
-                <div class="sd_act_head">
-                    <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
-                    ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
-                </div>
-                ${beats.length ? `<div class="sd_timeline">${beats.map(renderBeatItem).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>'}
-            </div>`;
-        }).join('');
-
-        const unassigned = o.beats.filter(b => !usedBeatIds.has(b.id));
-        const unassignedSection = unassigned.length
-            ? `<div class="sd_act"><div class="sd_act_head"><span class="sd_act_title">未分幕节点</span></div><div class="sd_timeline">${unassigned.map(renderBeatItem).join('')}</div></div>`
-            : '';
-
-        outlineSection = `<section class="sd_card sd_card_beats sd_card_outline">
-            <header class="sd_card_header"><i class="fa-solid fa-timeline"></i>故事大纲</header>
-            <div class="sd_card_body">${actSections}${unassignedSection}</div>
-        </section>`;
-    }
-
-    el.innerHTML = `<div class="sd_grid">${cards.join('')}</div>${outlineSection}`;
+function renderStats(outline) {
+    const el = document.getElementById('sd_stats');
+    if (!el) return;
+    const o = normalizeOutline(outline);
+    if (!hasOutlineContent(o)) { el.innerHTML = ''; return; }
+    const done = o.beats.filter(b => b.status === 'done').length;
+    const active = o.beats.find(b => b.status === 'active');
+    const activeAct = active ? o.acts.find(a => a.id === active.actId || (a.beats || []).includes(active.id)) : null;
+    el.innerHTML = `<div class="sd_stat"><i class="fa-solid fa-layer-group"></i>${o.acts.length || 1} 幕</div>
+        <div class="sd_stat"><i class="fa-solid fa-list-check"></i>${o.beats.length} 节点 · 已完成 ${done}</div>
+        <div class="sd_stat"><i class="fa-solid fa-bullseye"></i>进行中：${activeAct ? escapeHtml(activeAct.title) : (active ? escapeHtml(active.title || active.id) : '无')}</div>
+        <div class="sd_stat"><i class="fa-solid fa-clock-rotate-left"></i>已修订 ${o.meta.revisionCount} 次</div>`;
 }
 
 function renderFocus(outline) {
@@ -193,6 +252,19 @@ function syncTimelineInputs(outline) {
     set('sd_timeline_note', o.timeline?.note);
 }
 
+function renderHistoryOptions() {
+    const sel = document.getElementById('sd_history_select');
+    if (!sel) return;
+    const history = adapterRef?.getHistory?.() || [];
+    const reasonText = { generate: '生成', revise: '修订', check: '体检', manual: '手动编辑', import: '导入' };
+    sel.innerHTML = history.length
+        ? history.map((h, i) => {
+            const time = h.at ? new Date(h.at).toLocaleString() : '';
+            return `<option value="${i}">${reasonText[h.reason] || h.reason || '快照'} · ${time}</option>`;
+        }).join('')
+        : '<option value="">（无历史）</option>';
+}
+
 function renderReport(report, label = '大纲体检') {
     const el = document.getElementById('sd_report');
     if (!el) return;
@@ -231,7 +303,9 @@ export function mountUI(ctx, adapter) {
     adapter.setRenderCallback((outline) => {
         renderOverview(outline);
         renderFocus(outline);
+        renderStats(outline);
         syncTimelineInputs(outline);
+        renderHistoryOptions();
     });
 
     // 独立大界面由 index.js 负责加载到 body；若尚未就绪则等待 bindUI 时再补
@@ -290,6 +364,13 @@ export function bindUI(ctx, adapter) {
         adapter.director.refreshInjection();
     });
 
+    const lockEl = document.getElementById('sd_lock_outline');
+    if (lockEl) lockEl.checked = !!adapter.settings.lockOutline;
+    lockEl?.addEventListener('change', (e) => {
+        adapter.settings.lockOutline = e.target.checked;
+        ctx.saveSettingsDebounced?.();
+    });
+
     // 时间线约束：存进当前聊天的大纲（chat_metadata），生成时作为硬约束传给模型
     const timelineField = (id) => document.getElementById(id);
     const readTimeline = () => ({
@@ -336,6 +417,7 @@ export function bindUI(ctx, adapter) {
         if (!btn || btn.classList.contains('sd_loading')) return;
         setButtonLoading(btn, true);
         try {
+            adapter.recordHistory?.(adapter.getOutline(), 'manual');
             adapter.setOutline(createEmptyOutline());
             adapter.director.refreshInjection();
             renderReport(null);
@@ -427,7 +509,121 @@ export function bindUI(ctx, adapter) {
     bindLlmField('sd_llm_api_key', 'apiKey');
     bindLlmField('sd_llm_model', 'model');
 
-    // 手动编辑：点击 beat 进入编辑；空状态里的"生成大纲"也走这里的事件委托
+    // ---------- 节点编辑器 ----------
+    let editingBeatId = null;
+    const beatEditorEl = document.getElementById('sd_beat_editor');
+    const beatTitleEl = document.getElementById('sd_beat_title');
+    const beatSummaryEl = document.getElementById('sd_beat_summary');
+    const beatActEl = document.getElementById('sd_beat_act');
+    const beatTypeEl = document.getElementById('sd_beat_type');
+
+    function fillActOptions(outline) {
+        if (!beatActEl) return;
+        const acts = outline.acts.length ? outline.acts : [{ id: '', title: '（无幕，自动创建）' }];
+        beatActEl.innerHTML = acts.map(a => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.title || a.id)}</option>`).join('');
+    }
+
+    function openBeatEditor(beatId = null) {
+        const outline = adapter.getOutline();
+        fillActOptions(outline);
+        editingBeatId = beatId;
+        const beat = beatId ? outline.beats.find(b => b.id === beatId) : null;
+        if (beatTitleEl) beatTitleEl.value = beat?.title || '';
+        if (beatSummaryEl) beatSummaryEl.value = beat?.summary || '';
+        if (beatTypeEl) beatTypeEl.value = beat?.type || 'setup';
+        if (beatActEl && beat) beatActEl.value = beat.actId || outline.acts[0]?.id || '';
+        beatEditorEl?.classList.add('sd_open');
+    }
+
+    function closeBeatEditor() {
+        beatEditorEl?.classList.remove('sd_open');
+        editingBeatId = null;
+    }
+
+    function saveBeatFromEditor() {
+        const outline = adapter.getOutline();
+        const title = beatTitleEl?.value?.trim() || '未命名节点';
+        const summary = beatSummaryEl?.value?.trim() || '';
+        const type = beatTypeEl?.value || 'setup';
+        const actId = beatActEl?.value || '';
+
+        adapter.recordHistory?.(outline, 'manual');
+
+        let beat;
+        if (editingBeatId) {
+            beat = outline.beats.find(b => b.id === editingBeatId);
+            if (!beat) return;
+        } else {
+            beat = { id: `beat_${Date.now()}`, title, summary, type, status: 'pending', actId };
+            outline.beats.push(beat);
+        }
+        beat.title = title;
+        beat.summary = summary;
+        beat.type = type;
+        beat.actId = actId;
+
+        // 同步 acts.beats 列表
+        let act = outline.acts.find(a => a.id === actId);
+        if (!act && actId) {
+            act = { id: actId, title: actId, summary: '', beats: [] };
+            outline.acts.push(act);
+        }
+        for (const a of outline.acts) {
+            if (a.beats?.includes(beat.id) && a.id !== actId) a.beats = a.beats.filter(x => x !== beat.id);
+        }
+        if (act) {
+            act.beats = act.beats || [];
+            if (!act.beats.includes(beat.id)) act.beats.push(beat.id);
+        }
+
+        adapter.setOutline(outline);
+        adapter.renderOutline();
+        adapter.director.refreshInjection();
+        closeBeatEditor();
+    }
+
+    function moveEditingBeat(delta) {
+        if (!editingBeatId) return;
+        const outline = adapter.getOutline();
+        const beat = outline.beats.find(b => b.id === editingBeatId);
+        if (!beat) return;
+        const siblings = outline.beats.filter(b => b.actId === beat.actId);
+        const idx = siblings.findIndex(b => b.id === beat.id);
+        const target = siblings[idx + delta];
+        if (idx < 0 || !target) return;
+        const arr = outline.beats;
+        const i = arr.indexOf(beat);
+        const j = arr.indexOf(target);
+        adapter.recordHistory?.(outline, 'manual');
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+        adapter.setOutline(outline);
+        adapter.renderOutline();
+    }
+
+    document.getElementById('sd_add_beat')?.addEventListener('click', () => openBeatEditor(null));
+    document.getElementById('sd_beat_save')?.addEventListener('click', saveBeatFromEditor);
+    document.getElementById('sd_beat_cancel')?.addEventListener('click', closeBeatEditor);
+    document.getElementById('sd_beat_editor_close')?.addEventListener('click', closeBeatEditor);
+    document.getElementById('sd_beat_move_up')?.addEventListener('click', () => moveEditingBeat(-1));
+    document.getElementById('sd_beat_move_down')?.addEventListener('click', () => moveEditingBeat(1));
+    document.getElementById('sd_beat_delete')?.addEventListener('click', () => {
+        if (!editingBeatId) return closeBeatEditor();
+        const outline = adapter.getOutline();
+        const idx = outline.beats.findIndex(b => b.id === editingBeatId);
+        if (idx < 0) return closeBeatEditor();
+        adapter.recordHistory?.(outline, 'manual');
+        outline.beats.splice(idx, 1);
+        for (const act of outline.acts) act.beats = (act.beats || []).filter(x => x !== editingBeatId);
+        if (outline.focus.currentBeat === editingBeatId) {
+            outline.focus.currentBeat = outline.beats.find(b => b.status === 'active' || b.status === 'pending')?.id || '';
+        }
+        adapter.setOutline(outline);
+        adapter.renderOutline();
+        adapter.director.refreshInjection();
+        closeBeatEditor();
+    });
+
+    // 主区事件委托：空状态生成按钮 / 点击节点编辑 / 双击幕编辑
     document.getElementById('sd_overview')?.addEventListener('click', (e) => {
         const emptyCta = e.target.closest('#sd_generate_empty');
         if (emptyCta) {
@@ -435,19 +631,87 @@ export function bindUI(ctx, adapter) {
             return;
         }
         const beatEl = e.target.closest('[data-beat-id]');
-        if (!beatEl) return;
-        const id = beatEl.getAttribute('data-beat-id');
+        if (beatEl) openBeatEditor(beatEl.getAttribute('data-beat-id'));
+    });
+    document.getElementById('sd_overview')?.addEventListener('dblclick', (e) => {
+        const actEl = e.target.closest('[data-act-id]');
+        if (!actEl || e.target.closest('[data-beat-id]')) return;
         const outline = adapter.getOutline();
-        const beat = outline.beats.find(b => b.id === id);
-        if (!beat) return;
-        const newTitle = prompt('编辑节点标题：', beat.title);
-        if (newTitle !== null) {
-            beat.title = newTitle;
-            adapter.setOutline(outline);
+        const act = outline.acts.find(a => a.id === actEl.getAttribute('data-act-id'));
+        if (!act) return;
+        const title = prompt('编辑幕标题：', act.title);
+        if (title === null) return;
+        const summary = prompt('编辑幕概要：', act.summary || '');
+        if (summary === null) return;
+        adapter.recordHistory?.(outline, 'manual');
+        act.title = title;
+        act.summary = summary;
+        adapter.setOutline(outline);
+        adapter.renderOutline();
+    });
+
+    // ---------- 快照回滚 / 导出 / 导入 ----------
+    document.getElementById('sd_history_rollback')?.addEventListener('click', () => {
+        const sel = document.getElementById('sd_history_select');
+        const index = Number(sel?.value);
+        if (!Number.isInteger(index) || index < 0) return;
+        if (adapter.restoreHistory?.(index)) {
             adapter.renderOutline();
             adapter.director.refreshInjection();
+            renderReport({ verdict: 'sync', changed: false, reason: `已回滚到快照 #${index + 1}` }, '回滚');
         }
     });
+
+    document.getElementById('sd_export')?.addEventListener('click', async () => {
+        const json = JSON.stringify(adapter.getOutline(), null, 2);
+        try {
+            await navigator.clipboard?.writeText(json);
+            renderReport({ verdict: 'sync', changed: false, reason: '大纲 JSON 已复制到剪贴板' }, '导出');
+        } catch {
+            prompt('复制以下大纲 JSON：', json);
+        }
+    });
+
+    document.getElementById('sd_import')?.addEventListener('click', () => {
+        const raw = prompt('粘贴大纲 JSON：');
+        if (!raw) return;
+        try {
+            const parsed = JSON.parse(raw);
+            adapter.recordHistory?.(adapter.getOutline(), 'import');
+            adapter.setOutline(parsed);
+            adapter.renderOutline();
+            adapter.director.refreshInjection();
+            renderReport({ verdict: 'sync', changed: false, reason: '大纲已导入' }, '导入');
+        } catch (e) {
+            renderReport({ verdict: 'major-drift', changed: false, reason: `导入失败：${e?.message || e}` }, '导入');
+        }
+    });
+
+    // ---------- 窗口拖拽 ----------
+    const header = windowEl?.querySelector('.sd_window_header');
+    if (windowEl && header) {
+        let dragging = null;
+        header.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('#sd_window_close')) return;
+            const rect = windowEl.getBoundingClientRect();
+            dragging = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+            windowEl.classList.add('sd_dragging');
+        });
+        document.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            windowEl.style.left = `${e.clientX - dragging.dx}px`;
+            windowEl.style.top = `${e.clientY - dragging.dy}px`;
+            windowEl.style.right = 'auto';
+            windowEl.style.bottom = 'auto';
+            windowEl.style.margin = '0';
+        });
+        document.addEventListener('pointerup', () => {
+            dragging = null;
+            windowEl.classList.remove('sd_dragging');
+        });
+    }
+
+    renderHistoryOptions();
 }
 
 export { renderOverview, renderFocus, renderReport };

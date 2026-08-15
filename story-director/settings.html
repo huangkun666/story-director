@@ -24,9 +24,16 @@
             <div id="sd_clear" class="menu_button sd_btn sd_btn_danger" title="清空当前聊天的大纲">
                 <i class="fa-solid fa-trash-can sd_btn_icon"></i><span>清空</span>
             </div>
+            <div id="sd_add_beat" class="menu_button sd_btn" title="手动插入一个新情节节点">
+                <i class="fa-solid fa-plus sd_btn_icon"></i><span>加节点</span>
+            </div>
             <label class="sd_enable" title="关闭后不再注入导演指令，也不会自动修订">
                 <input id="sd_enabled" type="checkbox" />
                 <span>启用</span>
+            </label>
+            <label class="sd_enable" title="锁定后自动修订只推进状态和焦点，不会改写你手动编辑的节点内容">
+                <input id="sd_lock_outline" type="checkbox" />
+                <span>锁定大纲</span>
             </label>
         </div>
 
@@ -52,9 +59,34 @@
             </div>
         </div>
 
-        <div id="sd_overview" class="sd_overview"></div>
-        <div id="sd_focus" class="sd_focus"></div>
-        <div id="sd_report" class="sd_report"></div>
+        <div class="sd_workspace">
+            <aside class="sd_sidebar">
+                <div id="sd_sidebar_story" class="sd_sidebar_slot"></div>
+                <div id="sd_sidebar_arcs" class="sd_sidebar_slot"></div>
+                <div id="sd_sidebar_foreshadow" class="sd_sidebar_slot"></div>
+                <section class="sd_card sd_card_tools">
+                    <header class="sd_card_header"><i class="fa-solid fa-toolbox"></i>工具</header>
+                    <div class="sd_card_body">
+                        <label class="sd_tool_row">
+                            <span>修订快照</span>
+                            <select id="sd_history_select"><option value="">（无历史）</option></select>
+                        </label>
+                        <div class="sd_tool_buttons">
+                            <div id="sd_history_rollback" class="menu_button sd_btn" title="回滚到选中的快照"><i class="fa-solid fa-rotate-left"></i><span>回滚</span></div>
+                            <div id="sd_export" class="menu_button sd_btn" title="复制大纲 JSON"><i class="fa-solid fa-copy"></i><span>导出</span></div>
+                            <div id="sd_import" class="menu_button sd_btn" title="粘贴大纲 JSON 导入"><i class="fa-solid fa-paste"></i><span>导入</span></div>
+                        </div>
+                        <small class="sd_hint">生成/修订/体检和手动编辑前都会自动留快照，最多 30 条。</small>
+                    </div>
+                </section>
+            </aside>
+            <main class="sd_main">
+                <div id="sd_stats" class="sd_stats"></div>
+                <div id="sd_focus" class="sd_focus"></div>
+                <div id="sd_overview" class="sd_overview"></div>
+                <div id="sd_report" class="sd_report"></div>
+            </main>
+        </div>
 
         <div class="inline-drawer sd_subdrawer" id="sd_settings_drawer">
             <div class="inline-drawer-toggle inline-drawer-header sd_subdrawer_header">
@@ -147,6 +179,50 @@
                     </div>
                     <small class="sd_hint">custom 模式通过 /v1/chat/completions 直连；配置或网络出错时静默降级为沿用旧大纲，绝不中断 RP。</small>
                 </div>
+            </div>
+        </div>
+
+        <div id="sd_beat_editor" class="sd_modal">
+            <div class="sd_modal_card">
+                <header class="sd_modal_header">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <b>编辑情节节点</b>
+                    <div id="sd_beat_editor_close" class="sd_window_close" title="关闭"><i class="fa-solid fa-xmark"></i></div>
+                </header>
+                <div class="sd_modal_body">
+                    <label class="sd_setting">
+                        <span class="sd_setting_label">节点标题</span>
+                        <input id="sd_beat_title" type="text" placeholder="例如：许都夜宴" />
+                    </label>
+                    <label class="sd_setting">
+                        <span class="sd_setting_label">节点概要（含时间点）</span>
+                        <textarea id="sd_beat_summary" rows="3" placeholder="该节点发生什么、人物目标与转折"></textarea>
+                    </label>
+                    <div class="sd_modal_grid">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">所属幕</span>
+                            <select id="sd_beat_act"></select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">节点类型</span>
+                            <select id="sd_beat_type">
+                                <option value="setup">铺垫</option>
+                                <option value="conflict">冲突</option>
+                                <option value="twist">转折</option>
+                                <option value="climax">高潮</option>
+                                <option value="resolution">收束</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                <footer class="sd_modal_footer">
+                    <div id="sd_beat_move_up" class="menu_button sd_btn" title="在本幕内上移"><i class="fa-solid fa-arrow-up"></i><span>上移</span></div>
+                    <div id="sd_beat_move_down" class="menu_button sd_btn" title="在本幕内下移"><i class="fa-solid fa-arrow-down"></i><span>下移</span></div>
+                    <span class="sd_expander"></span>
+                    <div id="sd_beat_delete" class="menu_button sd_btn sd_btn_danger" title="删除该节点"><i class="fa-solid fa-trash-can"></i><span>删除</span></div>
+                    <div id="sd_beat_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
+                    <div id="sd_beat_save" class="menu_button sd_btn sd_btn_primary" title="保存"><i class="fa-solid fa-check"></i><span>保存</span></div>
+                </footer>
             </div>
         </div>
         </div>

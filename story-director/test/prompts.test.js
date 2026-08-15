@@ -86,6 +86,18 @@ test('buildRevisePrompt uses strict pull-back instruction when requested', () =>
     assert.ok(!prompt.includes('宽松吸收'));
 });
 
+test('buildRevisePrompt tells model not to rewrite locked outline', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o, locked: true });
+    assert.ok(prompt.includes('锁定'));
+    assert.ok(prompt.includes('禁止改写'));
+});
+
+test('OUTLINE_SCHEMA exposes beat types and arc status', () => {
+    assert.ok(OUTLINE_SCHEMA.properties.beats.items.properties.type);
+    assert.ok(OUTLINE_SCHEMA.properties.arcs.items.properties.status);
+});
+
 test('buildCheckPrompt includes dialogue and outline', () => {
     const o = createEmptyOutline();
     o.world = '魔法大陆';

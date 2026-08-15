@@ -6,7 +6,7 @@ import { mountUI, bindUI } from './src/ui.js';
     'use strict';
 
     const NAMESPACE = 'STORY_DIRECTOR';
-    const VERSION = '0.5.0';
+    const VERSION = '0.6.0';
 
     if (window[NAMESPACE]?.loaded) {
         console.warn(`[story-director] Already loaded, skipping duplicate init.`);
@@ -73,7 +73,9 @@ import { mountUI, bindUI } from './src/ui.js';
                             <div id="sd_revise" class="menu_button sd_btn"><i class="fa-solid fa-rotate sd_btn_icon"></i><span>修订</span></div>
                             <div id="sd_check" class="menu_button sd_btn"><i class="fa-solid fa-stethoscope sd_btn_icon"></i><span>大纲体检</span></div>
                             <div id="sd_clear" class="menu_button sd_btn sd_btn_danger"><i class="fa-solid fa-trash-can sd_btn_icon"></i><span>清空</span></div>
+                            <div id="sd_add_beat" class="menu_button sd_btn"><i class="fa-solid fa-plus sd_btn_icon"></i><span>加节点</span></div>
                             <label class="sd_enable"><input id="sd_enabled" type="checkbox" /><span>启用</span></label>
+                            <label class="sd_enable"><input id="sd_lock_outline" type="checkbox" /><span>锁定大纲</span></label>
                         </div>
                         <div id="sd_timeline_editor" class="sd_timeline_editor">
                             <div class="sd_timeline_head"><i class="fa-solid fa-calendar-days"></i><b>时间线约束</b></div>

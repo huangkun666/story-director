@@ -60,6 +60,17 @@ test('normalizeOutline accepts acts and keeps beat actId', () => {
     assert.equal(o.beats[1].actId, 'act_2'); // 兼容 act_id 字段
 });
 
+test('normalizeOutline keeps beat type, arc status and foreshadow payoff beat', () => {
+    const o = normalizeOutline({
+        beats: [{ id: 'b1', title: 't', summary: 's', type: 'climax', status: 'active' }],
+        arcs: [{ char: '甲', growth: '成长', status: 'active' }],
+        foreshadowing: [{ id: 'f1', hint: '伏笔', status: 'paid', beatId: 'b1' }],
+    });
+    assert.equal(o.beats[0].type, 'climax');
+    assert.equal(o.arcs[0].status, 'active');
+    assert.equal(o.foreshadowing[0].beatId, 'b1');
+});
+
 test('normalizeOutline coerces invalid status values', () => {
     const o = normalizeOutline({
         beats: [{ id: 'b1', title: 't', summary: 's', status: 'bogus' }],

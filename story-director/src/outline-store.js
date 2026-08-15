@@ -5,6 +5,8 @@ export const OUTLINE_VERSION = 1;
 
 const VALID_BEAT_STATUS = new Set(['pending', 'active', 'done']);
 const VALID_FORESHADOW_STATUS = new Set(['pending', 'active', 'paid']);
+const VALID_BEAT_TYPE = new Set(['setup', 'conflict', 'twist', 'climax', 'resolution']);
+const VALID_ARC_STATUS = new Set(['pending', 'active', 'done']);
 
 export function createEmptyOutline() {
     return {
@@ -68,6 +70,7 @@ function normalizeBeat(b, index) {
         actId: asString(b.actId, '') || asString(b.act_id, ''),
         title: asString(b.title, '') || asString(b.name, ''),
         summary: asString(b.summary, '') || asString(b.description, ''),
+        type: VALID_BEAT_TYPE.has(b.type) ? b.type : '',
         status: VALID_BEAT_STATUS.has(b.status) ? b.status : 'pending',
     };
 }
@@ -77,7 +80,7 @@ function normalizeForeshadow(f, index) {
     if (typeof f === 'string') {
         const hint = f.trim();
         if (!hint) return null;
-        return { id: `f${index + 1}`, hint, status: 'pending', payoff: '' };
+        return { id: `f${index + 1}`, hint, status: 'pending', payoff: '', beatId: '' };
     }
     if (!f || typeof f !== 'object') return null;
     const id = asString(f.id, '');
@@ -88,6 +91,7 @@ function normalizeForeshadow(f, index) {
         hint: hint || id,
         status: VALID_FORESHADOW_STATUS.has(f.status) ? f.status : 'pending',
         payoff: asString(f.payoff, ''),
+        beatId: asString(f.beatId, '') || asString(f.payoffBeat, ''),
     };
 }
 
@@ -101,9 +105,9 @@ function normalizeArc(a) {
             const char = s.slice(0, s.indexOf(sep)).trim();
             const growth = s.slice(s.indexOf(sep) + sep.length).trim();
             if (!char && !growth) return null;
-            return { char: char || '（未命名角色）', desire: '', flaw: '', growth };
+            return { char: char || '（未命名角色）', desire: '', flaw: '', growth, status: 'pending' };
         }
-        return { char: '（未命名角色）', desire: '', flaw: '', growth: s };
+        return { char: '（未命名角色）', desire: '', flaw: '', growth: s, status: 'pending' };
     }
     if (!a || typeof a !== 'object') return null;
     const char = asString(a.char, '') || asString(a.character, '') || asString(a.name, '');
@@ -113,6 +117,7 @@ function normalizeArc(a) {
         desire: asString(a.desire, ''),
         flaw: asString(a.flaw, ''),
         growth: asString(a.growth, '') || asString(a.arc, ''),
+        status: VALID_ARC_STATUS.has(a.status) ? a.status : 'pending',
     };
 }
 

@@ -7,6 +7,7 @@ import { createOpenAiCompatibleGenerator } from './openai-compat.js';
 const META_KEY = 'story_director';
 const INJECT_KEY = 'story_director';
 const SETTINGS_KEY = 'story_director';
+const HISTORY_KEY = 'story_director_history';
 
 export const DEFAULT_LLM_SETTINGS = {
     mode: 'main',           // 'main' = 复用主 API；'custom' = 独立配置（OpenAI 兼容直连）
@@ -25,6 +26,7 @@ export const DEFAULT_SETTINGS = {
     driftTolerance: 'loose',        // 'loose' | 'strict'
     outlineDetail: 'medium',        // 'low' | 'medium' | 'high'
     recentTurns: 5,
+    lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
     llm: { ...DEFAULT_LLM_SETTINGS },
 };
 
@@ -81,6 +83,36 @@ export function createSillyTavernAdapter(ctx) {
         const c = freshCtx();
         c.updateChatMetadata({ [META_KEY]: serializeOutline(normalized) });
         c.saveMetadataDebounced?.();
+    }
+
+    function getHistory() {
+        const raw = freshCtx().chatMetadata?.[HISTORY_KEY];
+        if (!Array.isArray(raw)) return [];
+        return raw.filter(entry => entry && typeof entry === 'object' && entry.outline).map(entry => ({
+            at: typeof entry.at === 'string' ? entry.at : '',
+            reason: typeof entry.reason === 'string' ? entry.reason : '',
+            outline: normalizeOutline(entry.outline),
+        }));
+    }
+
+    function recordHistory(outline, reason = 'manual') {
+        const c = freshCtx();
+        const history = getHistory();
+        history.unshift({
+            at: new Date().toISOString(),
+            reason,
+            outline: normalizeOutline(outline),
+        });
+        c.updateChatMetadata({ [HISTORY_KEY]: history.slice(0, 30) });
+        c.saveMetadataDebounced?.();
+    }
+
+    function restoreHistory(index) {
+        const history = getHistory();
+        const entry = history[index];
+        if (!entry) return false;
+        setOutline(entry.outline);
+        return true;
     }
 
     function setInjectedInstruction(text) {
@@ -165,6 +197,7 @@ export function createSillyTavernAdapter(ctx) {
         getSettings: () => settings,
         getRecentDialogue,
         getCharacterCard,
+        recordHistory,
         renderOutline,
     });
 
@@ -182,6 +215,9 @@ export function createSillyTavernAdapter(ctx) {
         settings,
         getOutline,
         setOutline,
+        getHistory,
+        recordHistory,
+        restoreHistory,
         load: () => { director.refreshInjection(); renderOutline(); },
         save: () => { director.refreshInjection(); },
         getCharacterCard,

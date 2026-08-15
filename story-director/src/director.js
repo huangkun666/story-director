@@ -13,6 +13,14 @@ export function createDirector(deps) {
     const gen = makeStructuredGenerator(deps.generateRaw, OUTLINE_SCHEMA);
     const genCheck = makeStructuredGenerator(deps.generateRaw, CHECK_SCHEMA);
 
+    function recordHistory(reason) {
+        try {
+            deps.recordHistory?.(deps.getOutline(), reason);
+        } catch (err) {
+            console.warn('[story-director] failed to record history snapshot:', err);
+        }
+    }
+
     function refreshInjection() {
         const settings = deps.getSettings();
         if (!settings.enabled) {
@@ -53,6 +61,7 @@ export function createDirector(deps) {
                         note: requestedTimeline.note || next.timeline.note,
                     };
                 }
+                recordHistory('generate');
                 deps.setOutline(next);
                 deps.renderOutline();
             }
@@ -74,10 +83,12 @@ export function createDirector(deps) {
                 recentDialogue: dialogue,
                 outline,
                 driftTolerance: settings.driftTolerance || 'loose',
+                locked: settings.lockOutline === true,
             });
             const result = await gen(bundle);
             if (result) {
-                deps.setOutline(applyRevision(outline, result));
+                recordHistory('revise');
+                deps.setOutline(applyRevision(outline, result, { lockOutline: settings.lockOutline === true }));
                 deps.renderOutline();
             }
             refreshInjection();
@@ -102,6 +113,7 @@ export function createDirector(deps) {
             }
             const { outline: updated, report: normalizedReport } = applyCheckResult(outline, report);
             if (normalizedReport.changed) {
+                recordHistory('check');
                 deps.setOutline(updated);
                 deps.renderOutline();
             }
