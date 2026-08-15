@@ -134,15 +134,18 @@ beats 至少 3 个，按起承转合排列；第一个 beat 的 status 设为 "a
     return { system, prompt };
 }
 
-export function buildRevisePrompt({ recentDialogue = '', outline }) {
+export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose' }) {
     const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const driftInstruction = driftTolerance === 'strict'
+        ? '若剧情偏离当前方向，请严格拉回：不要为偏离新增节点，优先把 focus.currentBeat / focus.nextStep 调整回既定节点与方向；仅当偏离已成为不可逆事实时，才做最小化吸收并说明理由。'
+        : '若剧情偏离当前方向，请宽松吸收：把新走向写入大纲（改写 focus.nextStep 或插入新 beat），而非强行拉回。';
     const prompt = `【最近对话】
 ${recentDialogue}
 
 【当前大纲】
 ${serializeOutline(outline)}
 
-请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) 若剧情偏离当前方向，将其吸收进大纲（改写 focus.nextStep 或插入新 beat），而非强行拉回；3) 更新伏笔状态。
+请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态。
 
 严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
     return { system, prompt };

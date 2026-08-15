@@ -16,6 +16,44 @@
         <div id="sd_overview" class="sd_overview"><small>尚未生成大纲。点击"生成大纲"开始。</small></div>
         <div id="sd_focus" class="sd_focus"></div>
         <div id="sd_report" class="sd_report"></div>
+        <details class="sd_llm_settings sd_settings_group">
+            <summary>参数设置</summary>
+            <label class="sd_llm_row">控制强度
+                <select id="sd_control_strength">
+                    <option value="weak">弱引导</option>
+                    <option value="strong">强约束</option>
+                </select>
+            </label>
+            <label class="sd_llm_row">注入指令长度上限（近似 token）
+                <input id="sd_inject_limit" type="number" min="0" max="4000" step="10" />
+            </label>
+            <label class="sd_llm_row">修订节奏
+                <select id="sd_revise_frequency">
+                    <option value="every">每轮</option>
+                    <option value="everyN">每 N 轮</option>
+                    <option value="manual">仅手动</option>
+                </select>
+            </label>
+            <label class="sd_llm_row" id="sd_revise_every_n_row">每 N 轮
+                <input id="sd_revise_every_n" type="number" min="1" max="20" step="1" />
+            </label>
+            <label class="sd_llm_row">偏离处理
+                <select id="sd_drift_tolerance">
+                    <option value="loose">宽松吸收</option>
+                    <option value="strict">严格拉回</option>
+                </select>
+            </label>
+            <label class="sd_llm_row">大纲详细度
+                <select id="sd_outline_detail">
+                    <option value="low">低</option>
+                    <option value="medium">中</option>
+                    <option value="high">高</option>
+                </select>
+            </label>
+            <label class="sd_llm_row">修订回顾轮数
+                <input id="sd_recent_turns" type="number" min="1" max="50" step="1" />
+            </label>
+        </details>
         <details class="sd_llm_settings">
             <summary>独立 API 设置</summary>
             <label class="sd_llm_row">模式

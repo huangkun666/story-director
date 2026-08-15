@@ -67,6 +67,20 @@ test('director.revise keeps old outline when LLM returns null', async () => {
     assert.equal(deps.getOutline(), before);
 });
 
+test('director.revise passes driftTolerance setting into revision prompt', async () => {
+    let receivedPrompt = '';
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify(createEmptyOutline());
+        },
+        getSettings: () => ({ enabled: true, recentTurns: 5, driftTolerance: 'strict' }),
+    });
+    const d = createDirector(deps);
+    await d.revise();
+    assert.ok(receivedPrompt.includes('严格拉回'));
+});
+
 test('director.check applies modified outline when changed is true', async () => {
     const calls = [];
     const newOutline = createEmptyOutline();

@@ -53,7 +53,11 @@ export function createDirector(deps) {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
             const outline = deps.getOutline();
-            const bundle = buildRevisePrompt({ recentDialogue: dialogue, outline });
+            const bundle = buildRevisePrompt({
+                recentDialogue: dialogue,
+                outline,
+                driftTolerance: settings.driftTolerance || 'loose',
+            });
             const result = await gen(bundle);
             if (result) {
                 deps.setOutline(applyRevision(outline, result));

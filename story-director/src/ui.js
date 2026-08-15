@@ -78,6 +78,55 @@ export function bindUI(ctx, adapter) {
         ctx.saveSettingsDebounced?.();
         adapter.director.refreshInjection();
     });
+
+    // 参数设置（任务 B）：每个控件即时写回 extension_settings 并保存
+    const saveSettings = () => ctx.saveSettingsDebounced?.();
+    const setSelect = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value ?? '';
+    };
+    const bindSelect = (id, key, after) => {
+        document.getElementById(id)?.addEventListener('change', (e) => {
+            adapter.settings[key] = e.target.value;
+            saveSettings();
+            after?.();
+        });
+    };
+    const bindNumber = (id, key, { min = 0, max = 1000, integer = true, after } = {}) => {
+        document.getElementById(id)?.addEventListener('input', (e) => {
+            const raw = Number(e.target.value);
+            let value = Number.isFinite(raw) ? raw : adapter.settings[key];
+            value = Math.min(max, Math.max(min, value));
+            adapter.settings[key] = integer ? Math.floor(value) : value;
+            saveSettings();
+            after?.();
+        });
+    };
+
+    setSelect('sd_control_strength', adapter.settings.controlStrength);
+    setSelect('sd_revise_frequency', adapter.settings.reviseFrequency);
+    setSelect('sd_drift_tolerance', adapter.settings.driftTolerance);
+    setSelect('sd_outline_detail', adapter.settings.outlineDetail);
+    const injectLimitEl = document.getElementById('sd_inject_limit');
+    if (injectLimitEl) injectLimitEl.value = adapter.settings.injectTokenLimit;
+    const reviseEveryNEl = document.getElementById('sd_revise_every_n');
+    if (reviseEveryNEl) reviseEveryNEl.value = adapter.settings.reviseEveryN;
+    const recentTurnsEl = document.getElementById('sd_recent_turns');
+    if (recentTurnsEl) recentTurnsEl.value = adapter.settings.recentTurns;
+
+    const syncReviseEveryNVisibility = () => {
+        const row = document.getElementById('sd_revise_every_n_row');
+        if (row) row.style.display = adapter.settings.reviseFrequency === 'everyN' ? '' : 'none';
+    };
+    syncReviseEveryNVisibility();
+
+    bindSelect('sd_control_strength', 'controlStrength', () => adapter.director.refreshInjection());
+    bindNumber('sd_inject_limit', 'injectTokenLimit', { min: 0, max: 4000, after: () => adapter.director.refreshInjection() });
+    bindSelect('sd_revise_frequency', 'reviseFrequency', syncReviseEveryNVisibility);
+    bindNumber('sd_revise_every_n', 'reviseEveryN', { min: 1, max: 20 });
+    bindSelect('sd_drift_tolerance', 'driftTolerance');
+    bindSelect('sd_outline_detail', 'outlineDetail');
+    bindNumber('sd_recent_turns', 'recentTurns', { min: 1, max: 50 });
     document.getElementById('sd_generate')?.addEventListener('click', async () => {
         try {
             const r = await adapter.director.generate({ userRequest: '' });

@@ -40,6 +40,20 @@ test('buildRevisePrompt includes dialogue and outline', () => {
     assert.ok(prompt.includes('复仇'));
 });
 
+test('buildRevisePrompt defaults to loose drift absorption', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o });
+    assert.ok(prompt.includes('宽松吸收'));
+});
+
+test('buildRevisePrompt uses strict pull-back instruction when requested', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o, driftTolerance: 'strict' });
+    assert.ok(prompt.includes('严格拉回'));
+    assert.ok(prompt.includes('最小化吸收'));
+    assert.ok(!prompt.includes('宽松吸收'));
+});
+
 test('buildCheckPrompt includes dialogue and outline', () => {
     const o = createEmptyOutline();
     o.world = '魔法大陆';
