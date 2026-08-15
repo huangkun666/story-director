@@ -6,7 +6,7 @@ import { mountUI, bindUI } from './src/ui.js';
     'use strict';
 
     const NAMESPACE = 'STORY_DIRECTOR';
-    const VERSION = '0.10.0';
+    const VERSION = '0.11.0';
 
     if (window[NAMESPACE]?.loaded) {
         console.warn(`[story-director] Already loaded, skipping duplicate init.`);

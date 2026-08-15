@@ -1,14 +1,17 @@
 <div id="story_director_window" class="sd_window">
     <div class="sd_window_header">
         <div class="sd_title_block">
-            <i class="fa-solid fa-clapperboard sd_title_icon"></i>
-            <b>叙事导演</b>
-            <span class="sd_subtitle">Story Director</span>
+            <span class="sd_title_badge"><i class="fa-solid fa-clapperboard"></i></span>
+            <div class="sd_title_texts">
+                <b>叙事导演</b>
+                <span class="sd_subtitle">Story Director · 大纲工作台</span>
+            </div>
         </div>
         <div class="sd_window_actions">
             <div id="sd_window_close" class="sd_window_close" title="关闭（Esc）"><i class="fa-solid fa-xmark"></i></div>
         </div>
     </div>
+
     <div class="sd_window_body">
         <div id="story_director_panel" class="sd_panel_content">
             <div id="sd_toolbar" class="sd_toolbar">
@@ -18,223 +21,311 @@
                 <div id="sd_revise" class="menu_button sd_btn" title="手动触发一次情节追踪，推进节点并吸收偏离">
                     <i class="fa-solid fa-rotate sd_btn_icon"></i><span>修订</span>
                 </div>
-                <div id="sd_check" class="menu_button sd_btn" title="检查大纲与剧情的同步性，无论改没改都给反馈">
+                <div id="sd_check" class="menu_button sd_btn" title="检查大纲与剧情的同步性">
                     <i class="fa-solid fa-stethoscope sd_btn_icon"></i><span>大纲体检</span>
-                </div>
-                <div id="sd_clear" class="menu_button sd_btn sd_btn_danger" title="清空当前聊天的大纲">
-                    <i class="fa-solid fa-trash-can sd_btn_icon"></i><span>清空</span>
                 </div>
                 <div id="sd_add_beat" class="menu_button sd_btn" title="手动插入一个新情节节点">
                     <i class="fa-solid fa-plus sd_btn_icon"></i><span>加节点</span>
                 </div>
+                <div id="sd_clear" class="menu_button sd_btn sd_btn_danger" title="清空当前聊天的大纲">
+                    <i class="fa-solid fa-trash-can sd_btn_icon"></i><span>清空</span>
+                </div>
+                <span class="sd_toolbar_spacer"></span>
                 <label class="sd_enable" title="关闭后不再注入导演指令，也不会自动修订">
                     <input id="sd_enabled" type="checkbox" />
                     <span>启用</span>
                 </label>
-                <label class="sd_enable" title="锁定后自动修订只推进状态和焦点，不会改写你手动编辑的节点内容">
+                <label class="sd_enable" title="锁定后自动修订只推进状态和焦点，不会改写手动编辑内容">
                     <input id="sd_lock_outline" type="checkbox" />
                     <span>锁定大纲</span>
                 </label>
             </div>
 
-            <div id="sd_tabbar" class="sd_tabbar">
+            <nav id="sd_tabbar" class="sd_tabbar">
                 <div class="sd_tab sd_tab_active" data-sd-view="sd_view_outline">
                     <i class="fa-solid fa-timeline"></i><span>大纲总览</span>
                 </div>
-                <div class="sd_tab" data-sd-view="sd_view_settings">
-                    <i class="fa-solid fa-sliders"></i><span>设置与工具</span>
+                <div class="sd_tab" data-sd-view="sd_view_story">
+                    <i class="fa-solid fa-book-open"></i><span>故事设定</span>
                 </div>
-            </div>
+                <div class="sd_tab" data-sd-view="sd_view_generation">
+                    <i class="fa-solid fa-sliders"></i><span>生成与记忆</span>
+                </div>
+                <div class="sd_tab" data-sd-view="sd_view_api_tools">
+                    <i class="fa-solid fa-plug"></i><span>API 与工具</span>
+                </div>
+            </nav>
 
-            <div id="sd_view_outline" class="sd_view">
+            <section id="sd_view_outline" class="sd_view">
                 <div id="sd_stats" class="sd_stats"></div>
                 <div id="sd_focus" class="sd_focus"></div>
                 <div id="sd_overview" class="sd_overview"></div>
                 <div id="sd_report" class="sd_report"></div>
-            </div>
+            </section>
 
-            <div id="sd_view_settings" class="sd_view sd_hidden">
-                <div class="sd_settings_columns">
-                    <section class="sd_settings_setup">
-                        <div id="sd_sidebar_story" class="sd_sidebar_slot"></div>
-                        <div id="sd_sidebar_arcs" class="sd_sidebar_slot"></div>
-                        <div id="sd_sidebar_foreshadow" class="sd_sidebar_slot"></div>
-                    </section>
+            <section id="sd_view_story" class="sd_view sd_hidden">
+                <div class="sd_page_head">
+                    <div>
+                        <h4>故事设定</h4>
+                        <p>时间线与必读设定约束大纲范围；总览、弧光、伏笔来自当前大纲。</p>
+                    </div>
+                </div>
 
-                    <section class="sd_settings_main">
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-calendar-days"></i></span>
+                        <div class="sd_card_titles">
+                            <b>时间线约束</b>
+                            <small>所有分幕和节点都限制在这个时间段内</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body">
                         <div id="sd_timeline_editor" class="sd_timeline_editor">
-                            <div class="sd_timeline_head">
-                                <i class="fa-solid fa-calendar-days"></i>
-                                <b>时间线约束</b>
-                                <small>生成大纲时，所有分幕和节点都限制在这个时间段内</small>
-                            </div>
                             <div class="sd_timeline_fields">
-                                <label class="sd_setting sd_timeline_field">
+                                <label class="sd_setting">
                                     <span class="sd_setting_label">开始时间</span>
-                                    <input id="sd_timeline_start" type="text" placeholder="例如：建安五年（200年）" />
+                                    <input id="sd_timeline_start" type="text" placeholder="例如：第一章 / 第一天 / 200年" />
                                 </label>
-                                <label class="sd_setting sd_timeline_field">
+                                <label class="sd_setting">
                                     <span class="sd_setting_label">结束时间</span>
-                                    <input id="sd_timeline_end" type="text" placeholder="例如：建安十三年（208年）" />
+                                    <input id="sd_timeline_end" type="text" placeholder="例如：第十章 / 第七天 / 208年" />
                                 </label>
-                                <label class="sd_setting sd_timeline_field sd_timeline_note">
+                                <label class="sd_setting">
                                     <span class="sd_setting_label">补充约束</span>
-                                    <input id="sd_timeline_note" type="text" placeholder="可选：例如 必须包含赤壁之战、官渡之战" />
+                                    <input id="sd_timeline_note" type="text" placeholder="必须包含的关键事件（可选）" />
                                 </label>
-                                <label class="sd_setting sd_timeline_field sd_timeline_mustread">
+                                <label class="sd_setting sd_setting_wide">
                                     <span class="sd_setting_label">必读设定</span>
-                                    <textarea id="sd_timeline_must_read" rows="2" placeholder="可选：最高优先级设定，例如 这个世界魔法会消耗寿命"></textarea>
+                                    <textarea id="sd_timeline_must_read" rows="2" placeholder="最高优先级设定，例如：这个世界魔法会消耗寿命"></textarea>
                                 </label>
                             </div>
                         </div>
+                    </div>
+                </section>
 
-                        <section class="sd_card">
-                            <header class="sd_card_header"><i class="fa-solid fa-sliders"></i>生成与修订参数</header>
-                            <div class="sd_card_body sd_settings_grid">
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-compass"></i>控制强度</span>
-                                    <select id="sd_control_strength">
-                                        <option value="weak">弱引导（参考即可）</option>
-                                        <option value="strong">强约束（必须遵循）</option>
-                                    </select>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-scissors"></i>注入指令上限</span>
-                                    <input id="sd_inject_limit" type="number" min="0" max="4000" step="10" />
-                                    <small>导演指令的近似 token 上限，0 表示不注入</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-rotate"></i>修订节奏</span>
-                                    <select id="sd_revise_frequency">
-                                        <option value="every">每轮自动修订</option>
-                                        <option value="everyN">每 N 轮修订</option>
-                                        <option value="manual">仅手动修订</option>
-                                    </select>
-                                </label>
-                                <label class="sd_setting" id="sd_revise_every_n_row">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-hashtag"></i>修订间隔 N</span>
-                                    <input id="sd_revise_every_n" type="number" min="1" max="20" step="1" />
-                                    <small>每发送 N 条消息后自动修订一次</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-arrows-split-up-and-left"></i>偏离处理</span>
-                                    <select id="sd_drift_tolerance">
-                                        <option value="loose">宽松吸收（把新走向写进大纲）</option>
-                                        <option value="strict">严格拉回（回到既定节点方向）</option>
-                                    </select>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-align-left"></i>大纲详细度</span>
-                                    <select id="sd_outline_detail">
-                                        <option value="low">低（骨架式分幕）</option>
-                                        <option value="medium">中（均衡）</option>
-                                        <option value="high">高（节点细节更丰富）</option>
-                                    </select>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-brain"></i>生成大纲的记忆模式</span>
-                                    <select id="sd_generate_memory_mode">
-                                        <option value="auto">自动（摘要 + 向量检索）</option>
-                                        <option value="summary">只读记忆摘要</option>
-                                        <option value="vector">只做向量检索</option>
-                                        <option value="none">不使用记忆</option>
-                                    </select>
-                                    <small>避免大纲被过长聊天记忆过度约束时，选 none 或 vector</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-clock-rotate-left"></i>修订回顾轮数</span>
-                                    <input id="sd_recent_turns" type="number" min="1" max="50" step="1" />
-                                    <small>修订/体检时回看最近多少轮对话</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-address-card"></i>角色卡上下文上限</span>
-                                    <input id="sd_card_context_limit" type="number" min="2000" max="200000" step="1000" />
-                                    <small>字符数；防止巨型世界书/深度提示把大纲请求撑爆</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-comment-dots"></i>对话上下文上限</span>
-                                    <input id="sd_dialogue_context_limit" type="number" min="1000" max="50000" step="500" />
-                                    <small>修订/体检时最多回看多少字符的对话</small>
-                                </label>
-                                <label class="sd_setting sd_setting_wide">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-brain"></i>接入长时记忆插件</span>
-                                    <select id="sd_use_memory_plugin">
-                                        <option value="true">开启（yuzuki-Memory）</option>
-                                        <option value="false">关闭</option>
-                                    </select>
-                                    <small>开启后生成/修订/体检会读取记忆插件的剧情摘要与表格，防止长对话后幻觉</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-brain"></i>记忆上下文上限</span>
-                                    <input id="sd_memory_context_limit" type="number" min="1000" max="50000" step="500" />
-                                    <small>记忆插件注入大纲请求的最大字符数</small>
-                                </label>
-                                <label class="sd_setting sd_setting_wide">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-magnifying-glass-chart"></i>向量资料检索</span>
-                                    <select id="sd_use_vector_memory">
-                                        <option value="true">开启（检索柚月向量库）</option>
-                                        <option value="false">关闭</option>
-                                    </select>
-                                    <small>用时间线、用户要求和当前焦点作为 query 检索柚月已向量化的资料</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-magnifying-glass-chart"></i>向量结果上限</span>
-                                    <input id="sd_vector_memory_limit" type="number" min="1000" max="30000" step="500" />
-                                    <small>向量检索结果注入大纲请求的最大字符数</small>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section class="sd_card">
-                            <header class="sd_card_header"><i class="fa-solid fa-plug-circle-bolt"></i>独立 API</header>
-                            <div class="sd_card_body">
-                                <label class="sd_setting sd_setting_wide">
-                                    <span class="sd_setting_label"><i class="fa-solid fa-route"></i>连接模式</span>
-                                    <select id="sd_llm_mode">
-                                        <option value="main">复用主 API</option>
-                                        <option value="custom">独立配置（OpenAI 兼容）</option>
-                                    </select>
-                                </label>
-                                <div id="sd_llm_fields" class="sd_llm_fields">
-                                    <label class="sd_setting">
-                                        <span class="sd_setting_label"><i class="fa-solid fa-code"></i>API 类型</span>
-                                        <input id="sd_llm_api" type="text" placeholder="openai / textgenerationwebui" />
-                                    </label>
-                                    <label class="sd_setting">
-                                        <span class="sd_setting_label"><i class="fa-solid fa-globe"></i>Base URL</span>
-                                        <input id="sd_llm_base_url" type="text" placeholder="https://your-proxy.example/v1" />
-                                    </label>
-                                    <label class="sd_setting">
-                                        <span class="sd_setting_label"><i class="fa-solid fa-key"></i>API Key</span>
-                                        <input id="sd_llm_api_key" type="password" autocomplete="off" placeholder="sk-..." />
-                                    </label>
-                                    <label class="sd_setting">
-                                        <span class="sd_setting_label"><i class="fa-solid fa-microchip"></i>模型</span>
-                                        <input id="sd_llm_model" type="text" placeholder="留空使用服务端默认模型" />
-                                    </label>
-                                </div>
-                                <small class="sd_hint">custom 模式通过 /v1/chat/completions 直连；配置或网络出错时静默降级为沿用旧大纲，绝不中断 RP。</small>
-                            </div>
-                        </section>
-
-                        <section class="sd_card sd_card_tools">
-                            <header class="sd_card_header"><i class="fa-solid fa-toolbox"></i>工具</header>
-                            <div class="sd_card_body">
-                                <label class="sd_tool_row">
-                                    <span>修订快照</span>
-                                    <select id="sd_history_select"><option value="">（无历史）</option></select>
-                                </label>
-                                <div class="sd_tool_buttons">
-                                    <div id="sd_history_rollback" class="menu_button sd_btn" title="回滚到选中的快照"><i class="fa-solid fa-rotate-left"></i><span>回滚</span></div>
-                                    <div id="sd_export" class="menu_button sd_btn" title="复制大纲 JSON"><i class="fa-solid fa-copy"></i><span>导出</span></div>
-                                    <div id="sd_import" class="menu_button sd_btn" title="粘贴大纲 JSON 导入"><i class="fa-solid fa-paste"></i><span>导入</span></div>
-                                </div>
-                                <small class="sd_hint">生成/修订/体检和手动编辑前都会自动留快照，最多 30 条。</small>
-                            </div>
-                        </section>
-                    </section>
+                <div class="sd_story_grid">
+                    <div id="sd_sidebar_story" class="sd_sidebar_slot"></div>
+                    <div id="sd_sidebar_arcs" class="sd_sidebar_slot"></div>
+                    <div id="sd_sidebar_foreshadow" class="sd_sidebar_slot"></div>
                 </div>
-            </div>
+            </section>
+
+            <section id="sd_view_generation" class="sd_view sd_hidden">
+                <div class="sd_page_head">
+                    <div>
+                        <h4>生成与记忆</h4>
+                        <p>控制大纲生成质量、修订节奏，以及长时记忆与向量资料的接入方式。</p>
+                    </div>
+                </div>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                        <div class="sd_card_titles">
+                            <b>大纲生成</b>
+                            <small>影响每次生成大纲的详细程度和约束强度</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body sd_settings_grid">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">控制强度</span>
+                            <select id="sd_control_strength">
+                                <option value="weak">弱引导（参考即可）</option>
+                                <option value="strong">强约束（必须遵循）</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">大纲详细度</span>
+                            <select id="sd_outline_detail">
+                                <option value="low">低（骨架式分幕）</option>
+                                <option value="medium">中（均衡）</option>
+                                <option value="high">高（节点细节更丰富）</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">注入指令上限</span>
+                            <input id="sd_inject_limit" type="number" min="0" max="4000" step="10" />
+                            <small>导演指令近似 token 上限，0 表示不注入</small>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">生成大纲的记忆模式</span>
+                            <select id="sd_generate_memory_mode">
+                                <option value="auto">自动（摘要 + 向量检索）</option>
+                                <option value="summary">只读记忆摘要</option>
+                                <option value="vector">只做向量检索</option>
+                                <option value="none">不使用记忆</option>
+                            </select>
+                            <small>想摆脱旧聊天约束时选 none</small>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-rotate"></i></span>
+                        <div class="sd_card_titles">
+                            <b>自动修订</b>
+                            <small>每轮发送消息后如何推进大纲</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body sd_settings_grid">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">修订节奏</span>
+                            <select id="sd_revise_frequency">
+                                <option value="every">每轮自动修订</option>
+                                <option value="everyN">每 N 轮修订</option>
+                                <option value="manual">仅手动修订</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting" id="sd_revise_every_n_row">
+                            <span class="sd_setting_label">修订间隔 N</span>
+                            <input id="sd_revise_every_n" type="number" min="1" max="20" step="1" />
+                            <small>每发送 N 条消息后自动修订一次</small>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">偏离处理</span>
+                            <select id="sd_drift_tolerance">
+                                <option value="loose">宽松吸收（把新走向写进大纲）</option>
+                                <option value="strict">严格拉回（回到既定节点方向）</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">修订回顾轮数</span>
+                            <input id="sd_recent_turns" type="number" min="1" max="50" step="1" />
+                            <small>修订/体检时回看最近多少轮对话</small>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-scissors"></i></span>
+                        <div class="sd_card_titles">
+                            <b>上下文预算</b>
+                            <small>防止超长角色卡或对话把请求撑爆</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body sd_settings_grid">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">角色卡上下文上限</span>
+                            <input id="sd_card_context_limit" type="number" min="2000" max="200000" step="1000" />
+                            <small>字符数</small>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">对话上下文上限</span>
+                            <input id="sd_dialogue_context_limit" type="number" min="1000" max="50000" step="500" />
+                            <small>字符数</small>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-brain"></i></span>
+                        <div class="sd_card_titles">
+                            <b>记忆插件</b>
+                            <small>接入 yuzuki-Memory 的摘要与向量资料</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body sd_settings_grid">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">长时记忆摘要</span>
+                            <select id="sd_use_memory_plugin">
+                                <option value="true">开启</option>
+                                <option value="false">关闭</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">记忆摘要上限</span>
+                            <input id="sd_memory_context_limit" type="number" min="1000" max="50000" step="500" />
+                            <small>字符数</small>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">向量资料检索</span>
+                            <select id="sd_use_vector_memory">
+                                <option value="true">开启</option>
+                                <option value="false">关闭</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">向量结果上限</span>
+                            <input id="sd_vector_memory_limit" type="number" min="1000" max="30000" step="500" />
+                            <small>字符数</small>
+                        </label>
+                    </div>
+                </section>
+            </section>
+
+            <section id="sd_view_api_tools" class="sd_view sd_hidden">
+                <div class="sd_page_head">
+                    <div>
+                        <h4>API 与工具</h4>
+                        <p>独立模型连接，以及大纲快照、导入导出。</p>
+                    </div>
+                </div>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-plug-circle-bolt"></i></span>
+                        <div class="sd_card_titles">
+                            <b>独立 API</b>
+                            <small>生成/修订/体检可脱离酒馆主 API</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body">
+                        <div class="sd_settings_grid">
+                            <label class="sd_setting sd_setting_wide">
+                                <span class="sd_setting_label">连接模式</span>
+                                <select id="sd_llm_mode">
+                                    <option value="main">复用主 API</option>
+                                    <option value="custom">独立配置（OpenAI 兼容）</option>
+                                </select>
+                            </label>
+                            <div id="sd_llm_fields" class="sd_llm_fields">
+                                <label class="sd_setting">
+                                    <span class="sd_setting_label">API 类型</span>
+                                    <input id="sd_llm_api" type="text" placeholder="openai / textgenerationwebui" />
+                                </label>
+                                <label class="sd_setting">
+                                    <span class="sd_setting_label">Base URL</span>
+                                    <input id="sd_llm_base_url" type="text" placeholder="https://your-proxy.example/v1" />
+                                </label>
+                                <label class="sd_setting">
+                                    <span class="sd_setting_label">API Key</span>
+                                    <input id="sd_llm_api_key" type="password" autocomplete="off" placeholder="sk-..." />
+                                </label>
+                                <label class="sd_setting">
+                                    <span class="sd_setting_label">模型</span>
+                                    <input id="sd_llm_model" type="text" placeholder="留空使用服务端默认模型" />
+                                </label>
+                            </div>
+                        </div>
+                        <small class="sd_hint">custom 模式通过 /v1/chat/completions 直连；配置或网络出错时静默降级为沿用旧大纲，绝不中断 RP。</small>
+                    </div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-toolbox"></i></span>
+                        <div class="sd_card_titles">
+                            <b>工具</b>
+                            <small>快照回滚与大纲导入导出</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body">
+                        <label class="sd_tool_row">
+                            <span>修订快照</span>
+                            <select id="sd_history_select"><option value="">（无历史）</option></select>
+                        </label>
+                        <div class="sd_tool_buttons">
+                            <div id="sd_history_rollback" class="menu_button sd_btn" title="回滚到选中的快照"><i class="fa-solid fa-rotate-left"></i><span>回滚</span></div>
+                            <div id="sd_export" class="menu_button sd_btn" title="复制大纲 JSON"><i class="fa-solid fa-copy"></i><span>导出</span></div>
+                            <div id="sd_import" class="menu_button sd_btn" title="粘贴大纲 JSON 导入"><i class="fa-solid fa-paste"></i><span>导入</span></div>
+                        </div>
+                        <small class="sd_hint">生成/修订/体检和手动编辑前都会自动留快照，最多 30 条。</small>
+                    </div>
+                </section>
+            </section>
 
             <div id="sd_beat_editor" class="sd_modal">
                 <div class="sd_modal_card">
@@ -246,11 +337,11 @@
                     <div class="sd_modal_body">
                         <label class="sd_setting">
                             <span class="sd_setting_label">节点标题</span>
-                            <input id="sd_beat_title" type="text" placeholder="例如：许都夜宴" />
+                            <input id="sd_beat_title" type="text" placeholder="例如：初入都城" />
                         </label>
                         <label class="sd_setting">
                             <span class="sd_setting_label">节点概要（含时间点）</span>
-                            <textarea id="sd_beat_summary" rows="3" placeholder="该节点发生什么、人物目标与转折"></textarea>
+                            <textarea id="sd_beat_summary" rows="3" placeholder="该节点发生什么、各方人物目标与转折"></textarea>
                         </label>
                         <div class="sd_modal_grid">
                             <label class="sd_setting">
