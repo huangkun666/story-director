@@ -105,6 +105,35 @@ test('getRecentDialogue respects dialogueContextLimit budget', () => {
     assert.ok(dialogue.length <= 2000);
 });
 
+test('getCharacterCard includes a lightweight cast list to avoid invented NPCs', () => {
+    const ctx = makeCtx({
+        characters: [
+            { name: '主角', description: '第一行身份\n更多', data: {} },
+            { name: '未出场NPC', description: '十年前已存在的盟友', data: {} },
+        ],
+        characterId: 0,
+    });
+    const adapter = createSillyTavernAdapter(ctx);
+    const card = adapter.getCharacterCard();
+    assert.ok(card.cast.includes('主角'));
+    assert.ok(card.cast.includes('未出场NPC'));
+});
+
+test('getMemoryContext reads yuzuki-Memory when enabled', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = { YuzukiMemory: { VariableInjector: { buildMemoryText: () => '【主线总结】长时记忆内容'.repeat(500) } } };
+    try {
+        const ctx = makeCtx();
+        ctx.extensionSettings.story_director = { useMemoryPlugin: true, memoryContextLimit: 2000 };
+        const adapter = createSillyTavernAdapter(ctx);
+        const memory = adapter.getMemoryContext();
+        assert.ok(memory.includes('长时记忆内容'));
+        assert.ok(memory.length <= 2000);
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
 test('adapter records and restores outline history snapshots', () => {    const ctx = makeCtx();
     const adapter = createSillyTavernAdapter(ctx);
     const first = adapter.getOutline();

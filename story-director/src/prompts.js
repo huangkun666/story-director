@@ -117,6 +117,7 @@ function cardToText(card) {
     const c = card || {};
     return [
         c.name ? `角色名：${c.name}` : '',
+        c.cast ? `角色名录（防止大纲自创冲突角色）：${c.cast}` : '',
         c.description ? `角色描述：${c.description}` : '',
         c.personality ? `性格：${c.personality}` : '',
         c.scenario ? `场景：${c.scenario}` : '',
@@ -128,9 +129,11 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, memoryContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
+    const memoryText = String(memoryContext || '').trim();
+    const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note);
     const timelineBlock = hasTimeline
         ? `【时间线约束（必须遵守）】
@@ -139,6 +142,7 @@ export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 
 ${t.note ? `- 补充约束：${t.note}` : ''}
 - 本大纲只覆盖上述时间线内发生的事，acts 与所有 beats 必须落在该区间内；
 - 每幕标题注明该幕覆盖的时间段；每个 beat 的 summary 明确写出大致发生时间；
+- 若时间跨度较长（多年），按年代拆分幕，并注意人物年龄、势力与关系随时间的自然变化；
 - 超出时间线的事件不要规划，时间线上的关键事件不要遗漏。`
         : `【时间线约束】
 用户未指定时间线。请根据角色卡与题材自行推定一个合理的故事时间范围，并在 JSON 的 timeline 字段中填写 start/end/note；所有分幕与节点都必须有明确的时间归属。`;
@@ -150,7 +154,7 @@ ${t.note ? `- 补充约束：${t.note}` : ''}
 
 ${timelineBlock}
 
-【角色卡】
+${memoryBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【用户要求】
@@ -191,8 +195,10 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
     return { system, prompt };
 }
 
-export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false }) {
+export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, memoryContext = '' }) {
     const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const memoryText = String(memoryContext || '').trim();
+    const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
     const driftInstruction = driftTolerance === 'strict'
         ? '若剧情偏离当前方向，请严格拉回：不要为偏离新增节点，优先把 focus.currentBeat / focus.nextStep 调整回既定节点与方向；仅当偏离已成为不可逆事实时，才做最小化吸收并说明理由。'
         : '若剧情偏离当前方向，请宽松吸收：把新走向写进大纲（改写 focus.nextStep 或插入新 beat），而非强行拉回。';
@@ -202,7 +208,7 @@ export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance
     const prompt = `【最近对话】
 ${recentDialogue}
 
-【当前大纲】
+${memoryBlock}【当前大纲】
 ${serializeOutline(outline)}
 
 请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。${lockInstruction ? `\n\n${lockInstruction}` : ''}
@@ -211,12 +217,14 @@ ${serializeOutline(outline)}
     return { system, prompt };
 }
 
-export function buildCheckPrompt({ recentDialogue = '', outline }) {
+export function buildCheckPrompt({ recentDialogue = '', outline, memoryContext = '' }) {
     const system = '你是叙事导演。对比最近对话与当前大纲（含时间线约束），输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const memoryText = String(memoryContext || '').trim();
+    const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
     const prompt = `【最近对话】
 ${recentDialogue}
 
-【当前大纲】
+${memoryBlock}【当前大纲】
 ${serializeOutline(outline)}
 
 请判断大纲（timeline 时间线、分幕结构、情节节点、伏笔与焦点）是否仍与剧情同步，并按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：

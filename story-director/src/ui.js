@@ -475,6 +475,13 @@ export function bindUI(ctx, adapter) {
     setNumber('sd_recent_turns', adapter.settings.recentTurns);
     setNumber('sd_card_context_limit', adapter.settings.cardContextLimit ?? 12000);
     setNumber('sd_dialogue_context_limit', adapter.settings.dialogueContextLimit ?? 8000);
+    setNumber('sd_memory_context_limit', adapter.settings.memoryContextLimit ?? 8000);
+    const memoryToggleEl = document.getElementById('sd_use_memory_plugin');
+    if (memoryToggleEl) memoryToggleEl.value = adapter.settings.useMemoryPlugin === false ? 'false' : 'true';
+    memoryToggleEl?.addEventListener('change', (e) => {
+        adapter.settings.useMemoryPlugin = e.target.value !== 'false';
+        saveSettings();
+    });
 
     const syncReviseEveryNVisibility = () => {
         document.getElementById('sd_revise_every_n_row')?.classList.toggle('sd_hidden', adapter.settings.reviseFrequency !== 'everyN');
@@ -490,6 +497,7 @@ export function bindUI(ctx, adapter) {
     bindNumber('sd_recent_turns', 'recentTurns', { min: 1, max: 50 });
     bindNumber('sd_card_context_limit', 'cardContextLimit', { min: 2000, max: 200000 });
     bindNumber('sd_dialogue_context_limit', 'dialogueContextLimit', { min: 1000, max: 50000 });
+    bindNumber('sd_memory_context_limit', 'memoryContextLimit', { min: 1000, max: 50000 });
 
     // 独立 API 配置（任务 A）：即时写回 extension_settings
     const llm = adapter.settings.llm || { mode: 'main', api: '', baseUrl: '', apiKey: '', model: '' };

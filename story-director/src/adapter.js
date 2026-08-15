@@ -28,6 +28,8 @@ export const DEFAULT_SETTINGS = {
     recentTurns: 5,
     cardContextLimit: 12000,        // 生成大纲时角色卡内容的最大字符数（防止巨型世界书/深度提示撑爆 prompt）
     dialogueContextLimit: 8000,     // 修订/体检时回看对话的最大字符数
+    useMemoryPlugin: true,          // 生成/修订/体检时接入 yuzuki-Memory 等长时记忆插件
+    memoryContextLimit: 8000,       // 记忆插件上下文的字符上限
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
     llm: { ...DEFAULT_LLM_SETTINGS },
 };
@@ -121,6 +123,22 @@ export function createSillyTavernAdapter(ctx) {
         ctx.setExtensionPrompt(INJECT_KEY, text, 0, 10000, false, 0);
     }
 
+    function timelineTerms() {
+        const timeline = getOutline().timeline || {};
+        const raw = [timeline.start, timeline.end, timeline.note].filter(Boolean).join(' ');
+        const tokens = raw.match(/[\u4e00-\u9fff]{2,}|[A-Za-z0-9]{2,}/g) || [];
+        return new Set(tokens.map(t => t.toLowerCase()));
+    }
+
+    function worldbookRelevance(entry, terms) {
+        if (!terms.size) return 0;
+        const haystack = [entry?.name, entry?.comment, ...(Array.isArray(entry?.keys) ? entry.keys : [])]
+            .filter(Boolean).join(' ').toLowerCase();
+        let score = 0;
+        for (const term of terms) if (haystack.includes(term)) score += 1;
+        return score;
+    }
+
     function getCharacterCard() {
         const c = freshCtx();
         const chars = c.characters || [];
@@ -140,6 +158,24 @@ export function createSillyTavernAdapter(ctx) {
             return clipped;
         };
 
+        // 角色名录：即使不给未激活角色的完整设定，也要让大纲知道"都有谁"，
+        // 避免模型自创与既有角色冲突的 NPC。每角色只取一句身份。
+        let cast = '';
+        try {
+            const castParts = [];
+            for (const member of chars.slice(0, 60)) {
+                if (!member?.name) continue;
+                const roleSource = member.data?.extensions?.depth_prompt?.prompt
+                    || member.data?.depth_prompt?.prompt
+                    || member.description
+                    || member.personality
+                    || '';
+                const role = String(roleSource).split(/\r?\n/)[0].slice(0, 80).trim();
+                castParts.push(role ? `${member.name}（${role}）` : member.name);
+            }
+            cast = castParts.join('；').slice(0, 2000);
+        } catch {}
+
         const depthPrompt = spend(ch.data?.extensions?.depth_prompt?.prompt || ch.data?.depth_prompt?.prompt || '');
         const description = spend(ch.description);
         const personality = spend(ch.personality);
@@ -150,8 +186,15 @@ export function createSillyTavernAdapter(ctx) {
         try {
             const book = ch.data?.character_book || ch.character_book;
             if (book?.entries?.length) {
+                // 优先取与当前时间线相关的条目，而不是只取前 N 条
+                const terms = timelineTerms();
+                const entries = [...book.entries].sort((a, b) => {
+                    const score = worldbookRelevance(b, terms) - worldbookRelevance(a, terms);
+                    if (score !== 0) return score;
+                    return (a?.insertion_order ?? 0) - (b?.insertion_order ?? 0);
+                });
                 const parts = [];
-                for (const e of book.entries) {
+                for (const e of entries) {
                     if (budget <= 0) break;
                     const text = `${e.name ?? ''}: ${e.content ?? ''}`;
                     const part = spend(text, 1000);
@@ -163,6 +206,7 @@ export function createSillyTavernAdapter(ctx) {
 
         return {
             name: ch.name,
+            cast,
             description,
             personality,
             scenario,
@@ -172,6 +216,29 @@ export function createSillyTavernAdapter(ctx) {
             depth_prompt: depthPrompt,
             worldbook,
         };
+    }
+
+    function getMemoryContext() {
+        if (settings.useMemoryPlugin === false) return '';
+        try {
+            const api = (typeof window !== 'undefined') ? window.YuzukiMemory?.VariableInjector : null;
+            if (!api) return '';
+            let text = '';
+            if (typeof api.buildMemoryText === 'function') {
+                text = api.buildMemoryText();
+            } else if (typeof api.buildSummaryText === 'function') {
+                text = api.buildSummaryText();
+            }
+            if (!text || typeof text !== 'string') return '';
+            const cleaned = text.trim();
+            // yuzuki-Memory 无数据时只返回空态占位，不要灌进 prompt
+            if (cleaned.includes('(历史存档，当前暂无总结)') && cleaned.length < 300) return '';
+            const limit = Math.max(1000, Number(settings.memoryContextLimit) || 8000);
+            return cleaned.slice(0, limit);
+        } catch (err) {
+            console.warn('[story-director] failed to read yuzuki-Memory context:', err);
+            return '';
+        }
     }
 
     function getRecentDialogue(turns = 5) {
@@ -221,6 +288,7 @@ export function createSillyTavernAdapter(ctx) {
         getSettings: () => settings,
         getRecentDialogue,
         getCharacterCard,
+        getMemoryContext,
         recordHistory,
         renderOutline,
     });
@@ -246,6 +314,7 @@ export function createSillyTavernAdapter(ctx) {
         save: () => { director.refreshInjection(); },
         getCharacterCard,
         getRecentDialogue,
+        getMemoryContext,
         renderOutline,
         setRenderCallback,
     };

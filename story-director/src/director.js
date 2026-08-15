@@ -48,6 +48,7 @@ export function createDirector(deps) {
                 userRequest,
                 detail: settings.outlineDetail || 'medium',
                 timeline: requestedTimeline,
+                memoryContext: deps.getMemoryContext?.(),
             });
             const result = await gen(bundle);
             if (result) {
@@ -84,6 +85,7 @@ export function createDirector(deps) {
                 outline,
                 driftTolerance: settings.driftTolerance || 'loose',
                 locked: settings.lockOutline === true,
+                memoryContext: deps.getMemoryContext?.(),
             });
             const result = await gen(bundle);
             if (result) {
@@ -105,7 +107,11 @@ export function createDirector(deps) {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
             const outline = deps.getOutline();
-            const bundle = buildCheckPrompt({ recentDialogue: dialogue, outline });
+            const bundle = buildCheckPrompt({
+                recentDialogue: dialogue,
+                outline,
+                memoryContext: deps.getMemoryContext?.(),
+            });
             const report = await genCheck(bundle);
             if (!report) {
                 refreshInjection();

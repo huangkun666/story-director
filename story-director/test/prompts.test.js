@@ -59,6 +59,12 @@ test('buildGeneratePrompt asks model to infer timeline when none provided', () =
     assert.ok(prompt.includes('自行推定'));
 });
 
+test('buildGeneratePrompt injects long-term memory context when provided', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: {}, memoryContext: '【主线总结】已发生赤壁之战' });
+    assert.ok(prompt.includes('长时记忆（来自记忆插件，优先采信）'));
+    assert.ok(prompt.includes('已发生赤壁之战'));
+});
+
 test('OUTLINE_SCHEMA requires acts for full outline', () => {
     assert.ok(OUTLINE_SCHEMA.required.includes('acts'));
     assert.ok(OUTLINE_SCHEMA.properties.acts);

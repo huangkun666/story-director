@@ -142,6 +142,19 @@
                                     <input id="sd_dialogue_context_limit" type="number" min="1000" max="50000" step="500" />
                                     <small>修订/体检时最多回看多少字符的对话</small>
                                 </label>
+                                <label class="sd_setting sd_setting_wide">
+                                    <span class="sd_setting_label"><i class="fa-solid fa-brain"></i>接入长时记忆插件</span>
+                                    <select id="sd_use_memory_plugin">
+                                        <option value="true">开启（yuzuki-Memory）</option>
+                                        <option value="false">关闭</option>
+                                    </select>
+                                    <small>开启后生成/修订/体检会读取记忆插件的剧情摘要与表格，防止长对话后幻觉</small>
+                                </label>
+                                <label class="sd_setting">
+                                    <span class="sd_setting_label"><i class="fa-solid fa-brain"></i>记忆上下文上限</span>
+                                    <input id="sd_memory_context_limit" type="number" min="1000" max="50000" step="500" />
+                                    <small>记忆插件注入大纲请求的最大字符数</small>
+                                </label>
                             </div>
                         </section>
 
