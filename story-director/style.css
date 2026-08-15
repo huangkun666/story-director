@@ -1,16 +1,79 @@
-/* story-director 面板样式：与酒馆主题变量集成 */
+/* story-director 独立大界面样式：与酒馆主题变量集成 */
 
-#story_director_panel.sd_panel {
+#story_director_window.sd_window,
+#story_director_panel.sd_panel_content {
     --sd-border: var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.25));
     --sd-bg: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.18));
     --sd-text: var(--SmartThemeBodyColor, #d6d2c8);
     --sd-em: var(--SmartThemeEmColor, #d8a657);
     --sd-quote: var(--SmartThemeQuoteColor, #a67c52);
-    padding: 6px;
 }
 
-.sd_header_row {
-    width: 100%;
+/* ---------- 独立大窗口 ---------- */
+.sd_window {
+    display: none;
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: min(960px, 94vw);
+    height: min(86vh, 920px);
+    z-index: 40000;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--sd-border);
+    border-radius: 14px;
+    background-color: rgba(22, 22, 28, 0.97);
+    color: var(--sd-text);
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.sd_window.sd_open {
+    display: flex;
+}
+
+.sd_window_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--sd-border);
+    background: linear-gradient(90deg, rgba(216, 166, 87, 0.16), transparent 55%);
+}
+
+.sd_window_actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sd_window_close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--sd-text);
+    opacity: 0.75;
+    border: 1px solid transparent;
+}
+
+.sd_window_close:hover {
+    opacity: 1;
+    background: rgba(224, 108, 117, 0.15);
+    border-color: rgba(224, 108, 117, 0.45);
+}
+
+.sd_window_body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.sd_panel_content {
+    max-width: 100%;
 }
 
 .sd_title_block {
@@ -27,10 +90,6 @@
 .sd_subtitle {
     font-size: 0.75em;
     opacity: 0.55;
-}
-
-.sd_content {
-    padding-top: 6px;
 }
 
 /* ---------- 工具栏 ---------- */

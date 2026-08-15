@@ -1,16 +1,17 @@
-<div id="story_director_panel" class="inline-drawer sd_panel">
-    <div class="inline-drawer-toggle inline-drawer-header sd_header">
-        <div class="flex-container alignitemscenter margin0 sd_header_row">
-            <div class="sd_title_block">
-                <i class="fa-solid fa-clapperboard sd_title_icon"></i>
-                <b>叙事导演</b>
-                <span class="sd_subtitle">Story Director</span>
-            </div>
+<div id="story_director_window" class="sd_window">
+    <div class="sd_window_header">
+        <div class="sd_title_block">
+            <i class="fa-solid fa-clapperboard sd_title_icon"></i>
+            <b>叙事导演</b>
+            <span class="sd_subtitle">Story Director</span>
         </div>
-        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        <div class="sd_window_actions">
+            <div id="sd_window_close" class="sd_window_close" title="关闭（Esc）"><i class="fa-solid fa-xmark"></i></div>
+        </div>
     </div>
-    <div class="inline-drawer-content sd_content">
-        <div id="sd_toolbar" class="sd_toolbar">
+    <div class="sd_window_body">
+        <div id="story_director_panel" class="sd_panel_content">
+            <div id="sd_toolbar" class="sd_toolbar">
             <div id="sd_generate" class="menu_button sd_btn sd_btn_primary" title="读取当前角色卡与聊天设定，生成整场大纲">
                 <i class="fa-solid fa-wand-magic-sparkles sd_btn_icon"></i><span>生成大纲</span>
             </div>
@@ -125,6 +126,7 @@
                     <small class="sd_hint">custom 模式通过 /v1/chat/completions 直连；配置或网络出错时静默降级为沿用旧大纲，绝不中断 RP。</small>
                 </div>
             </div>
+        </div>
         </div>
     </div>
 </div>

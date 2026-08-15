@@ -189,18 +189,14 @@ function renderReport(report, label = '体检') {
 }
 
 export function mountUI(ctx, adapter) {
-    const target = document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
-    if (!target) return;
-
-    // 注册渲染回调必须在面板已存在的守卫之前，否则 index.js 注入面板后回调永远不被注册
+    // 注册渲染回调必须在任何面板守卫之前，否则加载顺序变化时回调可能永远注册不上
     adapter.setRenderCallback((outline) => {
         renderOverview(outline);
         renderFocus(outline);
     });
 
-    if (document.getElementById('story_director_panel')) return;
-
-    target.insertAdjacentHTML('beforeend', `<!-- 面板由 settings.html 通过模板加载（见 index.js 组装） -->`);
+    // 独立大界面由 index.js 负责加载到 body；若尚未就绪则等待 bindUI 时再补
+    if (document.getElementById('story_director_window')) return;
 }
 
 function setButtonLoading(btn, loading) {
@@ -238,6 +234,15 @@ let adapterRef = null;
 
 export function bindUI(ctx, adapter) {
     adapterRef = adapter;
+
+    // 独立窗口：关闭按钮 + Esc 关闭
+    const windowEl = document.getElementById('story_director_window');
+    const closeWindow = () => windowEl?.classList.remove('sd_open');
+    document.getElementById('sd_window_close')?.addEventListener('click', closeWindow);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && windowEl?.classList.contains('sd_open')) closeWindow();
+    });
+
     const enabledEl = document.getElementById('sd_enabled');
     if (enabledEl) enabledEl.checked = !!adapter.settings.enabled;
     enabledEl?.addEventListener('change', (e) => {
