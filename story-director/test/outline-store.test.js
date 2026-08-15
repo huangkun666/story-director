@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -159,4 +159,50 @@ test('serialize/deserialize roundtrip', () => {
     o.theme = '背叛与救赎';
     const back = deserializeOutline(serializeOutline(o));
     assert.equal(back.theme, '背叛与救赎');
+});
+
+test('jumpToBeat activates target and marks previous beats done', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', title: '开端', status: 'active' },
+        { id: 'b2', title: '发展', status: 'pending' },
+        { id: 'b3', title: '高潮', status: 'pending' },
+    ];
+    const out = jumpToBeat(o, 'b2');
+    assert.equal(out.beats[0].status, 'done'); // 之前的节点已完成
+    assert.equal(out.beats[1].status, 'active'); // 目标是 active
+    assert.equal(out.beats[2].status, 'pending'); // 之后保持
+    assert.equal(out.focus.currentBeat, 'b2');
+    assert.equal(out.focus.nextStep, ''); // 旧方向清空
+});
+
+test('jumpToBeat resets later active beats to pending', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', title: '一', status: 'done' },
+        { id: 'b2', title: '二', status: 'active' },
+        { id: 'b3', title: '三', status: 'pending' },
+    ];
+    const out = jumpToBeat(o, 'b1');
+    assert.equal(out.beats[0].status, 'active');
+    assert.equal(out.beats[1].status, 'pending'); // 后面的 active 重置为待开始
+    assert.equal(out.beats[2].status, 'pending');
+});
+
+test('jumpToBeat returns same outline when beat not found', () => {
+    const o = createEmptyOutline();
+    o.theme = 'X';
+    o.beats = [{ id: 'b1', title: '开端', status: 'active' }];
+    const out = jumpToBeat(o, 'nonexistent');
+    assert.equal(out.theme, 'X');
+    assert.equal(out.beats[0].status, 'active'); // 状态未被改动
+    assert.equal(out.focus.currentBeat, '');
+});
+
+test('jumpToBeat does not mutate the input outline', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: '开端', status: 'pending' }, { id: 'b2', title: '发展', status: 'pending' }];
+    jumpToBeat(o, 'b2');
+    assert.equal(o.beats[0].status, 'pending'); // 入参未被修改
+    assert.equal(o.focus.currentBeat, '');
 });

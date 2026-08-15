@@ -425,6 +425,28 @@
     opacity: 1;
 }
 
+/* 跳转按钮：hover 时在节点标题右侧浮现，点击从该节点开始游玩 */
+.sd_beat_jump {
+    margin-left: auto;
+    opacity: 0;
+    cursor: pointer;
+    color: #6b8cff;
+    font-size: 0.85em;
+    padding: 2px 7px;
+    border-radius: 6px;
+    transition: opacity 0.15s, background 0.15s;
+    user-select: none;
+}
+
+.sd_beat_item:hover .sd_beat_jump {
+    opacity: 1;
+}
+
+.sd_beat_jump:hover {
+    background: #eef2ff;
+    color: #4a6cf7;
+}
+
 .sd_beat_rail {
     position: relative;
     flex: 0 0 12px;
@@ -503,7 +525,7 @@
 }
 
 .sd_edit_hint {
-    margin-left: auto;
+    margin-left: 6px;
     opacity: 0.25;
     font-size: 0.85em;
     transition: opacity 0.15s;

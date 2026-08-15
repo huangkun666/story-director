@@ -205,3 +205,28 @@ export function deserializeOutline(json) {
         return createEmptyOutline();
     }
 }
+
+// 跳转到指定节点开始游玩：目标节点置为 active，其之前的节点全部视为已完成，
+// 目标之后若有 active 则重置为 pending（保证唯一 active），focus 指向目标。
+// 返回新大纲，不修改入参。手动操作，不递增 revisionCount（UI 层会留快照）。
+export function jumpToBeat(outline, beatId) {
+    const o = normalizeOutline(outline);
+    const target = o.beats.find(b => b.id === beatId);
+    if (!target) return o;
+    const targetIdx = o.beats.indexOf(target);
+    for (let i = 0; i < o.beats.length; i++) {
+        const b = o.beats[i];
+        if (i < targetIdx) {
+            if (b.status !== 'done') b.status = 'done';
+        } else if (i === targetIdx) {
+            b.status = 'active';
+        } else if (b.status === 'active') {
+            b.status = 'pending';
+        }
+    }
+    o.focus.currentBeat = beatId;
+    // 旧方向已不适用于新时间点，清空由下一轮修订重新生成
+    o.focus.nextStep = '';
+    o.meta.updatedAt = new Date().toISOString();
+    return o;
+}

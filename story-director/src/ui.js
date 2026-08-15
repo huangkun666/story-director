@@ -1,6 +1,6 @@
 // story-director/src/ui.js
 // UI 层：渲染面板、绑定事件、手动编辑。依赖浏览器 DOM 与酒馆 ctx。
-import { createEmptyOutline, normalizeOutline } from './outline-store.js';
+import { createEmptyOutline, normalizeOutline, jumpToBeat } from './outline-store.js';
 
 const BEAT_META = {
     pending: { label: '待开始', cls: 'sd_badge_pending', icon: 'fa-regular fa-circle' },
@@ -72,6 +72,9 @@ function renderBeatItem(b) {
                 <span class="sd_type_badge ${tm.cls}"><i class="${tm.icon}"></i>${tm.label}</span>
                 <span class="sd_beat_title">${escapeHtml(b.title || b.id)}</span>
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
+                <span class="sd_beat_jump" data-jump-id="${escapeHtml(b.id)}" title="从该节点开始游玩（之前的节点标记为已完成，可回滚）">
+                    <i class="fa-solid fa-flag-checkered"></i>
+                </span>
             </div>
             ${b.summary ? `<div class="sd_beat_summary">${escapeHtml(b.summary)}</div>` : ''}
             ${(b.cast || []).length ? `<div class="sd_beat_cast">${b.cast.map(c => `<span class="sd_chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
@@ -679,6 +682,11 @@ export function bindUI(ctx, adapter) {
     document.getElementById('sd_beat_editor_close')?.addEventListener('click', closeBeatEditor);
     document.getElementById('sd_beat_move_up')?.addEventListener('click', () => moveEditingBeat(-1));
     document.getElementById('sd_beat_move_down')?.addEventListener('click', () => moveEditingBeat(1));
+    document.getElementById('sd_beat_jump_here')?.addEventListener('click', () => {
+        if (!editingBeatId) return;
+        jumpToBeatUI(editingBeatId);
+        closeBeatEditor();
+    });
     document.getElementById('sd_beat_delete')?.addEventListener('click', () => {
         if (!editingBeatId) return closeBeatEditor();
         const outline = adapter.getOutline();
@@ -696,11 +704,30 @@ export function bindUI(ctx, adapter) {
         closeBeatEditor();
     });
 
-    // 主区事件委托：空状态生成按钮 / 点击节点编辑 / 双击幕编辑
+    // 跳转：从指定节点开始游玩（目标 active、之前 done、焦点指向目标，留快照可回滚）
+    function jumpToBeatUI(beatId) {
+        const outline = adapter.getOutline();
+        const beat = outline.beats.find(b => b.id === beatId);
+        if (!beat) return;
+        if (!confirm(`从「${beat.title || beat.id}」开始游玩？\n该节点之前的节点将标记为已完成，随时可从快照回滚。`)) return;
+        adapter.recordHistory?.(outline, 'manual');
+        const updated = jumpToBeat(outline, beatId);
+        adapter.setOutline(updated);
+        adapter.renderOutline();
+        adapter.director.refreshInjection();
+        renderReport({ verdict: 'sync', changed: false, reason: `已跳转到「${beat.title || beat.id}」，从此处开始游玩` }, '跳转');
+    }
+
+    // 主区事件委托：空状态生成按钮 / 点击节点编辑 / 跳转按钮 / 双击幕编辑
     document.getElementById('sd_overview')?.addEventListener('click', (e) => {
         const emptyCta = e.target.closest('#sd_generate_empty');
         if (emptyCta) {
             runGenerate(emptyCta);
+            return;
+        }
+        const jumpBtn = e.target.closest('[data-jump-id]');
+        if (jumpBtn) {
+            jumpToBeatUI(jumpBtn.getAttribute('data-jump-id'));
             return;
         }
         const beatEl = e.target.closest('[data-beat-id]');
