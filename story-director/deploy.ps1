@@ -1,10 +1,13 @@
-# 拷贝 story-director 到本地酒馆 third-party 目录
+# Deploy story-director to the local SillyTavern third-party directory.
 param(
     [string]$Target = "F:\jiuguanai\SillyTavern-Launcher\SillyTavern\public\scripts\extensions\third-party\story-director"
 )
 
-# 源目录从脚本所在位置推导，不再硬编码
-$Src = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Derive the source directory from the script location.
+# NOTE: keep this file ASCII-only. Windows PowerShell 5.1 reads BOM-less
+# files with the ANSI code page; UTF-8 Chinese comments corrupted parsing
+# and silently swallowed the line that computed $Src.
+$Src = $PSScriptRoot
 Write-Host "Deploying $Src -> $Target"
 
 if (Test-Path $Target) {
@@ -12,7 +15,7 @@ if (Test-Path $Target) {
 }
 New-Item -ItemType Directory -Path $Target -Force | Out-Null
 
-# 只拷贝运行所需文件，排除 test/、README.md、deploy.ps1 等开发文件
+# Only copy runtime files; exclude test/, README.md, deploy.ps1 etc.
 $Items = @('manifest.json', 'index.js', 'settings.html', 'style.css', 'src')
 foreach ($Item in $Items) {
     Copy-Item -Path (Join-Path $Src $Item) -Destination $Target -Recurse -Force
