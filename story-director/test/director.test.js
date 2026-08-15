@@ -170,3 +170,38 @@ test('director.generate passes empty hits when vector memory disabled', async ()
     assert.equal(received.length, 1);
     assert.deepEqual(received[0], []);
 });
+
+test('director.revise uses patch merge when outline is locked', async () => {
+    const prev = createEmptyOutline();
+    prev.beats = [{ id: 'b1', title: '手动标题', summary: '手动概要', status: 'active' }];
+    let stored = prev;
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            statusChanges: [{ beatId: 'b1', status: 'done' }],
+            focus: { nextStep: '推进' },
+        }),
+        getSettings: () => ({ enabled: true, recentTurns: 5, lockOutline: true, driftTolerance: 'loose' }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.revise();
+    assert.equal(stored.beats[0].status, 'done');
+    assert.equal(stored.beats[0].title, '手动标题'); // 锁定内容保留
+    assert.equal(stored.focus.nextStep, '推进');
+});
+
+test('director.revise uses full merge when outline is not locked', async () => {
+    let receivedPrompt = '';
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify(createEmptyOutline());
+        },
+        getSettings: () => ({ enabled: true, recentTurns: 5, lockOutline: false, driftTolerance: 'loose' }),
+    });
+    const d = createDirector(deps);
+    await d.revise();
+    assert.ok(receivedPrompt.includes('更新后的完整大纲')); // 全量修订路径
+    assert.ok(!receivedPrompt.includes('statusChanges'));
+});

@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     OUTLINE_SCHEMA, CHECK_SCHEMA,
-    buildGeneratePrompt, buildRevisePrompt, buildCheckPrompt, buildDirectorInstruction,
+    buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, buildDirectorInstruction,
+    compactOutlineForRevision,
 } from '../src/prompts.js';
 import { createEmptyOutline } from '../src/outline-store.js';
 
@@ -155,4 +156,40 @@ test('buildDirectorInstruction includes focus fields and strength', () => {
     assert.ok(s.includes('f1'));
     assert.ok(s.includes('别聊天气'));
     assert.ok(s.includes('必须'));
+});
+
+test('compactOutlineForRevision keeps only skeleton for done beats', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', title: '旧', summary: '秘密细节', type: 'climax', status: 'done', cast: ['A'] },
+        { id: 'b2', title: '新', summary: '细节', type: 'setup', status: 'active', cast: ['B'] },
+    ];
+    const c = compactOutlineForRevision(o);
+    assert.deepEqual(c.beats[0], { id: 'b1', title: '旧', status: 'done', actId: '' });
+    assert.equal(c.beats[1].summary, '细节'); // 进行中的节点保留全部字段
+});
+
+test('buildRevisePrompt omits compacted done-beat details from prompt', () => {
+    const o = createEmptyOutline();
+    const longSummary = '长'.repeat(500);
+    o.beats = [
+        { id: 'b1', title: '已完成节点', summary: longSummary, type: 'climax', status: 'done', cast: ['A'] },
+        { id: 'b2', title: '进行中', summary: '细节', type: 'conflict', status: 'active', cast: ['B'] },
+    ];
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o });
+    assert.ok(!prompt.includes(longSummary)); // done 细节被省略
+    assert.ok(prompt.includes('已完成节点'));
+    assert.ok(prompt.includes('细节')); // 非 done 保留
+    assert.ok(prompt.includes('原样保留'));
+});
+
+test('buildRevisePatchPrompt asks for minimal patch, not full outline', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: '开端', status: 'active' }];
+    const { prompt } = buildRevisePatchPrompt({ recentDialogue: 'A: hi', outline: o });
+    assert.ok(prompt.includes('statusChanges'));
+    assert.ok(prompt.includes('newBeats'));
+    assert.ok(prompt.includes('变更补丁'));
+    assert.ok(prompt.includes('锁定'));
+    assert.ok(!prompt.includes('更新后的完整大纲'));
 });

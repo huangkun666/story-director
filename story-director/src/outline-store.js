@@ -69,8 +69,7 @@ function asStringList(v) {
     return [];
 }
 
-function normalizeBeat(b, index) {
-    if (!b || typeof b !== 'object') return null;
+export function normalizeBeat(b, index) {    if (!b || typeof b !== 'object') return null;
     const id = asString(b.id, '') || `beat_${index + 1}`;
     return {
         id,

@@ -1,6 +1,6 @@
 // story-director/src/prompts.js
 // 纯逻辑：提示词模板与 JSON Schema。零依赖。
-import { serializeOutline } from './outline-store.js';
+import { serializeOutline, normalizeOutline } from './outline-store.js';
 
 export const OUTLINE_SCHEMA = {
     type: 'object',
@@ -206,6 +206,19 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
     return { system, prompt };
 }
 
+// 修订输入压缩：已完成节点只保留骨架（id/title/status/actId），省略 summary/cast 等细节。
+// 修订时这些节点的细节对「判断下一步」没有信息量，却能占掉大纲 token 的大头。
+// 注意：tracker.applyRevision 会在合并后从旧大纲恢复这些细节（见 tracker.js）。
+export function compactOutlineForRevision(outline) {
+    const o = normalizeOutline(outline);
+    return {
+        ...o,
+        beats: o.beats.map(b => (b.status === 'done'
+            ? { id: b.id, title: b.title, status: b.status, actId: b.actId }
+            : b)),
+    };
+}
+
 export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
@@ -222,11 +235,54 @@ export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance
 ${recentDialogue}
 
 ${memoryBlock}${vectorBlock}【当前大纲】
-${serializeOutline(outline)}
+${serializeOutline(compactOutlineForRevision(outline))}
+
+（注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题。输出时请原样保留这些节点及其全部字段——它们已经发生，不要改写或补写它们的 summary/cast/type。）
 
 请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。${lockInstruction ? `\n\n${lockInstruction}` : ''}
 
 严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
+    return { system, prompt };
+}
+
+// 锁定模式的增量补丁修订：模型只输出「变化的部分」而不是完整大纲。
+// 输出 token 从全量大纲（数百上千）降到几十；tracker.applyPatch 负责字段级合并。
+export function buildRevisePatchPrompt({ recentDialogue = '', outline, driftTolerance = 'loose', memoryContext = '', vectorContext = '' }) {
+    const system = '你是叙事导演。大纲已锁定（用户手动编辑），只能推进状态与焦点。根据最近对话输出最小变更补丁（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const memoryText = String(memoryContext || '').trim();
+    const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
+    const vectorText = String(vectorContext || '').trim();
+    const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
+    const driftInstruction = driftTolerance === 'strict'
+        ? '若剧情偏离当前方向，请严格拉回：不新增节点，只把 focus.currentBeat / focus.nextStep 调整回既定方向；仅当偏离已成不可逆事实时才最小化吸收。'
+        : '若剧情偏离当前方向，请宽松吸收：把新走向写进 focus.nextStep；确有必要时用 newBeats 追加一个节点。';
+    const prompt = `【最近对话】
+${recentDialogue}
+
+${memoryBlock}${vectorBlock}【当前大纲（已锁定，禁止改动任何现有内容）】
+${serializeOutline(compactOutlineForRevision(outline))}
+
+（注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题，无需处理它们。）
+
+${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成“已超出当前时间线，建议生成下一段大纲”。
+
+请只输出变更补丁，严格按以下 JSON 结构（字段名完全一致，不要 markdown 代码块；没有变化的字段省略，不要输出完整大纲）：
+
+{
+  "statusChanges": [ { "beatId": "beat_1", "status": "done" }, { "beatId": "beat_2", "status": "active" } ],
+  "focus": { "currentBeat": "beat_2", "nextStep": "下一步应当发生什么", "activeForeshadow": ["f1"], "avoidOffTopic": "需要避免偏离的内容" },
+  "foreshadowing": [ { "id": "f1", "status": "active" } ],
+  "arcs": [ { "char": "主角", "status": "active" } ],
+  "newBeats": [ { "title": "新增节点标题", "summary": "该节点发生什么", "type": "conflict", "status": "pending", "cast": ["主角"] } ],
+  "newBeatActId": "act_2"
+}
+
+规则：
+1) statusChanges：节点完成则置 "done"，并推进下一个节点为 "active"；没有状态变化就省略；
+2) focus 建议总是输出（这是导演指令的核心）；
+3) foreshadowing/arcs：只列出状态发生变化的条目；
+4) newBeats：仅在剧情确实需要新节点时使用，数量越少越好，并给出 newBeatActId 归属幕（必须是现有 act id）；
+5) 禁止任何字段修改现有 beat/act/timeline 的标题、概要、类型与时间线。`;
     return { system, prompt };
 }
 

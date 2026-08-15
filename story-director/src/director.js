@@ -1,9 +1,9 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
 import { normalizeOutline, createEmptyOutline } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildCheckPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
-import { applyRevision } from './tracker.js';
+import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
 import { renderInstruction } from './injector.js';
 
@@ -119,18 +119,29 @@ export function createDirector(deps) {
             const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
             const vectorContext = retrieval ? (retrieval.text || '') : (await deps.getVectorMemoryContext?.(vectorQueries) || '');
             deps.setRetrievalHits?.(retrieval ? (Array.isArray(retrieval.hits) ? retrieval.hits : []) : []);
-            const bundle = buildRevisePrompt({
-                recentDialogue: dialogue,
-                outline,
-                driftTolerance: settings.driftTolerance || 'loose',
-                locked: settings.lockOutline === true,
-                memoryContext: deps.getMemoryContext?.(),
-                vectorContext,
-            });
+            const locked = settings.lockOutline === true;
+            const bundle = locked
+                ? buildRevisePatchPrompt({
+                    recentDialogue: dialogue,
+                    outline,
+                    driftTolerance: settings.driftTolerance || 'loose',
+                    memoryContext: deps.getMemoryContext?.(),
+                    vectorContext,
+                })
+                : buildRevisePrompt({
+                    recentDialogue: dialogue,
+                    outline,
+                    driftTolerance: settings.driftTolerance || 'loose',
+                    locked: false,
+                    memoryContext: deps.getMemoryContext?.(),
+                    vectorContext,
+                });
             const result = await gen(bundle);
             if (result) {
                 recordHistory('revise');
-                deps.setOutline(applyRevision(outline, result, { lockOutline: settings.lockOutline === true }));
+                // 锁定模式：模型只输出变更补丁，字段级合并，省掉全量大纲往返；
+                // 非锁定模式：全量输出后合并（含已完成节点细节恢复）。
+                deps.setOutline(locked ? applyPatch(outline, result) : applyRevision(outline, result));
                 deps.renderOutline();
             }
             refreshInjection();
