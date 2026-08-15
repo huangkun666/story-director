@@ -6,7 +6,7 @@ import { mountUI, bindUI } from './src/ui.js';
     'use strict';
 
     const NAMESPACE = 'STORY_DIRECTOR';
-    const VERSION = '0.1.0';
+    const VERSION = '0.2.0';
 
     if (window[NAMESPACE]?.loaded) {
         console.warn(`[story-director] Already loaded, skipping duplicate init.`);
@@ -60,8 +60,9 @@ import { mountUI, bindUI } from './src/ui.js';
             adapter.director.revise().catch(() => {});
         });
 
-        // 切换聊天时重载大纲
+        // 切换聊天时重载大纲，并重置 everyN 计数器（节奏不跨聊天延续）
         es?.on(et.CHAT_CHANGED, () => {
+            reviseCounter = 0;
             adapter.load();
             adapter.renderOutline();
         });
@@ -96,11 +97,28 @@ import { mountUI, bindUI } from './src/ui.js';
                     const report = await adapter.director.check();
                     adapter.renderOutline();
                     return report === null ? '体检调用失败，已沿用旧大纲' : `体检完成：${report?.verdict ?? 'sync'}`;
+                } else if (sub === 'status') {
+                    const s = adapter.settings;
+                    const o = adapter.getOutline();
+                    const current = o.beats.find(b => b.id === o.focus.currentBeat);
+                    const freqText = {
+                        every: '每轮',
+                        everyN: `每 ${s.reviseEveryN || 1} 轮`,
+                        manual: '仅手动',
+                    }[s.reviseFrequency] || s.reviseFrequency;
+                    const llmMode = s.llm?.mode === 'custom' ? `独立（${s.llm?.model || '未指定模型'}）` : '主 API';
+                    return [
+                        '叙事导演状态',
+                        `- 插件：${s.enabled ? '启用' : '停用'}；控制强度：${s.controlStrength === 'weak' ? '弱引导' : '强约束'}`,
+                        `- 修订：${freqText}；偏离处理：${s.driftTolerance === 'strict' ? '严格拉回' : '宽松吸收'}`,
+                        `- LLM：${llmMode}`,
+                        `- 大纲：${o.beats.length} 个节点；当前：${current ? `${current.title}（${current.id}）` : '无'}；已修订 ${o.meta.revisionCount} 次`,
+                    ].join('\n');
                 } else {
                     return '用法：/director generate|revise|check|status';
                 }
             },
-            helpString: '叙事导演大纲控制。子命令：generate（生成）、revise（修订）、check（体检）',
+            helpString: '叙事导演大纲控制。子命令：generate（生成）、revise（修订）、check（体检）、status（状态）',
             unnamedArgumentList: [
                 new SlashCommandArgument('subcommand', [ARGUMENT_TYPE.STRING], false, false, ''),
             ],
