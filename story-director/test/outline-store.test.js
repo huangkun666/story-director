@@ -77,6 +77,33 @@ test('normalizeOutline accepts foreshadowing objects with text field', () => {
     assert.equal(o.foreshadowing[0].status, 'active');
 });
 
+test('normalizeOutline accepts arcs as string array', () => {
+    const o = normalizeOutline({
+        arcs: ['黄坤：从战术家到战略破局者', '司马朗：从世家公子到实干治道'],
+    });
+    assert.equal(o.arcs.length, 2);
+    assert.equal(o.arcs[0].char, '黄坤');
+    assert.equal(o.arcs[0].growth, '从战术家到战略破局者');
+});
+
+test('normalizeOutline accepts beats with name/description fields', () => {
+    const o = normalizeOutline({
+        beats: [
+            { id: 'beat_1', name: '落马余波', description: '焦土决断' },
+        ],
+    });
+    assert.equal(o.beats.length, 1);
+    assert.equal(o.beats[0].title, '落马余波');
+    assert.equal(o.beats[0].summary, '焦土决断');
+});
+
+test('normalizeOutline accepts focus with immediate_goal field', () => {
+    const o = normalizeOutline({
+        focus: { currentBeat: 'b1', immediate_goal: '打破僵局', current_situation: '战场刚平静' },
+    });
+    assert.equal(o.focus.nextStep, '打破僵局');
+});
+
 test('deserializeOutline returns empty on invalid JSON', () => {
     const o = deserializeOutline('not json {');
     assert.equal(o.version, 1);

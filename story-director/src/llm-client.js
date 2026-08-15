@@ -6,6 +6,7 @@
 // 那是裸 JSON.parse（不剥 markdown 代码块），Gemini 等模型返回 ```json 包裹的内容时
 // 会解析失败并回退成 "{}"，导致空大纲。改为不传 jsonSchema、拿到原始文本后，
 // 由本模块的 extractJson（含 stripCodeFence）负责解析。
+// JSON 结构由 prompt 中的显式模板约束（见 prompts.js），本模块只负责容错解析。
 
 export function stripCodeFence(text) {
     if (typeof text !== 'string') return '';
@@ -34,27 +35,13 @@ export function extractJson(text) {
     }
 }
 
-function schemaToFormatHint(schema) {
-    if (!schema || typeof schema !== 'object') return '';
-    const required = Array.isArray(schema.required) ? schema.required : [];
-    const props = schema.properties && typeof schema.properties === 'object' ? schema.properties : {};
-    const lines = [];
-    for (const key of required) {
-        const p = props[key];
-        const type = p?.type ?? 'any';
-        const desc = p?.description ?? '';
-        lines.push(`- ${key}（${type}${desc ? '：' + desc : ''}）`);
-    }
-    return lines.length ? `\n输出字段说明：\n${lines.join('\n')}` : '';
-}
-
 export function makeStructuredGenerator(generateRaw, schema) {
-    const formatHint = schemaToFormatHint(schema);
+    // schema 参数保留以兼容调用方签名，但实际解析不依赖它（prompt 已内置模板）
+    void schema;
     return async function generate({ system = '', prompt = '' }) {
         try {
-            const finalPrompt = formatHint ? `${prompt}\n${formatHint}` : prompt;
             const result = await generateRaw({
-                prompt: finalPrompt,
+                prompt,
                 systemPrompt: system,
             });
             return extractJson(result);

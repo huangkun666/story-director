@@ -29,14 +29,13 @@ function asString(v, d = '') {
     return typeof v === 'string' ? v : d;
 }
 
-function normalizeBeat(b) {
+function normalizeBeat(b, index) {
     if (!b || typeof b !== 'object') return null;
-    const id = asString(b.id, '');
-    if (!id) return null;
+    const id = asString(b.id, '') || `beat_${index + 1}`;
     return {
         id,
-        title: asString(b.title, ''),
-        summary: asString(b.summary, ''),
+        title: asString(b.title, '') || asString(b.name, ''),
+        summary: asString(b.summary, '') || asString(b.description, ''),
         status: VALID_BEAT_STATUS.has(b.status) ? b.status : 'pending',
     };
 }
@@ -61,6 +60,19 @@ function normalizeForeshadow(f, index) {
 }
 
 function normalizeArc(a) {
+    // 兼容字符串形式："角色名：弧光描述"
+    if (typeof a === 'string') {
+        const s = a.trim();
+        if (!s) return null;
+        const sep = s.indexOf('：') >= 0 ? '：' : (s.indexOf(':') >= 0 ? ':' : null);
+        if (sep) {
+            const char = s.slice(0, s.indexOf(sep)).trim();
+            const growth = s.slice(s.indexOf(sep) + sep.length).trim();
+            if (!char && !growth) return null;
+            return { char: char || '（未命名角色）', desire: '', flaw: '', growth };
+        }
+        return { char: '（未命名角色）', desire: '', flaw: '', growth: s };
+    }
     if (!a || typeof a !== 'object') return null;
     const char = asString(a.char, '') || asString(a.character, '') || asString(a.name, '');
     if (!char) return null;
@@ -82,11 +94,11 @@ export function normalizeOutline(raw) {
     base.world = asString(raw.world, '');
     base.arcs = Array.isArray(raw.arcs) ? raw.arcs.map(normalizeArc).filter(Boolean) : [];
     base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map((f, i) => normalizeForeshadow(f, i)).filter(Boolean) : [];
-    base.beats = Array.isArray(raw.beats) ? raw.beats.map(normalizeBeat).filter(Boolean) : [];
+    base.beats = Array.isArray(raw.beats) ? raw.beats.map((b, i) => normalizeBeat(b, i)).filter(Boolean) : [];
 
     const focus = (raw.focus && typeof raw.focus === 'object') ? raw.focus : {};
-    base.focus.currentBeat = asString(focus.currentBeat, '');
-    base.focus.nextStep = asString(focus.nextStep, '');
+    base.focus.currentBeat = asString(focus.currentBeat, '') || asString(focus.current_beat, '');
+    base.focus.nextStep = asString(focus.nextStep, '') || asString(focus.immediate_goal, '') || asString(focus.goal, '');
     base.focus.activeForeshadow = Array.isArray(focus.activeForeshadow)
         ? focus.activeForeshadow.map(x => asString(x, '')).filter(Boolean)
         : [];

@@ -95,7 +95,7 @@ function cardToText(card) {
 
 export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium' }) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
-    const system = '你是一位资深叙事设计师。根据角色卡和用户要求，构建一份结构化的故事大纲（JSON）。只输出符合 schema 的 JSON，不要任何解释。';
+    const system = '你是一位资深叙事设计师。根据角色卡和用户要求，构建一份结构化的故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `请为以下角色扮演构建一份${detailWord}的完整故事大纲。
 
 【角色卡】
@@ -104,31 +104,69 @@ ${cardToText(characterCard)}
 【用户要求】
 ${userRequest || '（未指定，请自行设计一个有深度的故事方向）'}
 
-请输出包含：主题(theme)、情绪基调(tone)、世界观与冲突根源(world)、角色弧光(arcs)、伏笔(foreshadowing)、情节节点(beats，含起承转合，至少3个)、当前焦点(focus)。`;
+请严格按以下 JSON 结构输出（字段名必须完全一致，不要增删字段，不要用 markdown 代码块包裹）：
+
+{
+  "theme": "故事主题",
+  "tone": "情绪基调",
+  "world": "世界观与冲突根源",
+  "arcs": [
+    { "character": "角色名", "arc": "该角色的弧光：欲望、缺陷、成长方向" }
+  ],
+  "foreshadowing": [
+    "伏笔一句话描述（含后续回收方式）"
+  ],
+  "beats": [
+    { "id": "beat_1", "title": "节点标题", "summary": "该节点发生什么", "status": "pending" },
+    { "id": "beat_2", "title": "节点标题", "summary": "该节点发生什么", "status": "pending" },
+    { "id": "beat_3", "title": "节点标题", "summary": "该节点发生什么", "status": "pending" }
+  ],
+  "focus": {
+    "currentBeat": "beat_1",
+    "nextStep": "当前应当推进的剧情方向",
+    "activeForeshadow": ["伏笔1"],
+    "avoidOffTopic": "需要避免偏离的内容"
+  }
+}
+
+beats 至少 3 个，按起承转合排列；第一个 beat 的 status 设为 "active"，其余为 "pending"。`;
     return { system, prompt };
 }
 
 export function buildRevisePrompt({ recentDialogue = '', outline }) {
-    const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出符合 schema 的更新后完整大纲，不要任何解释。';
+    const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `【最近对话】
 ${recentDialogue}
 
 【当前大纲】
 ${serializeOutline(outline)}
 
-请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点；2) 若剧情偏离当前方向，将其吸收进大纲（改写 nextStep 或插入新 beat），而非强行拉回；3) 更新伏笔状态（标记已回收的，记录新埋下的）。输出更新后的完整大纲。`;
+请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) 若剧情偏离当前方向，将其吸收进大纲（改写 focus.nextStep 或插入新 beat），而非强行拉回；3) 更新伏笔状态。
+
+严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
     return { system, prompt };
 }
 
 export function buildCheckPrompt({ recentDialogue = '', outline }) {
-    const system = '你是叙事导演。对比最近对话与当前大纲，输出同步性诊断报告（JSON）。只输出符合 schema 的 JSON。';
+    const system = '你是叙事导演。对比最近对话与当前大纲，输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `【最近对话】
 ${recentDialogue}
 
 【当前大纲】
 ${serializeOutline(outline)}
 
-请判断大纲是否仍与剧情同步。verdict 取 sync / minor-drift / major-drift。若需要修改，changed=true，在 changes 里说明改了什么，并在 updatedOutline 字段输出修改后的完整大纲（结构与当前大纲一致）；若无需修改，changed=false，省略 updatedOutline，并在 reason 说明为何仍适用。`;
+请判断大纲是否仍与剧情同步，并按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
+
+{
+  "verdict": "sync 或 minor-drift 或 major-drift",
+  "issues": [ { "where": "位置", "what": "问题", "severity": "low/mid/high" } ],
+  "changed": true,
+  "changes": "修改内容摘要",
+  "reason": "判断依据",
+  "updatedOutline": { ...完整大纲，结构与当前大纲一致... }
+}
+
+若需要修改，changed=true 且 updatedOutline 输出修改后的完整大纲；若无需修改，changed=false，省略 updatedOutline。`;
     return { system, prompt };
 }
 

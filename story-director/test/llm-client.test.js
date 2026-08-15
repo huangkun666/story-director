@@ -39,22 +39,13 @@ test('makeStructuredGenerator returns parsed object on success without jsonSchem
     assert.equal(received.jsonSchema, undefined);
 });
 
-test('makeStructuredGenerator appends format hint from schema to prompt', async () => {
+test('makeStructuredGenerator passes prompt through unchanged', async () => {
     let received = null;
     const fakeGen = async (args) => { received = args; return '{"theme":"X"}'; };
-    const schema = {
-        type: 'object',
-        required: ['theme', 'beats'],
-        properties: {
-            theme: { type: 'string', description: '故事主题' },
-            beats: { type: 'array' },
-        },
-    };
-    const gen = makeStructuredGenerator(fakeGen, schema);
+    const gen = makeStructuredGenerator(fakeGen, { type: 'object' });
     await gen({ system: 's', prompt: 'p' });
-    assert.ok(received.prompt.includes('theme'));
-    assert.ok(received.prompt.includes('beats'));
-    assert.ok(received.prompt.startsWith('p'));
+    assert.equal(received.prompt, 'p');
+    assert.equal(received.systemPrompt, 's');
 });
 
 test('makeStructuredGenerator parses markdown-fenced JSON from generateRaw', async () => {
