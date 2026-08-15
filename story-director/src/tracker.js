@@ -1,33 +1,125 @@
 // story-director/src/tracker.js
 // 纯逻辑：把 LLM 修订结果合并进现有大纲。零依赖。
-import { normalizeOutline } from './outline-store.js';
+import { normalizeOutline, normalizeBeat } from './outline-store.js';
+
+// 锁定合并核心：以 prev 为基底，只从 patch 吸收「状态类」变更
+// （status/focus/伏笔/弧光状态），用户手动编辑的内容（幕、节点、时间线）保持不变。
+// 不触碰 meta（调用方决定是否递增修订计数）。
+export function mergeLockedOutline(prevOutline, patch) {
+    const base = normalizeOutline(prevOutline);
+    if (!patch) return base;
+    const merged = normalizeOutline(patch);
+
+    merged.timeline = base.timeline;
+    const baseActIds = new Set(base.acts.map(a => a.id));
+    const extraActs = merged.acts.filter(a => !baseActIds.has(a.id));
+    merged.acts = base.acts.map(baseAct => {
+        const patched = merged.acts.find(a => a.id === baseAct.id);
+        return patched ? { ...baseAct, beats: patched.beats } : baseAct;
+    });
+    // 允许模型追加全新幕（例如新增过渡节点时）
+    merged.acts = [...merged.acts, ...extraActs];
+    merged.beats = merged.beats.map(patchedBeat => {
+        const baseBeat = base.beats.find(b => b.id === patchedBeat.id);
+        return baseBeat
+            ? { ...patchedBeat, title: baseBeat.title, summary: baseBeat.summary, type: baseBeat.type, actId: baseBeat.actId }
+            : patchedBeat;
+    });
+    return merged;
+}
+
+// 修订输入侧压缩了已完成节点（见 prompts.compactOutlineForRevision）：
+// 模型输出中这些节点可能只剩骨架，这里从旧大纲恢复细节，避免信息丢失。
+function restoreDoneBeatDetails(prev, merged) {
+    for (const beat of merged.beats) {
+        if (beat.status !== 'done') continue;
+        const prevBeat = prev.beats.find(b => b.id === beat.id);
+        if (!prevBeat || prevBeat.status !== 'done') continue;
+        if (!beat.summary) beat.summary = prevBeat.summary;
+        if (!beat.type) beat.type = prevBeat.type;
+        if (!Array.isArray(beat.cast) || !beat.cast.length) beat.cast = prevBeat.cast;
+    }
+    return merged;
+}
 
 export function applyRevision(prevOutline, revisionPatch, { lockOutline = false } = {}) {
     if (!revisionPatch) return prevOutline;
-    const merged = normalizeOutline(revisionPatch);
+    const prev = normalizeOutline(prevOutline);
+    const merged = lockOutline
+        ? mergeLockedOutline(prev, revisionPatch)
+        : normalizeOutline(revisionPatch);
+    restoreDoneBeatDetails(prev, merged);
 
-    if (lockOutline) {
-        const base = normalizeOutline(prevOutline);
-        // 用户手动编辑模式：只允许推进 status/focus/伏笔状态，
-        // 不得改写用户已编辑的幕、节点内容与时间线。
-        merged.timeline = base.timeline;
-        const baseActIds = new Set(base.acts.map(a => a.id));
-        const extraActs = merged.acts.filter(a => !baseActIds.has(a.id));
-        merged.acts = base.acts.map(baseAct => {
-            const patched = merged.acts.find(a => a.id === baseAct.id);
-            return patched ? { ...baseAct, beats: patched.beats } : baseAct;
-        });
-        // 允许模型追加全新幕（例如新增过渡节点时）
-        merged.acts = [...merged.acts, ...extraActs];
-        merged.beats = merged.beats.map(patchedBeat => {
-            const baseBeat = base.beats.find(b => b.id === patchedBeat.id);
-            return baseBeat
-                ? { ...patchedBeat, title: baseBeat.title, summary: baseBeat.summary, type: baseBeat.type, actId: baseBeat.actId }
-                : patchedBeat;
-        });
-    }
-
-    merged.meta.revisionCount = (prevOutline?.meta?.revisionCount ?? 0) + 1;
+    merged.meta.revisionCount = (prev?.meta?.revisionCount ?? 0) + 1;
     merged.meta.updatedAt = new Date().toISOString();
     return merged;
+}
+
+const VALID_STATUS = new Set(['pending', 'active', 'done']);
+
+// 锁定模式的增量补丁合并（见 prompts.buildRevisePatchPrompt）。
+// 只应用状态类变更与追加节点，不改写任何现有内容。
+export function applyPatch(prevOutline, patch) {
+    const base = normalizeOutline(prevOutline);
+    if (!patch || typeof patch !== 'object') return base;
+
+    for (const sc of Array.isArray(patch.statusChanges) ? patch.statusChanges : []) {
+        if (!sc || typeof sc !== 'object') continue;
+        const beat = base.beats.find(b => b.id === sc.beatId);
+        if (beat && VALID_STATUS.has(sc.status)) beat.status = sc.status;
+    }
+
+    const focus = (patch.focus && typeof patch.focus === 'object') ? patch.focus : null;
+    if (focus) {
+        if (typeof focus.currentBeat === 'string') base.focus.currentBeat = focus.currentBeat;
+        if (typeof focus.nextStep === 'string') base.focus.nextStep = focus.nextStep;
+        if (Array.isArray(focus.activeForeshadow)) {
+            base.focus.activeForeshadow = focus.activeForeshadow.map(x => String(x)).filter(Boolean);
+        }
+        if (typeof focus.avoidOffTopic === 'string') base.focus.avoidOffTopic = focus.avoidOffTopic;
+    }
+
+    for (const fs of Array.isArray(patch.foreshadowing) ? patch.foreshadowing : []) {
+        if (!fs || typeof fs !== 'object') continue;
+        const item = base.foreshadowing.find(x => x.id === fs.id);
+        if (!item) continue;
+        if (VALID_STATUS.has(fs.status)) item.status = fs.status;
+        if (typeof fs.payoff === 'string' && fs.payoff) item.payoff = fs.payoff;
+    }
+
+    for (const a of Array.isArray(patch.arcs) ? patch.arcs : []) {
+        if (!a || typeof a !== 'object') continue;
+        const arc = base.arcs.find(x => x.char === a.char);
+        if (arc && VALID_STATUS.has(a.status)) arc.status = a.status;
+    }
+
+    const newBeats = Array.isArray(patch.newBeats) ? patch.newBeats : [];
+    if (newBeats.length) {
+        let actId = typeof patch.newBeatActId === 'string' ? patch.newBeatActId : '';
+        if (!base.acts.some(a => a.id === actId)) actId = '';
+        if (!actId) {
+            // 兜底：挂到当前焦点所在幕；否则最后一幕；否则自动建幕
+            const focusBeat = base.beats.find(b => b.id === base.focus.currentBeat);
+            actId = focusBeat?.actId || base.acts[base.acts.length - 1]?.id || '';
+        }
+        for (let i = 0; i < newBeats.length; i++) {
+            const raw = newBeats[i];
+            if (!raw || typeof raw !== 'object') continue;
+            const beat = normalizeBeat({ ...raw, id: `beat_patch_${i + 1}` }, base.beats.length + i);
+            beat.actId = actId;
+            if (!beat.status) beat.status = 'pending';
+            base.beats.push(beat);
+            if (actId) {
+                const act = base.acts.find(a => a.id === actId);
+                if (act) {
+                    act.beats = act.beats || [];
+                    act.beats.push(beat.id);
+                }
+            }
+        }
+    }
+
+    base.meta.revisionCount = (prevOutline?.meta?.revisionCount ?? 0) + 1;
+    base.meta.updatedAt = new Date().toISOString();
+    return base;
 }

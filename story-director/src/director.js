@@ -170,7 +170,7 @@ export function createDirector(deps) {
                 refreshInjection();
                 return null; // LLM 调用失败，信号与 generate/revise 一致
             }
-            const { outline: updated, report: normalizedReport } = applyCheckResult(outline, report);
+            const { outline: updated, report: normalizedReport } = applyCheckResult(outline, report, { lockOutline: settings.lockOutline === true });
             if (normalizedReport.changed) {
                 recordHistory('check');
                 deps.setOutline(updated);

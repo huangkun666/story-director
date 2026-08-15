@@ -378,7 +378,7 @@ export function createSillyTavernAdapter(ctx) {
         getHistory,
         recordHistory,
         restoreHistory,
-        load: () => { director.refreshInjection(); renderOutline(); },
+        load: () => { setRetrievalHits([]); director.refreshInjection(); renderOutline(); },
         save: () => { director.refreshInjection(); },
         getCharacterCard,
         getRecentDialogue,
