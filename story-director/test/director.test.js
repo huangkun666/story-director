@@ -205,3 +205,42 @@ test('director.revise uses full merge when outline is not locked', async () => {
     assert.ok(receivedPrompt.includes('更新后的完整大纲')); // 全量修订路径
     assert.ok(!receivedPrompt.includes('statusChanges'));
 });
+
+test('director.check records verdict into meta.checkHistory even when unchanged', async () => {
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({ verdict: 'minor-drift', changed: false, reason: '轻微偏差' }),
+    });
+    const d = createDirector(deps);
+    await d.check();
+    const history = deps.getOutline().meta.checkHistory;
+    assert.equal(history.length, 1);
+    assert.equal(history[0].verdict, 'minor-drift');
+});
+
+test('director.check appends verdict history across multiple runs', async () => {
+    let verdicts = ['sync', 'major-drift'];
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({ verdict: verdicts.shift(), changed: false }),
+    });
+    const d = createDirector(deps);
+    await d.check();
+    await d.check();
+    const history = deps.getOutline().meta.checkHistory;
+    assert.equal(history.length, 2);
+    assert.equal(history[0].verdict, 'major-drift'); // 最新在前
+    assert.equal(history[1].verdict, 'sync');
+});
+
+test('director.isRunning is true while a call is in flight', async () => {
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const { deps } = makeDeps({
+        generateRaw: async () => { await gate; return JSON.stringify(createEmptyOutline()); },
+    });
+    const d = createDirector(deps);
+    const p = d.revise();
+    assert.equal(d.isRunning(), true); // 执行中
+    release();
+    await p;
+    assert.equal(d.isRunning(), false); // 结束后复位
+});

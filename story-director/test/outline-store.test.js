@@ -206,3 +206,39 @@ test('jumpToBeat does not mutate the input outline', () => {
     assert.equal(o.beats[0].status, 'pending'); // 入参未被修改
     assert.equal(o.focus.currentBeat, '');
 });
+
+test('normalizeOutline keeps valid checkHistory entries', () => {
+    const o = normalizeOutline({
+        meta: {
+            checkHistory: [
+                { at: '2026-01-01T00:00:00Z', verdict: 'sync' },
+                { at: '2026-01-02T00:00:00Z', verdict: 'minor-drift' },
+            ],
+        },
+    });
+    assert.equal(o.meta.checkHistory.length, 2);
+    assert.equal(o.meta.checkHistory[0].verdict, 'sync');
+    assert.equal(o.meta.checkHistory[1].verdict, 'minor-drift');
+});
+
+test('normalizeOutline drops invalid checkHistory entries', () => {
+    const o = normalizeOutline({
+        meta: {
+            checkHistory: [
+                { at: '2026-01-01T00:00:00Z', verdict: 'sync' },
+                { at: 'not-a-time', verdict: 'bogus' },
+                { verdict: 'major-drift' }, // 缺 at
+                'garbage',
+                null,
+            ],
+        },
+    });
+    assert.equal(o.meta.checkHistory.length, 1);
+    assert.equal(o.meta.checkHistory[0].verdict, 'sync');
+});
+
+test('normalizeOutline caps checkHistory at 10 entries', () => {
+    const entries = Array.from({ length: 15 }, (_, i) => ({ at: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`, verdict: 'sync' }));
+    const o = normalizeOutline({ meta: { checkHistory: entries } });
+    assert.equal(o.meta.checkHistory.length, 10);
+});

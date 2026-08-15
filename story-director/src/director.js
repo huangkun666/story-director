@@ -182,11 +182,15 @@ export function createDirector(deps) {
                 return null; // LLM 调用失败，信号与 generate/revise 一致
             }
             const { outline: updated, report: normalizedReport } = applyCheckResult(outline, report, { lockOutline: settings.lockOutline === true });
+            // 体检历史留痕：{at, verdict}，新到旧最多 10 条，供 UI 展示同步性趋势
+            const history = Array.isArray(updated.meta?.checkHistory) ? updated.meta.checkHistory : [];
+            history.unshift({ at: new Date().toISOString(), verdict: normalizedReport.verdict });
+            updated.meta.checkHistory = history.slice(0, 10);
             if (normalizedReport.changed) {
                 recordHistory('check');
-                deps.setOutline(updated);
-                deps.renderOutline();
             }
+            deps.setOutline(updated);
+            deps.renderOutline();
             refreshInjection();
             return normalizedReport;
         } finally {
@@ -194,5 +198,5 @@ export function createDirector(deps) {
         }
     }
 
-    return { generate, revise, check, refreshInjection };
+    return { generate, revise, check, refreshInjection, isRunning: () => running };
 }

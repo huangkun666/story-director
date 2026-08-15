@@ -7,6 +7,8 @@ const VALID_BEAT_STATUS = new Set(['pending', 'active', 'done']);
 const VALID_FORESHADOW_STATUS = new Set(['pending', 'active', 'paid']);
 const VALID_BEAT_TYPE = new Set(['setup', 'conflict', 'twist', 'climax', 'resolution']);
 const VALID_ARC_STATUS = new Set(['pending', 'active', 'done']);
+const VALID_CHECK_VERDICT = new Set(['sync', 'minor-drift', 'major-drift']);
+const CHECK_HISTORY_LIMIT = 10;
 
 export function createEmptyOutline() {
     return {
@@ -30,7 +32,7 @@ export function createEmptyOutline() {
             activeForeshadow: [],
             avoidOffTopic: '',
         },
-        meta: { updatedAt: '', revisionCount: 0 },
+        meta: { updatedAt: '', revisionCount: 0, checkHistory: [] },
     };
 }
 
@@ -189,6 +191,13 @@ export function normalizeOutline(raw) {
     const meta = (raw.meta && typeof raw.meta === 'object') ? raw.meta : {};
     base.meta.updatedAt = asString(meta.updatedAt, '');
     base.meta.revisionCount = Number.isFinite(meta.revisionCount) ? Math.max(0, Math.floor(meta.revisionCount)) : 0;
+    // 体检历史：{at, verdict} 列表，按新到旧，最多 CHECK_HISTORY_LIMIT 条
+    base.meta.checkHistory = Array.isArray(meta.checkHistory)
+        ? meta.checkHistory
+            .filter(h => h && typeof h === 'object' && typeof h.at === 'string' && VALID_CHECK_VERDICT.has(h.verdict))
+            .map(h => ({ at: h.at, verdict: h.verdict }))
+            .slice(0, CHECK_HISTORY_LIMIT)
+        : [];
 
     return base;
 }

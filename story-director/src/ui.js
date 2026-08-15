@@ -227,10 +227,24 @@ function renderStats(outline) {
     const done = o.beats.filter(b => b.status === 'done').length;
     const active = o.beats.find(b => b.status === 'active');
     const activeAct = active ? o.acts.find(a => a.id === active.actId || (a.beats || []).includes(active.id)) : null;
+
+    // 体检历史：图标序列（旧 → 新），鼠标悬停显示每次的时间
+    let checkStat = '';
+    const history = Array.isArray(o.meta?.checkHistory) ? o.meta.checkHistory : [];
+    if (history.length) {
+        const icons = [...history].reverse().slice(-6).map(h => {
+            const meta = VERDICT_META[h.verdict] || VERDICT_META.sync;
+            const time = h.at ? new Date(h.at).toLocaleString() : '';
+            return `<i class="${meta.icon} sd_check_hist_${escapeHtml(h.verdict)}" title="体检 · ${escapeHtml(meta.label)} · ${escapeHtml(time)}"></i>`;
+        }).join('');
+        checkStat = `<div class="sd_stat" title="最近 ${history.length} 次大纲体检结论（左旧右新）"><i class="fa-solid fa-stethoscope"></i>体检 <span class="sd_check_history">${icons}</span></div>`;
+    }
+
     el.innerHTML = `<div class="sd_stat"><i class="fa-solid fa-layer-group"></i>${o.acts.length || 1} 幕</div>
         <div class="sd_stat"><i class="fa-solid fa-list-check"></i>${o.beats.length} 节点 · 已完成 ${done}</div>
         <div class="sd_stat"><i class="fa-solid fa-bullseye"></i>进行中：${activeAct ? escapeHtml(activeAct.title) : (active ? escapeHtml(active.title || active.id) : '无')}</div>
-        <div class="sd_stat"><i class="fa-solid fa-clock-rotate-left"></i>已修订 ${o.meta.revisionCount} 次</div>`;
+        <div class="sd_stat"><i class="fa-solid fa-clock-rotate-left"></i>已修订 ${o.meta.revisionCount} 次</div>
+        ${checkStat}`;
 }
 
 function renderFocus(outline) {
@@ -378,6 +392,12 @@ function setButtonLoading(btn, loading) {
 
 async function runAction(btn, { label, isCheck = false, call }) {
     if (!btn || btn.classList.contains('sd_loading')) return;
+    // 自动修订可能正在后台运行：并发时手动操作会被 director 守卫丢弃，
+    // 这里提前检查并给出「进行中」提示，避免误报为失败
+    if (adapterRef?.director?.isRunning?.()) {
+        renderReport({ verdict: 'sync', changed: false, reason: `${label}已跳过：上一次生成/修订/体检还在进行中，请稍候再试` }, label);
+        return;
+    }
     setButtonLoading(btn, true);
     try {
         const result = await call();
