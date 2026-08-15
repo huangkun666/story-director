@@ -16,5 +16,29 @@
         <div id="sd_overview" class="sd_overview"><small>尚未生成大纲。点击"生成大纲"开始。</small></div>
         <div id="sd_focus" class="sd_focus"></div>
         <div id="sd_report" class="sd_report"></div>
+        <details class="sd_llm_settings">
+            <summary>独立 API 设置</summary>
+            <label class="sd_llm_row">模式
+                <select id="sd_llm_mode">
+                    <option value="main">复用主 API</option>
+                    <option value="custom">独立配置</option>
+                </select>
+            </label>
+            <div id="sd_llm_fields">
+                <label class="sd_llm_row">API 类型
+                    <input id="sd_llm_api" type="text" placeholder="openai / textgenerationwebui" />
+                </label>
+                <label class="sd_llm_row">Base URL
+                    <input id="sd_llm_base_url" type="text" placeholder="https://your-proxy.example/v1" />
+                </label>
+                <label class="sd_llm_row">API Key
+                    <input id="sd_llm_api_key" type="password" autocomplete="off" placeholder="sk-..." />
+                </label>
+                <label class="sd_llm_row">模型
+                    <input id="sd_llm_model" type="text" placeholder="留空使用服务端默认模型" />
+                </label>
+                <small>custom 模式通过 OpenAI 兼容接口 /v1/chat/completions 直连；配置错误时静默降级为沿用旧大纲。</small>
+            </div>
+        </details>
     </div>
 </div>

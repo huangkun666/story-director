@@ -89,6 +89,7 @@ function cardToText(card) {
         c.first_mes ? `开场白：${c.first_mes}` : '',
         c.mes_example ? `示例对话：${c.mes_example}` : '',
         c.system_prompt ? `系统提示：${c.system_prompt}` : '',
+        c.depth_prompt ? `深度提示：${c.depth_prompt}` : '',
         c.worldbook ? `世界书：${c.worldbook}` : '',
     ].filter(Boolean).join('\n');
 }

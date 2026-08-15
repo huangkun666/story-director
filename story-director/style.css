@@ -9,3 +9,7 @@
 .sd_beat:hover { background: rgba(128,128,128,0.1); }
 .sd_badge { font-size: 0.85em; }
 .sd_report { border-top: 1px dashed #888; margin-top: 8px; padding-top: 6px; }
+.sd_llm_settings { margin-top: 8px; border-top: 1px dashed #888; padding-top: 6px; font-size: 0.9em; }
+.sd_llm_settings summary { cursor: pointer; }
+.sd_llm_row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; }
+.sd_llm_row input, .sd_llm_row select { flex: 1; }

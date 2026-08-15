@@ -2,10 +2,19 @@
 // 酒馆运行时适配层：把 SillyTavern.getContext() 的能力桥接给 director。
 import { createDirector } from './director.js';
 import { normalizeOutline, createEmptyOutline, deserializeOutline, serializeOutline } from './outline-store.js';
+import { createOpenAiCompatibleGenerator } from './openai-compat.js';
 
 const META_KEY = 'story_director';
 const INJECT_KEY = 'story_director';
 const SETTINGS_KEY = 'story_director';
+
+export const DEFAULT_LLM_SETTINGS = {
+    mode: 'main',           // 'main' = 复用主 API；'custom' = 独立配置（OpenAI 兼容直连）
+    api: '',                // 与酒馆 generateRaw 的 api 参数一致（openai/textgenerationwebui 等）
+    baseUrl: '',            // 反向代理/网关地址，例如 https://api.example.com/v1
+    apiKey: '',             // 独立密钥（仅 custom 模式使用）
+    model: '',              // 独立模型名
+};
 
 export const DEFAULT_SETTINGS = {
     enabled: true,
@@ -16,13 +25,32 @@ export const DEFAULT_SETTINGS = {
     driftTolerance: 'loose',        // 'loose' | 'strict'
     outlineDetail: 'medium',        // 'low' | 'medium' | 'high'
     recentTurns: 5,
+    llm: { ...DEFAULT_LLM_SETTINGS },
 };
+
+function isObject(v) {
+    return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+export function normalizeSettings(raw) {
+    const src = isObject(raw) ? raw : {};
+    const out = { ...DEFAULT_SETTINGS };
+    for (const key of Object.keys(src)) {
+        if (key === 'llm') {
+            out.llm = { ...DEFAULT_LLM_SETTINGS, ...(isObject(src.llm) ? src.llm : {}) };
+        } else if (key in out) {
+            out[key] = src[key];
+        } else {
+            // 保留未知字段，避免破坏未来版本设置
+            out[key] = src[key];
+        }
+    }
+    return out;
+}
 
 export function ensureSettings(ctx) {
     const settings = ctx.extensionSettings || {};
-    if (!settings[SETTINGS_KEY]) {
-        settings[SETTINGS_KEY] = { ...DEFAULT_SETTINGS };
-    }
+    settings[SETTINGS_KEY] = normalizeSettings(settings[SETTINGS_KEY]);
     return settings[SETTINGS_KEY];
 }
 
@@ -65,6 +93,8 @@ export function createSillyTavernAdapter(ctx) {
         const chid = c.characterId;
         const ch = chid != null ? chars[chid] : null;
         if (!ch) return {};
+        const meta = c.chatMetadata || {};
+
         // 世界书文本（若存在）
         let worldbook = '';
         try {
@@ -73,14 +103,19 @@ export function createSillyTavernAdapter(ctx) {
                 worldbook = book.entries.map(e => `${e.name ?? ''}: ${e.content ?? ''}`).join('\n');
             }
         } catch {}
+
+        // 很多卡把设定放在 depth_prompt / 聊天级覆盖里，标准字段为空，必须一起读取
+        const depthPrompt = ch.data?.extensions?.depth_prompt?.prompt || ch.data?.depth_prompt?.prompt || '';
+
         return {
             name: ch.name,
             description: ch.description,
             personality: ch.personality,
-            scenario: ch.scenario,
+            scenario: meta.scenario || ch.scenario,
             first_mes: ch.first_mes,
-            mes_example: ch.mes_example,
-            system_prompt: ch.system_prompt,
+            mes_example: meta.mes_example || ch.mes_example,
+            system_prompt: meta.system_prompt || ch.system_prompt,
+            depth_prompt: depthPrompt,
             worldbook,
         };
     }
@@ -95,8 +130,35 @@ export function createSillyTavernAdapter(ctx) {
             .join('\n');
     }
 
+    function getLlmSettings() {
+        const llm = settings.llm || DEFAULT_LLM_SETTINGS;
+        return {
+            mode: llm.mode === 'custom' ? 'custom' : 'main',
+            api: llm.api ?? '',
+            baseUrl: llm.baseUrl ?? '',
+            apiKey: llm.apiKey ?? '',
+            model: llm.model ?? '',
+        };
+    }
+
+    // 独立 API：generateRaw 只接受 api 参数，baseUrl/apiKey 走酒馆全局设置，
+    // 无法在不污染主 API 的前提下安全透传。因此 custom 模式用 OpenAI 兼容直连，
+    // 任何配置/网络/解析错误都返回 null（由 director/llm-client 降级）。
+    const customGenerate = createOpenAiCompatibleGenerator({
+        fetchImpl: (...args) => fetch(...args),
+        getConfig: () => getLlmSettings(),
+    });
+
+    function generateRaw(opts) {
+        const llm = getLlmSettings();
+        if (llm.mode === 'custom') {
+            return customGenerate({ system: opts?.systemPrompt, prompt: opts?.prompt });
+        }
+        return freshCtx().generateRaw(opts);
+    }
+
     const director = createDirector({
-        generateRaw: (opts) => freshCtx().generateRaw(opts),
+        generateRaw,
         getOutline,
         setOutline,
         setInjectedInstruction,
