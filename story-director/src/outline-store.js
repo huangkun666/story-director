@@ -41,13 +41,20 @@ function normalizeBeat(b) {
     };
 }
 
-function normalizeForeshadow(f) {
+function normalizeForeshadow(f, index) {
+    // 兼容字符串形式（模型常直接返回字符串列表）
+    if (typeof f === 'string') {
+        const hint = f.trim();
+        if (!hint) return null;
+        return { id: `f${index + 1}`, hint, status: 'pending', payoff: '' };
+    }
     if (!f || typeof f !== 'object') return null;
     const id = asString(f.id, '');
-    if (!id) return null;
+    const hint = asString(f.hint, '') || asString(f.text, '') || asString(f.description, '');
+    if (!id && !hint) return null;
     return {
-        id,
-        hint: asString(f.hint, ''),
+        id: id || `f${index + 1}`,
+        hint: hint || id,
         status: VALID_FORESHADOW_STATUS.has(f.status) ? f.status : 'pending',
         payoff: asString(f.payoff, ''),
     };
@@ -55,13 +62,13 @@ function normalizeForeshadow(f) {
 
 function normalizeArc(a) {
     if (!a || typeof a !== 'object') return null;
-    const char = asString(a.char, '');
+    const char = asString(a.char, '') || asString(a.character, '') || asString(a.name, '');
     if (!char) return null;
     return {
         char,
         desire: asString(a.desire, ''),
         flaw: asString(a.flaw, ''),
-        growth: asString(a.growth, ''),
+        growth: asString(a.growth, '') || asString(a.arc, ''),
     };
 }
 
@@ -74,7 +81,7 @@ export function normalizeOutline(raw) {
     base.tone = asString(raw.tone, '');
     base.world = asString(raw.world, '');
     base.arcs = Array.isArray(raw.arcs) ? raw.arcs.map(normalizeArc).filter(Boolean) : [];
-    base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map(normalizeForeshadow).filter(Boolean) : [];
+    base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map((f, i) => normalizeForeshadow(f, i)).filter(Boolean) : [];
     base.beats = Array.isArray(raw.beats) ? raw.beats.map(normalizeBeat).filter(Boolean) : [];
 
     const focus = (raw.focus && typeof raw.focus === 'object') ? raw.focus : {};

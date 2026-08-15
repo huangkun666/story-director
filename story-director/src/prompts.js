@@ -14,26 +14,18 @@ export const OUTLINE_SCHEMA = {
             type: 'array',
             items: {
                 type: 'object',
-                required: ['char', 'desire', 'flaw', 'growth'],
+                required: ['character', 'arc'],
                 properties: {
-                    char: { type: 'string' },
-                    desire: { type: 'string' },
-                    flaw: { type: 'string' },
-                    growth: { type: 'string' },
+                    character: { type: 'string', description: '角色名' },
+                    arc: { type: 'string', description: '角色弧光：从何处到何处、欲望与成长' },
                 },
             },
         },
         foreshadowing: {
             type: 'array',
+            description: '伏笔列表，每条为一个字符串（一句话描述伏笔及其回收方式）',
             items: {
-                type: 'object',
-                required: ['id', 'hint', 'status', 'payoff'],
-                properties: {
-                    id: { type: 'string' },
-                    hint: { type: 'string' },
-                    status: { type: 'string', enum: ['pending', 'active', 'paid'] },
-                    payoff: { type: 'string' },
-                },
+                type: 'string',
             },
         },
         beats: {

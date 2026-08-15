@@ -44,6 +44,39 @@ test('normalizeOutline repairs dangling focus.currentBeat', () => {
     assert.equal(o.focus.currentBeat, 'b1');
 });
 
+test('normalizeOutline accepts arcs with character/arc fields (Gemini actual output)', () => {
+    const o = normalizeOutline({
+        arcs: [
+            { character: '黄坤', arc: '从地方军阀到霸主' },
+            { char: '司马朗', desire: '复仇', flaw: '软弱', growth: '成长' },
+        ],
+    });
+    assert.equal(o.arcs.length, 2);
+    assert.equal(o.arcs[0].char, '黄坤');
+    assert.equal(o.arcs[0].growth, '从地方军阀到霸主');
+    assert.equal(o.arcs[1].char, '司马朗');
+    assert.equal(o.arcs[1].desire, '复仇');
+});
+
+test('normalizeOutline accepts foreshadowing as string array (Gemini actual output)', () => {
+    const o = normalizeOutline({
+        foreshadowing: ['曹操的皮甲是阳谋', '沁水渠将成为战略武器'],
+    });
+    assert.equal(o.foreshadowing.length, 2);
+    assert.equal(o.foreshadowing[0].hint, '曹操的皮甲是阳谋');
+    assert.equal(o.foreshadowing[0].status, 'pending');
+    assert.ok(o.foreshadowing[0].id); // 自动生成 id
+});
+
+test('normalizeOutline accepts foreshadowing objects with text field', () => {
+    const o = normalizeOutline({
+        foreshadowing: [{ text: '某伏笔', status: 'active' }],
+    });
+    assert.equal(o.foreshadowing.length, 1);
+    assert.equal(o.foreshadowing[0].hint, '某伏笔');
+    assert.equal(o.foreshadowing[0].status, 'active');
+});
+
 test('deserializeOutline returns empty on invalid JSON', () => {
     const o = deserializeOutline('not json {');
     assert.equal(o.version, 1);

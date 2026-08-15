@@ -26,7 +26,7 @@ test('stripCodeFence removes surrounding fences', () => {
     assert.equal(stripCodeFence('plain'), 'plain');
 });
 
-test('makeStructuredGenerator returns parsed object on success', async () => {
+test('makeStructuredGenerator returns parsed object on success without jsonSchema', async () => {
     let received = null;
     const fakeGen = async (args) => { received = args; return '{"theme":"X"}'; };
     const schema = { type: 'object' };
@@ -35,9 +35,33 @@ test('makeStructuredGenerator returns parsed object on success', async () => {
     assert.deepEqual(r, { theme: 'X' });
     assert.equal(received.prompt, 'p');
     assert.equal(received.systemPrompt, 's');
-    assert.equal(received.jsonSchema.name, 'story_director_output');
-    assert.equal(received.jsonSchema.value, schema);
-    assert.equal(received.jsonSchema.strict, false);
+    // 关键回归断言：不再传 jsonSchema（否则酒馆 generateRaw 会走裸解析，代码块会失败）
+    assert.equal(received.jsonSchema, undefined);
+});
+
+test('makeStructuredGenerator appends format hint from schema to prompt', async () => {
+    let received = null;
+    const fakeGen = async (args) => { received = args; return '{"theme":"X"}'; };
+    const schema = {
+        type: 'object',
+        required: ['theme', 'beats'],
+        properties: {
+            theme: { type: 'string', description: '故事主题' },
+            beats: { type: 'array' },
+        },
+    };
+    const gen = makeStructuredGenerator(fakeGen, schema);
+    await gen({ system: 's', prompt: 'p' });
+    assert.ok(received.prompt.includes('theme'));
+    assert.ok(received.prompt.includes('beats'));
+    assert.ok(received.prompt.startsWith('p'));
+});
+
+test('makeStructuredGenerator parses markdown-fenced JSON from generateRaw', async () => {
+    const fakeGen = async () => '```json\n{"theme":"X"}\n```';
+    const gen = makeStructuredGenerator(fakeGen, { type: 'object' });
+    const r = await gen({ system: 's', prompt: 'p' });
+    assert.deepEqual(r, { theme: 'X' });
 });
 
 test('makeStructuredGenerator returns null on parse failure', async () => {
