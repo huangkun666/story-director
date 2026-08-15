@@ -41,6 +41,26 @@ test('buildGeneratePrompt asks for a full act-based outline, not loose nodes', (
     assert.ok(prompt.includes('actId'));
 });
 
+test('buildGeneratePrompt is genre-agnostic and asks for ensemble cast lines', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: {} });
+    assert.ok(prompt.includes('题材不限'));
+    assert.ok(prompt.includes('主角线'));
+    assert.ok(prompt.includes('对抗线'));
+    assert.ok(prompt.includes('配角线'));
+    assert.ok(prompt.includes('世界/势力线'));
+    assert.ok(prompt.includes('避免独角戏'));
+    assert.ok(prompt.includes('cast'));
+});
+
+test('buildGeneratePrompt treats mustRead lore as highest priority', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        timeline: { start: '', end: '', note: '', mustRead: '这个世界魔法会消耗寿命' },
+    });
+    assert.ok(prompt.includes('必读设定（最高优先级'));
+    assert.ok(prompt.includes('魔法会消耗寿命'));
+});
+
 test('buildGeneratePrompt enforces a specified story timeline', () => {
     const { prompt } = buildGeneratePrompt({
         characterCard: {},

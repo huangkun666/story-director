@@ -81,6 +81,10 @@
                                     <span class="sd_setting_label">补充约束</span>
                                     <input id="sd_timeline_note" type="text" placeholder="可选：例如 必须包含赤壁之战、官渡之战" />
                                 </label>
+                                <label class="sd_setting sd_timeline_field sd_timeline_mustread">
+                                    <span class="sd_setting_label">必读设定</span>
+                                    <textarea id="sd_timeline_must_read" rows="2" placeholder="可选：最高优先级设定，例如 这个世界魔法会消耗寿命"></textarea>
+                                </label>
                             </div>
                         </div>
 
@@ -126,6 +130,16 @@
                                         <option value="medium">中（均衡）</option>
                                         <option value="high">高（节点细节更丰富）</option>
                                     </select>
+                                </label>
+                                <label class="sd_setting">
+                                    <span class="sd_setting_label"><i class="fa-solid fa-brain"></i>生成大纲的记忆模式</span>
+                                    <select id="sd_generate_memory_mode">
+                                        <option value="auto">自动（摘要 + 向量检索）</option>
+                                        <option value="summary">只读记忆摘要</option>
+                                        <option value="vector">只做向量检索</option>
+                                        <option value="none">不使用记忆</option>
+                                    </select>
+                                    <small>避免大纲被过长聊天记忆过度约束时，选 none 或 vector</small>
                                 </label>
                                 <label class="sd_setting">
                                     <span class="sd_setting_label"><i class="fa-solid fa-clock-rotate-left"></i>修订回顾轮数</span>
@@ -254,6 +268,10 @@
                                 </select>
                             </label>
                         </div>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">参与角色（逗号分隔）</span>
+                            <input id="sd_beat_cast" type="text" placeholder="例如：主角，对手，配角" />
+                        </label>
                     </div>
                     <footer class="sd_modal_footer">
                         <div id="sd_beat_move_up" class="menu_button sd_btn" title="在本幕内上移"><i class="fa-solid fa-arrow-up"></i><span>上移</span></div>

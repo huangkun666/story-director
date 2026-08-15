@@ -18,6 +18,7 @@ export function createEmptyOutline() {
             start: '',
             end: '',
             note: '',
+            mustRead: '',
         },
         arcs: [],
         foreshadowing: [],
@@ -62,6 +63,12 @@ function normalizeAct(a, index) {
     };
 }
 
+function asStringList(v) {
+    if (Array.isArray(v)) return v.map(x => asString(x, '')).filter(Boolean);
+    if (typeof v === 'string') return v.split(/[,，、;；]/).map(x => x.trim()).filter(Boolean);
+    return [];
+}
+
 function normalizeBeat(b, index) {
     if (!b || typeof b !== 'object') return null;
     const id = asString(b.id, '') || `beat_${index + 1}`;
@@ -72,6 +79,7 @@ function normalizeBeat(b, index) {
         summary: asString(b.summary, '') || asString(b.description, ''),
         type: VALID_BEAT_TYPE.has(b.type) ? b.type : '',
         status: VALID_BEAT_STATUS.has(b.status) ? b.status : 'pending',
+        cast: asStringList(b.cast),
     };
 }
 
@@ -126,18 +134,20 @@ function normalizeTimeline(raw) {
     // 兼容字符串形式："建安五年 - 建安十三年"
     if (typeof raw === 'string') {
         const s = raw.trim();
-        if (!s) return { start: '', end: '', note: '' };
+        if (!s) return { start: '', end: '', note: '', mustRead: '' };
         const parts = s.split(/\s*[-–—~至到]\s*/);
         return {
             start: parts[0]?.trim() || '',
             end: parts[1]?.trim() || '',
             note: parts.length > 2 ? parts.slice(2).join(' - ').trim() : '',
+            mustRead: '',
         };
     }
     return {
         start: asString(t.start, ''),
         end: asString(t.end, ''),
         note: asString(t.note, '') || asString(t.constraint, ''),
+        mustRead: asString(t.mustRead, '') || asString(t.must_read, '') || asString(t.requiredLore, ''),
     };
 }
 

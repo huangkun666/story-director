@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = {
     dialogueContextLimit: 8000,     // 修订/体检时回看对话的最大字符数
     useMemoryPlugin: true,          // 生成/修订/体检时接入 yuzuki-Memory 等长时记忆插件
     memoryContextLimit: 8000,       // 记忆插件上下文的字符上限
+    generateMemoryMode: 'auto',     // 生成大纲时的记忆模式：auto / summary / vector / none
     useVectorMemory: true,          // 使用 yuzuki-Memory 向量库检索相关资料
     vectorMemoryLimit: 6000,        // 向量检索结果的字符上限
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
@@ -244,21 +245,37 @@ export function createSillyTavernAdapter(ctx) {
     }
 
     // 向量检索：复用柚月已经向量化好的资料库。
-    // 它内部会做 query embedding -> cosine 相似度初筛 -> 可选 rerank，最后返回相关 chunk。
+    // 支持多路 query（时间线/角色关系/当前焦点），合并去重后返回相关 chunk。
     async function getVectorMemoryContext(query) {
         if (settings.useVectorMemory === false) return '';
         try {
             const store = (typeof window !== 'undefined') ? window.YuzukiMemory?.VectorStore : null;
             if (!store || typeof store.search !== 'function') return '';
-            const sourceQuery = String(query || '').trim().slice(0, 2000);
-            if (!sourceQuery) return '';
-            const results = await store.search(sourceQuery);
-            if (!Array.isArray(results) || !results.length) return '';
+            const queries = (Array.isArray(query) ? query : [query])
+                .map(q => String(q || '').trim().slice(0, 2000))
+                .filter(Boolean);
+            if (!queries.length) return '';
+            const seen = new Set();
+            const blocks = [];
+            for (const sourceQuery of queries) {
+                let results;
+                try {
+                    results = await store.search(sourceQuery);
+                } catch (err) {
+                    console.warn('[story-director] vector search query failed:', err);
+                    continue;
+                }
+                if (!Array.isArray(results)) continue;
+                for (const r of results) {
+                    const text = String(r?.text || '').trim();
+                    if (!text || seen.has(text)) continue;
+                    seen.add(text);
+                    blocks.push(`【${r.source || '向量资料'}】${text}`);
+                }
+            }
+            if (!blocks.length) return '';
             const limit = Math.max(1000, Number(settings.vectorMemoryLimit) || 6000);
-            let text = results
-                .map(r => `【${r.source || '向量资料'}】${r.text || ''}`)
-                .join('\n');
-            return text.slice(0, limit);
+            return blocks.join('\n').slice(0, limit);
         } catch (err) {
             console.warn('[story-director] vector memory search failed:', err);
             return '';

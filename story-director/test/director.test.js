@@ -59,6 +59,7 @@ test('director.generate keeps user-specified timeline after LLM returns outline'
         start: '建安五年',
         end: '建安十三年',
         note: '含赤壁',
+        mustRead: '',
     });
 });
 

@@ -27,7 +27,7 @@ test('normalizeOutline fills missing fields with defaults', () => {
     assert.ok(Array.isArray(o.beats));
     assert.ok(Array.isArray(o.acts));
     assert.equal(typeof o.focus, 'object');
-    assert.deepEqual(o.timeline, { start: '', end: '', note: '' });
+    assert.deepEqual(o.timeline, { start: '', end: '', note: '', mustRead: '' });
 });
 
 test('normalizeOutline accepts timeline object and string forms', () => {
@@ -62,11 +62,12 @@ test('normalizeOutline accepts acts and keeps beat actId', () => {
 
 test('normalizeOutline keeps beat type, arc status and foreshadow payoff beat', () => {
     const o = normalizeOutline({
-        beats: [{ id: 'b1', title: 't', summary: 's', type: 'climax', status: 'active' }],
+        beats: [{ id: 'b1', title: 't', summary: 's', type: 'climax', status: 'active', cast: '主角，对手' }],
         arcs: [{ char: '甲', growth: '成长', status: 'active' }],
         foreshadowing: [{ id: 'f1', hint: '伏笔', status: 'paid', beatId: 'b1' }],
     });
     assert.equal(o.beats[0].type, 'climax');
+    assert.deepEqual(o.beats[0].cast, ['主角', '对手']);
     assert.equal(o.arcs[0].status, 'active');
     assert.equal(o.foreshadowing[0].beatId, 'b1');
 });

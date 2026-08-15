@@ -43,31 +43,38 @@ export function createDirector(deps) {
             const card = deps.getCharacterCard();
             const storedTimeline = deps.getOutline().timeline || {};
             const requestedTimeline = (timeline && typeof timeline === 'object') ? timeline : storedTimeline;
-            const vectorQuery = [
-                userRequest,
-                requestedTimeline?.start,
-                requestedTimeline?.end,
-                requestedTimeline?.note,
-            ].filter(Boolean).join(' ').trim();
-            const vectorContext = await deps.getVectorMemoryContext?.(vectorQuery) || '';
+
+            // 生成大纲的记忆模式：auto = 摘要+向量；summary = 只读记忆表；vector = 只检索资料；none = 只看角色卡和用户要求
+            const memoryMode = settings.generateMemoryMode || 'auto';
+            const useSummary = memoryMode === 'auto' || memoryMode === 'summary';
+            const useVector = memoryMode === 'auto' || memoryMode === 'vector';
+
+            const vectorQueries = [
+                [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedTimeline?.mustRead].filter(Boolean).join(' '),
+                card.cast ? `角色与关系：${card.cast}` : '',
+                deps.getOutline().focus?.nextStep || deps.getOutline().theme || '',
+            ].filter(q => String(q || '').trim());
+            const vectorContext = useVector ? (await deps.getVectorMemoryContext?.(vectorQueries) || '') : '';
+
             const bundle = buildGeneratePrompt({
                 characterCard: card,
                 userRequest,
                 detail: settings.outlineDetail || 'medium',
                 timeline: requestedTimeline,
-                memoryContext: deps.getMemoryContext?.(),
+                memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
             });
             const result = await gen(bundle);
             if (result) {
                 const next = normalizeOutline(result);
                 // 用户显式指定过时间线时，以用户输入为准（模型输出只补漏）
-                const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
+                const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note || requestedTimeline?.mustRead);
                 if (hasRequestedTimeline) {
                     next.timeline = {
                         start: requestedTimeline.start || next.timeline.start,
                         end: requestedTimeline.end || next.timeline.end,
                         note: requestedTimeline.note || next.timeline.note,
+                        mustRead: requestedTimeline.mustRead || next.timeline.mustRead,
                     };
                 }
                 recordHistory('generate');
@@ -88,14 +95,16 @@ export function createDirector(deps) {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
             const outline = deps.getOutline();
-            const vectorQuery = [
-                dialogue.slice(0, 600),
-                outline.focus?.nextStep,
-                outline.focus?.currentBeat,
-                outline.timeline?.start,
-                outline.timeline?.end,
-            ].filter(Boolean).join(' ').trim();
-            const vectorContext = await deps.getVectorMemoryContext?.(vectorQuery) || '';
+            const activeForeshadow = (outline.foreshadowing || [])
+                .filter(f => f.status !== 'paid')
+                .map(f => f.hint || f.id)
+                .join(' ');
+            const vectorQueries = [
+                [dialogue.slice(0, 600), outline.focus?.nextStep, outline.focus?.currentBeat].filter(Boolean).join(' '),
+                [outline.timeline?.start, outline.timeline?.end, outline.timeline?.note].filter(Boolean).join(' '),
+                activeForeshadow,
+            ].filter(q => String(q || '').trim());
+            const vectorContext = await deps.getVectorMemoryContext?.(vectorQueries) || '';
             const bundle = buildRevisePrompt({
                 recentDialogue: dialogue,
                 outline,
@@ -124,14 +133,16 @@ export function createDirector(deps) {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
             const outline = deps.getOutline();
-            const vectorQuery = [
-                dialogue.slice(0, 600),
-                outline.focus?.nextStep,
-                outline.focus?.currentBeat,
-                outline.timeline?.start,
-                outline.timeline?.end,
-            ].filter(Boolean).join(' ').trim();
-            const vectorContext = await deps.getVectorMemoryContext?.(vectorQuery) || '';
+            const activeForeshadow = (outline.foreshadowing || [])
+                .filter(f => f.status !== 'paid')
+                .map(f => f.hint || f.id)
+                .join(' ');
+            const vectorQueries = [
+                [dialogue.slice(0, 600), outline.focus?.nextStep, outline.focus?.currentBeat].filter(Boolean).join(' '),
+                [outline.timeline?.start, outline.timeline?.end, outline.timeline?.note].filter(Boolean).join(' '),
+                activeForeshadow,
+            ].filter(q => String(q || '').trim());
+            const vectorContext = await deps.getVectorMemoryContext?.(vectorQueries) || '';
             const bundle = buildCheckPrompt({
                 recentDialogue: dialogue,
                 outline,

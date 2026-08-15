@@ -58,7 +58,7 @@ function arcMeta(status) {
 }
 
 function hasOutlineContent(o) {
-    return !!(o.theme || o.tone || o.world || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
+    return !!(o.theme || o.tone || o.world || o.timeline?.start || o.timeline?.end || o.timeline?.mustRead || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
 }
 
 function renderBeatItem(b) {
@@ -74,6 +74,7 @@ function renderBeatItem(b) {
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
             </div>
             ${b.summary ? `<div class="sd_beat_summary">${escapeHtml(b.summary)}</div>` : ''}
+            ${(b.cast || []).length ? `<div class="sd_beat_cast">${b.cast.map(c => `<span class="sd_chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
         </div>
     </div>`;
 }
@@ -95,6 +96,7 @@ function storyCardHtml(o) {
         const range = [o.timeline.start, o.timeline.end].filter(Boolean).join(' → ');
         rows.push(`<div class="sd_kv sd_kv_timeline"><span class="sd_kv_key">时间线</span><span class="sd_kv_value">${escapeHtml(range)}${o.timeline.note ? `（${escapeHtml(o.timeline.note)}）` : ''}</span></div>`);
     }
+    if (o.timeline?.mustRead) rows.push(`<div class="sd_kv sd_kv_mustread"><span class="sd_kv_key">必读设定</span><span class="sd_kv_value">${escapeHtml(o.timeline.mustRead)}</span></div>`);
     if (o.theme) rows.push(`<div class="sd_kv"><span class="sd_kv_key">主题</span><span class="sd_kv_value">${escapeHtml(o.theme)}</span></div>`);
     if (o.tone) rows.push(`<div class="sd_kv"><span class="sd_kv_key">基调</span><span class="sd_kv_value">${escapeHtml(o.tone)}</span></div>`);
     if (o.world) rows.push(`<div class="sd_kv sd_kv_world"><span class="sd_kv_key">世界观</span><span class="sd_kv_value">${escapeHtml(o.world)}</span></div>`);
@@ -250,6 +252,7 @@ function syncTimelineInputs(outline) {
     set('sd_timeline_start', o.timeline?.start);
     set('sd_timeline_end', o.timeline?.end);
     set('sd_timeline_note', o.timeline?.note);
+    set('sd_timeline_must_read', o.timeline?.mustRead);
 }
 
 function renderHistoryOptions() {
@@ -388,6 +391,7 @@ export function bindUI(ctx, adapter) {
         start: timelineField('sd_timeline_start')?.value?.trim() || '',
         end: timelineField('sd_timeline_end')?.value?.trim() || '',
         note: timelineField('sd_timeline_note')?.value?.trim() || '',
+        mustRead: timelineField('sd_timeline_must_read')?.value?.trim() || '',
     });
     const persistTimeline = () => {
         const outline = adapter.getOutline();
@@ -402,6 +406,7 @@ export function bindUI(ctx, adapter) {
     bindTimelineField('sd_timeline_start');
     bindTimelineField('sd_timeline_end');
     bindTimelineField('sd_timeline_note');
+    bindTimelineField('sd_timeline_must_read');
 
     const runGenerate = (btn) => runAction(btn, {
         label: '生成',
@@ -466,6 +471,7 @@ export function bindUI(ctx, adapter) {
     setSelect('sd_revise_frequency', adapter.settings.reviseFrequency);
     setSelect('sd_drift_tolerance', adapter.settings.driftTolerance);
     setSelect('sd_outline_detail', adapter.settings.outlineDetail);
+    setSelect('sd_generate_memory_mode', adapter.settings.generateMemoryMode || 'auto');
     const setNumber = (id, value) => {
         const el = document.getElementById(id);
         if (el) el.value = value ?? 0;
@@ -501,6 +507,7 @@ export function bindUI(ctx, adapter) {
     bindNumber('sd_revise_every_n', 'reviseEveryN', { min: 1, max: 20 });
     bindSelect('sd_drift_tolerance', 'driftTolerance');
     bindSelect('sd_outline_detail', 'outlineDetail');
+    bindSelect('sd_generate_memory_mode', 'generateMemoryMode');
     bindNumber('sd_recent_turns', 'recentTurns', { min: 1, max: 50 });
     bindNumber('sd_card_context_limit', 'cardContextLimit', { min: 2000, max: 200000 });
     bindNumber('sd_dialogue_context_limit', 'dialogueContextLimit', { min: 1000, max: 50000 });
@@ -547,6 +554,7 @@ export function bindUI(ctx, adapter) {
     const beatSummaryEl = document.getElementById('sd_beat_summary');
     const beatActEl = document.getElementById('sd_beat_act');
     const beatTypeEl = document.getElementById('sd_beat_type');
+    const beatCastEl = document.getElementById('sd_beat_cast');
 
     function fillActOptions(outline) {
         if (!beatActEl) return;
@@ -562,6 +570,7 @@ export function bindUI(ctx, adapter) {
         if (beatTitleEl) beatTitleEl.value = beat?.title || '';
         if (beatSummaryEl) beatSummaryEl.value = beat?.summary || '';
         if (beatTypeEl) beatTypeEl.value = beat?.type || 'setup';
+        if (beatCastEl) beatCastEl.value = (beat?.cast || []).join('，');
         if (beatActEl && beat) beatActEl.value = beat.actId || outline.acts[0]?.id || '';
         beatEditorEl?.classList.add('sd_open');
     }
@@ -577,6 +586,7 @@ export function bindUI(ctx, adapter) {
         const summary = beatSummaryEl?.value?.trim() || '';
         const type = beatTypeEl?.value || 'setup';
         const actId = beatActEl?.value || '';
+        const cast = String(beatCastEl?.value || '').split(/[,，、;；]/).map(x => x.trim()).filter(Boolean);
 
         adapter.recordHistory?.(outline, 'manual');
 
@@ -585,13 +595,14 @@ export function bindUI(ctx, adapter) {
             beat = outline.beats.find(b => b.id === editingBeatId);
             if (!beat) return;
         } else {
-            beat = { id: `beat_${Date.now()}`, title, summary, type, status: 'pending', actId };
+            beat = { id: `beat_${Date.now()}`, title, summary, type, status: 'pending', actId, cast: [] };
             outline.beats.push(beat);
         }
         beat.title = title;
         beat.summary = summary;
         beat.type = type;
         beat.actId = actId;
+        beat.cast = cast;
 
         // 同步 acts.beats 列表
         let act = outline.acts.find(a => a.id === actId);
