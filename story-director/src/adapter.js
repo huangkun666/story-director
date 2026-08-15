@@ -26,6 +26,8 @@ export const DEFAULT_SETTINGS = {
     driftTolerance: 'loose',        // 'loose' | 'strict'
     outlineDetail: 'medium',        // 'low' | 'medium' | 'high'
     recentTurns: 5,
+    cardContextLimit: 12000,        // 生成大纲时角色卡内容的最大字符数（防止巨型世界书/深度提示撑爆 prompt）
+    dialogueContextLimit: 8000,     // 修订/体检时回看对话的最大字符数
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
     llm: { ...DEFAULT_LLM_SETTINGS },
 };
@@ -127,26 +129,46 @@ export function createSillyTavernAdapter(ctx) {
         if (!ch) return {};
         const meta = c.chatMetadata || {};
 
-        // 世界书文本（若存在）
+        // 角色卡内容预算：防止巨型世界书 / depth_prompt 把 outline 请求撑到几十万 token。
+        // generateRaw 本身不会召回聊天记忆，token 大头只可能来自这里。
+        const limit = Math.max(2000, Number(settings.cardContextLimit) || 12000);
+        let budget = limit;
+        const spend = (text, perFieldMax = budget) => {
+            if (budget <= 0) return '';
+            const clipped = String(text ?? '').slice(0, Math.max(0, Math.min(perFieldMax, budget))).trim();
+            budget -= clipped.length;
+            return clipped;
+        };
+
+        const depthPrompt = spend(ch.data?.extensions?.depth_prompt?.prompt || ch.data?.depth_prompt?.prompt || '');
+        const description = spend(ch.description);
+        const personality = spend(ch.personality);
+        const scenario = spend(meta.scenario || ch.scenario);
+        const systemPrompt = spend(meta.system_prompt || ch.system_prompt);
+
         let worldbook = '';
         try {
             const book = ch.data?.character_book || ch.character_book;
             if (book?.entries?.length) {
-                worldbook = book.entries.map(e => `${e.name ?? ''}: ${e.content ?? ''}`).join('\n');
+                const parts = [];
+                for (const e of book.entries) {
+                    if (budget <= 0) break;
+                    const text = `${e.name ?? ''}: ${e.content ?? ''}`;
+                    const part = spend(text, 1000);
+                    if (part) parts.push(part);
+                }
+                worldbook = parts.join('\n');
             }
         } catch {}
 
-        // 很多卡把设定放在 depth_prompt / 聊天级覆盖里，标准字段为空，必须一起读取
-        const depthPrompt = ch.data?.extensions?.depth_prompt?.prompt || ch.data?.depth_prompt?.prompt || '';
-
         return {
             name: ch.name,
-            description: ch.description,
-            personality: ch.personality,
-            scenario: meta.scenario || ch.scenario,
-            first_mes: ch.first_mes,
-            mes_example: meta.mes_example || ch.mes_example,
-            system_prompt: meta.system_prompt || ch.system_prompt,
+            description,
+            personality,
+            scenario,
+            first_mes: spend(ch.first_mes),
+            mes_example: spend(meta.mes_example || ch.mes_example),
+            system_prompt: systemPrompt,
             depth_prompt: depthPrompt,
             worldbook,
         };
@@ -156,10 +178,12 @@ export function createSillyTavernAdapter(ctx) {
         const c = freshCtx();
         const chat = Array.isArray(c.chat) ? c.chat : [];
         const recent = chat.slice(-(turns * 2)); // 每轮 = 用户 + 角色两条
-        return recent
+        const limit = Math.max(1000, Number(settings.dialogueContextLimit) || 8000);
+        const text = recent
             .filter(m => m && typeof m.mes === 'string')
-            .map(m => `${m.is_user ? (c.name1 || '用户') : (m.name || c.name2 || '角色')}: ${m.mes}`)
+            .map(m => `${m.is_user ? (c.name1 || '用户') : (m.name || c.name2 || '角色')}: ${String(m.mes).slice(0, 1200)}`)
             .join('\n');
+        return text.slice(0, limit);
     }
 
     function getLlmSettings() {

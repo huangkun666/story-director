@@ -68,8 +68,44 @@ test('getCharacterCard reads depth_prompt and chat-level overrides', () => {
     assert.equal(card.system_prompt, '手动系统');
 });
 
-test('adapter records and restores outline history snapshots', () => {
-    const ctx = makeCtx();
+test('getCharacterCard respects cardContextLimit budget', () => {
+    const ctx = makeCtx({
+        characters: [{
+            name: '巨型卡',
+            description: 'A'.repeat(10000),
+            personality: '',
+            scenario: '',
+            first_mes: '',
+            mes_example: '',
+            system_prompt: '',
+            data: {
+                extensions: { depth_prompt: { prompt: '深'.repeat(10000) } },
+                character_book: { entries: [{ name: '设定', content: '界'.repeat(10000) }] },
+            },
+        }],
+        characterId: 0,
+        chatMetadata: {},
+    });
+    ctx.extensionSettings.story_director = { cardContextLimit: 3000 };
+    const adapter = createSillyTavernAdapter(ctx);
+    const card = adapter.getCharacterCard();
+    const totalChars = ['description', 'personality', 'scenario', 'first_mes', 'mes_example', 'system_prompt', 'depth_prompt', 'worldbook']
+        .reduce((sum, key) => sum + String(card[key] || '').length, 0);
+    assert.ok(totalChars <= 3000, `card context should be capped, got ${totalChars}`);
+    assert.ok(card.depth_prompt.length > 0); // 深度提示优先保留
+});
+
+test('getRecentDialogue respects dialogueContextLimit budget', () => {
+    const ctx = makeCtx({
+        chat: Array.from({ length: 20 }, (_, i) => ({ mes: `消息${i}`.repeat(2000), is_user: i % 2 === 0 })),
+    });
+    ctx.extensionSettings.story_director = { dialogueContextLimit: 2000 };
+    const adapter = createSillyTavernAdapter(ctx);
+    const dialogue = adapter.getRecentDialogue(10);
+    assert.ok(dialogue.length <= 2000);
+});
+
+test('adapter records and restores outline history snapshots', () => {    const ctx = makeCtx();
     const adapter = createSillyTavernAdapter(ctx);
     const first = adapter.getOutline();
     first.theme = '旧主题';

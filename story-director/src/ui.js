@@ -356,6 +356,17 @@ export function bindUI(ctx, adapter) {
         if (e.key === 'Escape' && windowEl?.classList.contains('sd_open')) closeWindow();
     });
 
+    // 功能页签：主界面只放大纲总览，其余收进「设置与工具」
+    const tabs = [...(document.querySelectorAll?.('.sd_tab') || [])];
+    const switchView = (viewId) => {
+        const views = [...(document.querySelectorAll?.('.sd_view') || [])];
+        for (const view of views) view.classList.toggle('sd_hidden', view.id !== viewId);
+        for (const tab of tabs) tab.classList.toggle('sd_tab_active', tab.getAttribute('data-sd-view') === viewId);
+    };
+    for (const tab of tabs) {
+        tab.addEventListener('click', () => switchView(tab.getAttribute('data-sd-view')));
+    }
+
     const enabledEl = document.getElementById('sd_enabled');
     if (enabledEl) enabledEl.checked = !!adapter.settings.enabled;
     enabledEl?.addEventListener('change', (e) => {
@@ -462,6 +473,8 @@ export function bindUI(ctx, adapter) {
     setNumber('sd_inject_limit', adapter.settings.injectTokenLimit);
     setNumber('sd_revise_every_n', adapter.settings.reviseEveryN);
     setNumber('sd_recent_turns', adapter.settings.recentTurns);
+    setNumber('sd_card_context_limit', adapter.settings.cardContextLimit ?? 12000);
+    setNumber('sd_dialogue_context_limit', adapter.settings.dialogueContextLimit ?? 8000);
 
     const syncReviseEveryNVisibility = () => {
         document.getElementById('sd_revise_every_n_row')?.classList.toggle('sd_hidden', adapter.settings.reviseFrequency !== 'everyN');
@@ -475,6 +488,8 @@ export function bindUI(ctx, adapter) {
     bindSelect('sd_drift_tolerance', 'driftTolerance');
     bindSelect('sd_outline_detail', 'outlineDetail');
     bindNumber('sd_recent_turns', 'recentTurns', { min: 1, max: 50 });
+    bindNumber('sd_card_context_limit', 'cardContextLimit', { min: 2000, max: 200000 });
+    bindNumber('sd_dialogue_context_limit', 'dialogueContextLimit', { min: 1000, max: 50000 });
 
     // 独立 API 配置（任务 A）：即时写回 extension_settings
     const llm = adapter.settings.llm || { mode: 'main', api: '', baseUrl: '', apiKey: '', model: '' };
