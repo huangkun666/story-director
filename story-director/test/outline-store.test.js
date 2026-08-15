@@ -11,6 +11,7 @@ test('createEmptyOutline returns valid empty structure', () => {
     assert.equal(typeof o.world, 'string');
     assert.ok(Array.isArray(o.arcs));
     assert.ok(Array.isArray(o.foreshadowing));
+    assert.ok(Array.isArray(o.acts));
     assert.ok(Array.isArray(o.beats));
     assert.equal(typeof o.focus, 'object');
     assert.equal(typeof o.focus.currentBeat, 'string');
@@ -24,7 +25,27 @@ test('normalizeOutline fills missing fields with defaults', () => {
     assert.equal(o.theme, 'X');
     assert.equal(typeof o.tone, 'string');
     assert.ok(Array.isArray(o.beats));
+    assert.ok(Array.isArray(o.acts));
     assert.equal(typeof o.focus, 'object');
+});
+
+test('normalizeOutline accepts acts and keeps beat actId', () => {
+    const o = normalizeOutline({
+        acts: [
+            { id: 'act_1', title: '第一幕：开端', summary: '铺垫', beats: ['beat_1'] },
+            { title: '第二幕：高潮', description: '冲突爆发' },
+        ],
+        beats: [
+            { id: 'beat_1', title: '开端', summary: 's', status: 'active' },
+            { id: 'beat_2', act_id: 'act_2', name: '高潮', description: 'd', status: 'pending' },
+        ],
+    });
+    assert.equal(o.acts.length, 2);
+    assert.equal(o.acts[0].id, 'act_1');
+    assert.equal(o.acts[1].title, '第二幕：高潮');
+    assert.equal(o.acts[1].summary, '冲突爆发');
+    assert.equal(o.beats[0].actId, 'act_1'); // 从 acts[0].beats 推断
+    assert.equal(o.beats[1].actId, 'act_2'); // 兼容 act_id 字段
 });
 
 test('normalizeOutline coerces invalid status values', () => {

@@ -6,7 +6,7 @@ import { mountUI, bindUI } from './src/ui.js';
     'use strict';
 
     const NAMESPACE = 'STORY_DIRECTOR';
-    const VERSION = '0.3.0';
+    const VERSION = '0.4.0';
 
     if (window[NAMESPACE]?.loaded) {
         console.warn(`[story-director] Already loaded, skipping duplicate init.`);
@@ -71,7 +71,7 @@ import { mountUI, bindUI } from './src/ui.js';
                         <div class="sd_toolbar">
                             <div id="sd_generate" class="menu_button sd_btn sd_btn_primary"><i class="fa-solid fa-wand-magic-sparkles sd_btn_icon"></i><span>生成大纲</span></div>
                             <div id="sd_revise" class="menu_button sd_btn"><i class="fa-solid fa-rotate sd_btn_icon"></i><span>修订</span></div>
-                            <div id="sd_check" class="menu_button sd_btn"><i class="fa-solid fa-stethoscope sd_btn_icon"></i><span>体检</span></div>
+                            <div id="sd_check" class="menu_button sd_btn"><i class="fa-solid fa-stethoscope sd_btn_icon"></i><span>大纲体检</span></div>
                             <div id="sd_clear" class="menu_button sd_btn sd_btn_danger"><i class="fa-solid fa-trash-can sd_btn_icon"></i><span>清空</span></div>
                             <label class="sd_enable"><input id="sd_enabled" type="checkbox" /><span>启用</span></label>
                         </div>
@@ -180,7 +180,7 @@ import { mountUI, bindUI } from './src/ui.js';
                 } else if (sub === 'check') {
                     const report = await adapter.director.check();
                     adapter.renderOutline();
-                    return report === null ? '体检调用失败，已沿用旧大纲' : `体检完成：${report?.verdict ?? 'sync'}`;
+                    return report === null ? '大纲体检调用失败，已沿用旧大纲' : `大纲体检完成：${report?.verdict ?? 'sync'}`;
                 } else if (sub === 'status') {
                     const s = adapter.settings;
                     const o = adapter.getOutline();
@@ -196,13 +196,13 @@ import { mountUI, bindUI } from './src/ui.js';
                         `- 插件：${s.enabled ? '启用' : '停用'}；控制强度：${s.controlStrength === 'weak' ? '弱引导' : '强约束'}`,
                         `- 修订：${freqText}；偏离处理：${s.driftTolerance === 'strict' ? '严格拉回' : '宽松吸收'}`,
                         `- LLM：${llmMode}`,
-                        `- 大纲：${o.beats.length} 个节点；当前：${current ? `${current.title}（${current.id}）` : '无'}；已修订 ${o.meta.revisionCount} 次`,
+                        `- 大纲：${o.acts.length} 幕 / ${o.beats.length} 个节点；当前：${current ? `${current.title}（${current.id}）` : '无'}；已修订 ${o.meta.revisionCount} 次`,
                     ].join('\n');
                 } else {
                     return '用法：/director open|generate|revise|check|status';
                 }
             },
-            helpString: '叙事导演大纲控制。子命令：open（打开大界面）、generate（生成）、revise（修订）、check（体检）、status（状态）',
+            helpString: '叙事导演大纲控制。子命令：open（打开大界面）、generate（生成大纲）、revise（修订）、check（大纲体检）、status（状态）',
             unnamedArgumentList: [
                 new SlashCommandArgument('subcommand', [ARGUMENT_TYPE.STRING], false, false, ''),
             ],

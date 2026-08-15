@@ -1,12 +1,12 @@
-/* story-director 独立大界面样式：与酒馆主题变量集成 */
+/* story-director 独立大界面样式：白色底、深色文字，不跟随酒馆暗色主题 */
 
 #story_director_window.sd_window,
 #story_director_panel.sd_panel_content {
-    --sd-border: var(--SmartThemeBorderColor, rgba(128, 128, 128, 0.25));
-    --sd-bg: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.18));
-    --sd-text: var(--SmartThemeBodyColor, #d6d2c8);
-    --sd-em: var(--SmartThemeEmColor, #d8a657);
-    --sd-quote: var(--SmartThemeQuoteColor, #a67c52);
+    --sd-border: rgba(31, 41, 55, 0.16);
+    --sd-bg: #f5f6f8;
+    --sd-text: #1f2430;
+    --sd-em: #b07a1a;
+    --sd-quote: #8a5a00;
 }
 
 /* ---------- 独立大窗口 ---------- */
@@ -22,9 +22,9 @@
     overflow: hidden;
     border: 1px solid var(--sd-border);
     border-radius: 14px;
-    background-color: rgba(22, 22, 28, 0.97);
+    background-color: #ffffff;
     color: var(--sd-text);
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 18px 60px rgba(15, 23, 42, 0.28);
 }
 
 .sd_window.sd_open {
@@ -38,7 +38,7 @@
     gap: 10px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--sd-border);
-    background: linear-gradient(90deg, rgba(216, 166, 87, 0.16), transparent 55%);
+    background: linear-gradient(90deg, #fff6e5, #ffffff 60%);
 }
 
 .sd_window_actions {
@@ -108,15 +108,40 @@
     gap: 6px;
     cursor: pointer;
     padding: 5px 10px;
+    color: var(--sd-text);
+    background: #f3f4f6;
+    border: 1px solid #d5d8dd;
 }
 
 .sd_btn_primary {
-    border-color: var(--sd-em);
-    color: var(--sd-em);
+    background: #fff7e6;
+    border-color: #e2b05a;
+    color: #8a5a00;
 }
 
 .sd_btn_danger {
-    opacity: 0.85;
+    background: #fdf1f2;
+    border-color: #eec2c6;
+    color: #b3373f;
+}
+
+/* 覆盖酒馆暗色主题的 menu_button 默认样式 */
+.sd_window .menu_button.sd_btn {
+    margin: 0;
+    filter: none;
+}
+
+.sd_window .menu_button.sd_btn:hover {
+    filter: brightness(0.97);
+    background-color: #e9ebef;
+}
+
+.sd_window .menu_button.sd_btn_primary:hover {
+    background-color: #ffefd0;
+}
+
+.sd_window .menu_button.sd_btn_danger:hover {
+    background-color: #fbe4e6;
 }
 
 .sd_btn .sd_btn_icon {
@@ -124,7 +149,7 @@
 }
 
 .sd_btn:hover {
-    filter: brightness(1.2);
+    filter: brightness(0.97);
 }
 
 .sd_btn.sd_loading {
@@ -312,6 +337,36 @@
     background: rgba(103, 184, 120, 0.14);
 }
 
+/* 分幕大纲 */
+.sd_act + .sd_act {
+    margin-top: 12px;
+    border-top: 1px dashed var(--sd-border);
+    padding-top: 10px;
+}
+
+.sd_act_head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 4px;
+}
+
+.sd_act_title {
+    font-weight: 700;
+    color: var(--sd-em);
+}
+
+.sd_act_summary {
+    font-size: 0.88em;
+    opacity: 0.75;
+}
+
+.sd_act_empty {
+    display: block;
+    padding: 2px 9px;
+}
+
 /* 情节节点时间线 */
 .sd_timeline {
     padding: 10px 9px;
@@ -483,6 +538,11 @@
     font-weight: 600;
 }
 
+.sd_focus_act {
+    color: var(--sd-em);
+    font-weight: 600;
+}
+
 .sd_focus_next .sd_focus_value {
     color: var(--sd-quote);
 }
@@ -535,30 +595,30 @@
 }
 
 .sd_verdict_sync {
-    color: #67b878;
-    border-color: rgba(103, 184, 120, 0.5);
+    color: #2e7d4f;
+    border-color: rgba(46, 125, 79, 0.4);
 }
 
 .sd_verdict_sync .sd_report_header {
-    background: rgba(103, 184, 120, 0.1);
+    background: rgba(46, 125, 79, 0.08);
 }
 
 .sd_verdict_minor {
-    color: #e8b34b;
-    border-color: rgba(232, 179, 75, 0.5);
+    color: #a86f00;
+    border-color: rgba(168, 111, 0, 0.4);
 }
 
 .sd_verdict_minor .sd_report_header {
-    background: rgba(232, 179, 75, 0.1);
+    background: rgba(168, 111, 0, 0.08);
 }
 
 .sd_verdict_major {
-    color: #e06c75;
-    border-color: rgba(224, 108, 117, 0.5);
+    color: #b3373f;
+    border-color: rgba(179, 55, 63, 0.4);
 }
 
 .sd_verdict_major .sd_report_header {
-    background: rgba(224, 108, 117, 0.1);
+    background: rgba(179, 55, 63, 0.08);
 }
 
 .sd_report_body {
@@ -590,6 +650,7 @@
     border: 1px solid var(--sd-border);
     border-radius: 10px;
     overflow: hidden;
+    background: #ffffff;
 }
 
 .sd_subdrawer_header {
@@ -597,7 +658,8 @@
     margin: 0 !important;
     border-radius: 0 !important;
     border: none !important;
-    background: rgba(128, 128, 128, 0.08) !important;
+    background: #f3f4f6 !important;
+    color: var(--sd-text) !important;
 }
 
 .sd_subdrawer_header .flex-container {
@@ -629,7 +691,7 @@
     padding: 7px 8px;
     border: 1px solid var(--sd-border);
     border-radius: 8px;
-    background: rgba(0, 0, 0, 0.08);
+    background: #f8f9fb;
 }
 
 .sd_setting_label {
@@ -640,12 +702,26 @@
     color: var(--sd-em);
 }
 
-.sd_setting select,
-.sd_setting input[type='text'],
-.sd_setting input[type='password'],
-.sd_setting input[type='number'] {
+.sd_window select,
+.sd_window input[type='text'],
+.sd_window input[type='password'],
+.sd_window input[type='number'] {
     width: 100%;
     box-sizing: border-box;
+    background: #ffffff;
+    color: var(--sd-text);
+    border: 1px solid #d5d8dd;
+    border-radius: 6px;
+    padding: 4px 7px;
+}
+
+.sd_window select:focus,
+.sd_window input[type='text']:focus,
+.sd_window input[type='password']:focus,
+.sd_window input[type='number']:focus {
+    outline: none;
+    border-color: #d9a441;
+    box-shadow: 0 0 0 2px rgba(217, 164, 65, 0.18);
 }
 
 .sd_setting small,

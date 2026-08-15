@@ -32,6 +32,20 @@ test('buildGeneratePrompt includes character card and user request', () => {
     assert.ok(prompt.includes('悲剧结局'));
 });
 
+test('buildGeneratePrompt asks for a full act-based outline, not loose nodes', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: {}, detail: 'high' });
+    assert.ok(prompt.includes('完整故事大纲'));
+    assert.ok(prompt.includes('acts'));
+    assert.ok(prompt.includes('起承转合'));
+    assert.ok(prompt.includes('6-8 个'));
+    assert.ok(prompt.includes('actId'));
+});
+
+test('OUTLINE_SCHEMA requires acts for full outline', () => {
+    assert.ok(OUTLINE_SCHEMA.required.includes('acts'));
+    assert.ok(OUTLINE_SCHEMA.properties.acts);
+});
+
 test('buildRevisePrompt includes dialogue and outline', () => {
     const o = createEmptyOutline();
     o.theme = '复仇';

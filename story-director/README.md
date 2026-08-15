@@ -4,7 +4,7 @@ SillyTavern 扩展：双层结构化大纲 + 每轮动态修订，为 AI 角色�
 
 ## 功能
 
-- **大纲生成**：读取当前角色卡（含 depth_prompt、世界书、聊天级 scenario/system_prompt/mes_example 覆盖）生成结构化大纲；
+- **大纲生成**：读取当前角色卡（含 depth_prompt、世界书、聊天级 scenario/system_prompt/mes_example 覆盖），生成**完整故事大纲**：分幕结构（起承转合）+ 6-8 个情节节点 + 角色弧光 + 伏笔；
 - **每轮异步修订**：后台推进情节节点、吸收偏离、更新伏笔状态；
 - **大纲体检**：主动诊断大纲与剧情的同步性，无论是否修改都给出反馈；
 - **导演指令注入**：把当前节点 / 下一步 / 活跃伏笔注入生成上下文；
@@ -81,4 +81,4 @@ node --check index.js
 
 ## 数据模型
 
-大纲 JSON 存于 `chat_metadata.story_director`，设置存于 `extension_settings.story_director`。`src/` 下除 `adapter.js`、`ui.js` 外均为零依赖纯逻辑模块，可在 Node 中直接单测。
+大纲 JSON 存于 `chat_metadata.story_director`（顶层含 `theme/tone/world`、`arcs`、`foreshadowing`、`acts` 分幕、`beats` 节点、`focus` 焦点），设置存于 `extension_settings.story_director`。`src/` 下除 `adapter.js`、`ui.js` 外均为零依赖纯逻辑模块，可在 Node 中直接单测。

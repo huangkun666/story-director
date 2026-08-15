@@ -14,6 +14,7 @@ export function createEmptyOutline() {
         world: '',
         arcs: [],
         foreshadowing: [],
+        acts: [],
         beats: [],
         focus: {
             currentBeat: '',
@@ -29,11 +30,37 @@ function asString(v, d = '') {
     return typeof v === 'string' ? v : d;
 }
 
+function normalizeAct(a, index) {
+    // 兼容字符串形式："第一幕：开端"
+    if (typeof a === 'string') {
+        const s = a.trim();
+        if (!s) return null;
+        const sepIndex = s.indexOf('：') >= 0 ? s.indexOf('：') : (s.indexOf(':') >= 0 ? s.indexOf(':') : -1);
+        if (sepIndex >= 0) {
+            const title = s.slice(0, sepIndex).trim();
+            const summary = s.slice(sepIndex + 1).trim();
+            if (!title && !summary) return null;
+            return { id: `act_${index + 1}`, title: title || `第${index + 1}幕`, summary };
+        }
+        return { id: `act_${index + 1}`, title: s, summary: '' };
+    }
+    if (!a || typeof a !== 'object') return null;
+    const id = asString(a.id, '') || `act_${index + 1}`;
+    const title = asString(a.title, '') || asString(a.name, '') || `第${index + 1}幕`;
+    return {
+        id,
+        title,
+        summary: asString(a.summary, '') || asString(a.description, ''),
+        beats: Array.isArray(a.beats) ? a.beats.map(x => asString(x, '')).filter(Boolean) : [],
+    };
+}
+
 function normalizeBeat(b, index) {
     if (!b || typeof b !== 'object') return null;
     const id = asString(b.id, '') || `beat_${index + 1}`;
     return {
         id,
+        actId: asString(b.actId, '') || asString(b.act_id, ''),
         title: asString(b.title, '') || asString(b.name, ''),
         summary: asString(b.summary, '') || asString(b.description, ''),
         status: VALID_BEAT_STATUS.has(b.status) ? b.status : 'pending',
@@ -94,7 +121,16 @@ export function normalizeOutline(raw) {
     base.world = asString(raw.world, '');
     base.arcs = Array.isArray(raw.arcs) ? raw.arcs.map(normalizeArc).filter(Boolean) : [];
     base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map((f, i) => normalizeForeshadow(f, i)).filter(Boolean) : [];
+    base.acts = Array.isArray(raw.acts) ? raw.acts.map((a, i) => normalizeAct(a, i)).filter(Boolean) : [];
     base.beats = Array.isArray(raw.beats) ? raw.beats.map((b, i) => normalizeBeat(b, i)).filter(Boolean) : [];
+
+    // 兼容旧数据/模型输出：若 beat 没有 actId，但从某个 act.beats 能推出归属，则补上
+    for (const act of base.acts) {
+        for (const beatId of act.beats) {
+            const beat = base.beats.find(b => b.id === beatId && !b.actId);
+            if (beat) beat.actId = act.id;
+        }
+    }
 
     const focus = (raw.focus && typeof raw.focus === 'object') ? raw.focus : {};
     base.focus.currentBeat = asString(focus.currentBeat, '') || asString(focus.current_beat, '');

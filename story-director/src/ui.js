@@ -35,14 +35,29 @@ function foreshadowMeta(status) {
 }
 
 function hasOutlineContent(o) {
-    return !!(o.theme || o.tone || o.world || o.arcs.length || o.foreshadowing.length || o.beats.length);
+    return !!(o.theme || o.tone || o.world || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
+}
+
+function renderBeatItem(b) {
+    const m = beatMeta(b.status);
+    return `<div class="sd_beat_item sd_beat_${escapeHtml(b.status)}" data-beat-id="${escapeHtml(b.id)}" title="点击编辑节点标题">
+        <div class="sd_beat_rail"><span class="sd_beat_dot"></span></div>
+        <div class="sd_beat_body">
+            <div class="sd_beat_head">
+                <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
+                <span class="sd_beat_title">${escapeHtml(b.title || b.id)}</span>
+                <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
+            </div>
+            ${b.summary ? `<div class="sd_beat_summary">${escapeHtml(b.summary)}</div>` : ''}
+        </div>
+    </div>`;
 }
 
 function renderEmptyState() {
     return `<div class="sd_empty_state">
         <div class="sd_empty_icon"><i class="fa-solid fa-clapperboard"></i></div>
         <div class="sd_empty_title">还没有大纲</div>
-        <div class="sd_empty_text">读取当前角色卡，生成一份带情节节点、伏笔与当前焦点的叙事大纲。</div>
+        <div class="sd_empty_text">读取当前角色卡，生成包含分幕结构、情节节点、角色弧光与伏笔的完整故事大纲。</div>
         <div id="sd_generate_empty" class="menu_button sd_btn sd_btn_primary sd_empty_cta" title="生成大纲">
             <i class="fa-solid fa-wand-magic-sparkles sd_btn_icon"></i><span>生成大纲</span>
         </div>
@@ -102,27 +117,34 @@ function renderOverview(outline) {
         </section>`);
     }
 
-    const beatItems = o.beats.map((b) => {
-        const m = beatMeta(b.status);
-        return `<div class="sd_beat_item sd_beat_${escapeHtml(b.status)}" data-beat-id="${escapeHtml(b.id)}" title="点击编辑节点标题">
-            <div class="sd_beat_rail"><span class="sd_beat_dot"></span></div>
-            <div class="sd_beat_body">
-                <div class="sd_beat_head">
-                    <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
-                    <span class="sd_beat_title">${escapeHtml(b.title || b.id)}</span>
-                    <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
+    // 真正的大纲：分幕（acts）+ 每幕下的情节节点
+    let outlineSection = '';
+    if (o.acts.length || o.beats.length) {
+        const usedBeatIds = new Set();
+        const actSections = o.acts.map(act => {
+            const beats = o.beats.filter(b => b.actId === act.id || (act.beats || []).includes(b.id));
+            beats.forEach(b => usedBeatIds.add(b.id));
+            return `<div class="sd_act">
+                <div class="sd_act_head">
+                    <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
+                    ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
                 </div>
-                ${b.summary ? `<div class="sd_beat_summary">${escapeHtml(b.summary)}</div>` : ''}
-            </div>
-        </div>`;
-    }).join('');
+                ${beats.length ? `<div class="sd_timeline">${beats.map(renderBeatItem).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>'}
+            </div>`;
+        }).join('');
 
-    const beatsSection = o.beats.length ? `<section class="sd_card sd_card_beats">
-        <header class="sd_card_header"><i class="fa-solid fa-timeline"></i>情节节点</header>
-        <div class="sd_card_body sd_timeline">${beatItems}</div>
-    </section>` : '';
+        const unassigned = o.beats.filter(b => !usedBeatIds.has(b.id));
+        const unassignedSection = unassigned.length
+            ? `<div class="sd_act"><div class="sd_act_head"><span class="sd_act_title">未分幕节点</span></div><div class="sd_timeline">${unassigned.map(renderBeatItem).join('')}</div></div>`
+            : '';
 
-    el.innerHTML = `<div class="sd_grid">${cards.join('')}</div>${beatsSection}`;
+        outlineSection = `<section class="sd_card sd_card_beats sd_card_outline">
+            <header class="sd_card_header"><i class="fa-solid fa-timeline"></i>故事大纲</header>
+            <div class="sd_card_body">${actSections}${unassignedSection}</div>
+        </section>`;
+    }
+
+    el.innerHTML = `<div class="sd_grid">${cards.join('')}</div>${outlineSection}`;
 }
 
 function renderFocus(outline) {
@@ -136,8 +158,9 @@ function renderFocus(outline) {
     }
 
     const beat = o.beats.find(b => b.id === f.currentBeat);
+    const act = beat ? o.acts.find(a => a.id === beat.actId || (a.beats || []).includes(beat.id)) : null;
     const currentText = beat
-        ? `${escapeHtml(beat.title || beat.id)} <code>${escapeHtml(beat.id)}</code>`
+        ? `${act ? `<span class="sd_focus_act">${escapeHtml(act.title)}</span> · ` : ''}${escapeHtml(beat.title || beat.id)} <code>${escapeHtml(beat.id)}</code>`
         : escapeHtml(f.currentBeat);
     const foreshadowTexts = (f.activeForeshadow || []).map(id => {
         const fs = o.foreshadowing.find(x => x.id === id);
@@ -155,7 +178,7 @@ function renderFocus(outline) {
     </section>`;
 }
 
-function renderReport(report, label = '体检') {
+function renderReport(report, label = '大纲体检') {
     const el = document.getElementById('sd_report');
     if (!el) return;
     if (!report) { el.innerHTML = ''; return; }
@@ -260,7 +283,7 @@ export function bindUI(ctx, adapter) {
         call: () => adapter.director.revise(),
     });
     const runCheck = (btn) => runAction(btn, {
-        label: '体检',
+        label: '大纲体检',
         isCheck: true,
         call: () => adapter.director.check(),
     });
