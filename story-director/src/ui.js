@@ -61,6 +61,24 @@ function hasOutlineContent(o) {
     return !!(o.theme || o.tone || o.world || o.timeline?.start || o.timeline?.end || o.timeline?.mustRead || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
 }
 
+// 窗口位置视口钳制：把 {left, top} 夹进可视区域，保证窗口不会开在屏幕外。
+// 窗口比视口大时按视口尺寸收缩（maxLeft=0 → 贴左上角）。纯函数，无 DOM。
+export function clampWindowPos(pos, { viewportW = 0, viewportH = 0, winW = 0, winH = 0 } = {}) {
+    const left = Number.isFinite(pos?.left) ? pos.left : null;
+    const top = Number.isFinite(pos?.top) ? pos.top : null;
+    if (left === null && top === null) return null;
+    const vw = Math.max(0, viewportW);
+    const vh = Math.max(0, viewportH);
+    const w = Math.min(Math.max(0, winW), vw);
+    const h = Math.min(Math.max(0, winH), vh);
+    const maxLeft = Math.max(0, vw - w);
+    const maxTop = Math.max(0, vh - h);
+    return {
+        left: left === null ? null : Math.round(Math.min(Math.max(0, left), maxLeft)),
+        top: top === null ? null : Math.round(Math.min(Math.max(0, top), maxTop)),
+    };
+}
+
 function renderBeatItem(b) {
     const m = beatMeta(b.status);
     const tm = beatTypeMeta(b.type);
@@ -806,8 +824,13 @@ export function bindUI(ctx, adapter) {
             windowEl.style.margin = '0';
         });
         document.addEventListener('pointerup', () => {
+            if (!dragging) return;
             dragging = null;
             windowEl.classList.remove('sd_dragging');
+            // 记住窗口位置（随 extension_settings 持久化，下次打开恢复）
+            const rect = windowEl.getBoundingClientRect();
+            adapter.settings.windowPos = { left: Math.round(rect.left), top: Math.round(rect.top) };
+            ctx.saveSettingsDebounced?.();
         });
     }
 

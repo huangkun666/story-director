@@ -1,6 +1,6 @@
 // story-director 入口：独立大界面（挂在魔法棒菜单里），注册事件与斜杠命令
 import { createSillyTavernAdapter, ensureSettings } from './src/adapter.js';
-import { mountUI, bindUI } from './src/ui.js';
+import { mountUI, bindUI, clampWindowPos } from './src/ui.js';
 
 (function () {
     'use strict';
@@ -29,6 +29,28 @@ import { mountUI, bindUI } from './src/ui.js';
         const win = getWindow();
         if (!win) return;
         win.classList.add('sd_open');
+        // 恢复上次拖拽的位置（先显示再取 rect，保证尺寸有效；钳制在视口内）
+        const pos = adapter?.settings?.windowPos;
+        if (pos) {
+            const rect = win.getBoundingClientRect();
+            const clamped = clampWindowPos(pos, {
+                viewportW: window.innerWidth,
+                viewportH: window.innerHeight,
+                winW: rect.width,
+                winH: rect.height,
+            });
+            if (clamped) {
+                if (clamped.left !== null) {
+                    win.style.left = `${clamped.left}px`;
+                    win.style.right = 'auto';
+                }
+                if (clamped.top !== null) {
+                    win.style.top = `${clamped.top}px`;
+                    win.style.bottom = 'auto';
+                }
+                win.style.margin = '0';
+            }
+        }
         // 关闭魔法棒下拉，避免挡在大界面上
         const menu = document.getElementById('extensionsMenu');
         if (menu) menu.style.display = 'none';

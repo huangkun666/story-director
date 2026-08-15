@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
     useVectorMemory: true,          // 使用 yuzuki-Memory 向量库检索相关资料
     vectorMemoryLimit: 6000,        // 向量检索结果的字符上限
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
+    windowPos: null,                // {left, top}：独立窗口上次拖拽位置（打开时恢复）
     llm: { ...DEFAULT_LLM_SETTINGS },
 };
 
