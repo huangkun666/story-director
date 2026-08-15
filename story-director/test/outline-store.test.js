@@ -27,6 +27,18 @@ test('normalizeOutline fills missing fields with defaults', () => {
     assert.ok(Array.isArray(o.beats));
     assert.ok(Array.isArray(o.acts));
     assert.equal(typeof o.focus, 'object');
+    assert.deepEqual(o.timeline, { start: '', end: '', note: '' });
+});
+
+test('normalizeOutline accepts timeline object and string forms', () => {
+    const obj = normalizeOutline({ timeline: { start: '200年', end: '208年', note: '含赤壁' } });
+    assert.equal(obj.timeline.start, '200年');
+    assert.equal(obj.timeline.end, '208年');
+    assert.equal(obj.timeline.note, '含赤壁');
+
+    const str = normalizeOutline({ timeline: '建安五年 - 建安十三年' });
+    assert.equal(str.timeline.start, '建安五年');
+    assert.equal(str.timeline.end, '建安十三年');
 });
 
 test('normalizeOutline accepts acts and keeps beat actId', () => {

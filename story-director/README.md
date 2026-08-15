@@ -4,13 +4,23 @@ SillyTavern 扩展：双层结构化大纲 + 每轮动态修订，为 AI 角色�
 
 ## 功能
 
-- **大纲生成**：读取当前角色卡（含 depth_prompt、世界书、聊天级 scenario/system_prompt/mes_example 覆盖），生成**完整故事大纲**：分幕结构（起承转合）+ 6-8 个情节节点 + 角色弧光 + 伏笔；
+- **大纲生成**：读取当前角色卡（含 depth_prompt、世界书、聊天级 scenario/system_prompt/mes_example 覆盖），按用户指定的**故事内时间线**生成完整故事大纲：分幕结构（起承转合）+ 6-8 个情节节点 + 角色弧光 + 伏笔；
+- **时间线约束**：大界面顶部填写开始/结束时间与补充约束，生成、修订、体检都会强制在时间线内推进，超出时可顺延时间线而不是删大纲；
 - **每轮异步修订**：后台推进情节节点、吸收偏离、更新伏笔状态；
 - **大纲体检**：主动诊断大纲与剧情的同步性，无论是否修改都给出反馈；
 - **导演指令注入**：把当前节点 / 下一步 / 活跃伏笔注入生成上下文；
 - **精美独立大界面**：挂在聊天输入区左侧的魔法棒菜单里，点击「叙事导演」打开一个可滚动的大窗口（支持 Esc / 关闭按钮），卡片式总览、情节时间线、焦点高亮、彩色体检报告、loading 状态、空状态引导；
 - **可调参数**：控制强度、注入长度、修订节奏、偏离策略、大纲详细度、回顾轮数；
 - **独立 API**：生成 / 修订 / 体检可脱离酒馆主 API，走 OpenAI 兼容接口。
+
+## 时间线
+
+大界面顶部有「时间线约束」编辑区，按每个聊天独立保存在 `chat_metadata.story_director.timeline`：
+
+- `start` / `end`：故事内时间文本，例如「建安五年（200年）」「建安十三年（208年）」「第一天」「第七天」；
+- `note`：可选补充，例如「必须包含赤壁之战」；
+- 留空时，模型会自己推定一个时间范围并写回大纲；
+- 修订时若剧情时间越过 `end`，会顺延时间线并补过渡节点，不会把原有大纲删掉。
 
 ## 设置说明
 
@@ -81,4 +91,4 @@ node --check index.js
 
 ## 数据模型
 
-大纲 JSON 存于 `chat_metadata.story_director`（顶层含 `theme/tone/world`、`arcs`、`foreshadowing`、`acts` 分幕、`beats` 节点、`focus` 焦点），设置存于 `extension_settings.story_director`。`src/` 下除 `adapter.js`、`ui.js` 外均为零依赖纯逻辑模块，可在 Node 中直接单测。
+大纲 JSON 存于 `chat_metadata.story_director`（顶层含 `timeline`、`theme/tone/world`、`arcs`、`foreshadowing`、`acts` 分幕、`beats` 节点、`focus` 焦点），设置存于 `extension_settings.story_director`。`src/` 下除 `adapter.js`、`ui.js` 外均为零依赖纯逻辑模块，可在 Node 中直接单测。

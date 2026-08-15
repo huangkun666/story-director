@@ -46,6 +46,22 @@ test('director.generate writes outline and refreshes', async () => {
     assert.ok(calls.some(([k]) => k === 'render'));
 });
 
+test('director.generate keeps user-specified timeline after LLM returns outline', async () => {
+    const patch = createEmptyOutline();
+    patch.theme = 'X';
+    const { deps } = makeDeps({ generateRaw: async () => JSON.stringify(patch) });
+    const d = createDirector(deps);
+    await d.generate({
+        userRequest: '',
+        timeline: { start: '建安五年', end: '建安十三年', note: '含赤壁' },
+    });
+    assert.deepEqual(deps.getOutline().timeline, {
+        start: '建安五年',
+        end: '建安十三年',
+        note: '含赤壁',
+    });
+});
+
 test('director.revise skips when already running (concurrency guard)', async () => {
     const { deps } = makeDeps({
         generateRaw: async () => { await new Promise(r => setTimeout(r, 20)); return JSON.stringify(createEmptyOutline()); },

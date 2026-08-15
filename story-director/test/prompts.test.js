@@ -41,6 +41,24 @@ test('buildGeneratePrompt asks for a full act-based outline, not loose nodes', (
     assert.ok(prompt.includes('actId'));
 });
 
+test('buildGeneratePrompt enforces a specified story timeline', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        timeline: { start: '建安五年', end: '建安十三年', note: '必须包含赤壁之战' },
+    });
+    assert.ok(prompt.includes('时间线约束（必须遵守）'));
+    assert.ok(prompt.includes('建安五年'));
+    assert.ok(prompt.includes('建安十三年'));
+    assert.ok(prompt.includes('必须包含赤壁之战'));
+    assert.ok(prompt.includes('所有 beats 必须落在该区间内'));
+});
+
+test('buildGeneratePrompt asks model to infer timeline when none provided', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: {} });
+    assert.ok(prompt.includes('用户未指定时间线'));
+    assert.ok(prompt.includes('自行推定'));
+});
+
 test('OUTLINE_SCHEMA requires acts for full outline', () => {
     assert.ok(OUTLINE_SCHEMA.required.includes('acts'));
     assert.ok(OUTLINE_SCHEMA.properties.acts);

@@ -12,6 +12,11 @@ export function createEmptyOutline() {
         theme: '',
         tone: '',
         world: '',
+        timeline: {
+            start: '',
+            end: '',
+            note: '',
+        },
         arcs: [],
         foreshadowing: [],
         acts: [],
@@ -111,6 +116,26 @@ function normalizeArc(a) {
     };
 }
 
+function normalizeTimeline(raw) {
+    const t = (raw && typeof raw === 'object') ? raw : {};
+    // 兼容字符串形式："建安五年 - 建安十三年"
+    if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return { start: '', end: '', note: '' };
+        const parts = s.split(/\s*[-–—~至到]\s*/);
+        return {
+            start: parts[0]?.trim() || '',
+            end: parts[1]?.trim() || '',
+            note: parts.length > 2 ? parts.slice(2).join(' - ').trim() : '',
+        };
+    }
+    return {
+        start: asString(t.start, ''),
+        end: asString(t.end, ''),
+        note: asString(t.note, '') || asString(t.constraint, ''),
+    };
+}
+
 export function normalizeOutline(raw) {
     const base = createEmptyOutline();
     if (!raw || typeof raw !== 'object') return base;
@@ -119,6 +144,7 @@ export function normalizeOutline(raw) {
     base.theme = asString(raw.theme, '');
     base.tone = asString(raw.tone, '');
     base.world = asString(raw.world, '');
+    base.timeline = normalizeTimeline(raw.timeline);
     base.arcs = Array.isArray(raw.arcs) ? raw.arcs.map(normalizeArc).filter(Boolean) : [];
     base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map((f, i) => normalizeForeshadow(f, i)).filter(Boolean) : [];
     base.acts = Array.isArray(raw.acts) ? raw.acts.map((a, i) => normalizeAct(a, i)).filter(Boolean) : [];

@@ -30,6 +30,28 @@
             </label>
         </div>
 
+        <div id="sd_timeline_editor" class="sd_timeline_editor">
+            <div class="sd_timeline_head">
+                <i class="fa-solid fa-calendar-days"></i>
+                <b>时间线约束</b>
+                <small>生成大纲时，所有分幕和节点都限制在这个时间段内</small>
+            </div>
+            <div class="sd_timeline_fields">
+                <label class="sd_setting sd_timeline_field">
+                    <span class="sd_setting_label">开始时间</span>
+                    <input id="sd_timeline_start" type="text" placeholder="例如：建安五年（200年）" />
+                </label>
+                <label class="sd_setting sd_timeline_field">
+                    <span class="sd_setting_label">结束时间</span>
+                    <input id="sd_timeline_end" type="text" placeholder="例如：建安十三年（208年）" />
+                </label>
+                <label class="sd_setting sd_timeline_field sd_timeline_note">
+                    <span class="sd_setting_label">补充约束</span>
+                    <input id="sd_timeline_note" type="text" placeholder="可选：例如 必须包含赤壁之战、官渡之战" />
+                </label>
+            </div>
+        </div>
+
         <div id="sd_overview" class="sd_overview"></div>
         <div id="sd_focus" class="sd_focus"></div>
         <div id="sd_report" class="sd_report"></div>

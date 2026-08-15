@@ -75,8 +75,12 @@ function renderOverview(outline) {
 
     const cards = [];
 
-    if (o.theme || o.tone || o.world) {
+    if (o.theme || o.tone || o.world || o.timeline?.start || o.timeline?.end) {
         const rows = [];
+        if (o.timeline?.start || o.timeline?.end) {
+            const range = [o.timeline.start, o.timeline.end].filter(Boolean).join(' → ');
+            rows.push(`<div class="sd_kv sd_kv_timeline"><span class="sd_kv_key">时间线</span><span class="sd_kv_value">${escapeHtml(range)}${o.timeline.note ? `（${escapeHtml(o.timeline.note)}）` : ''}</span></div>`);
+        }
         if (o.theme) rows.push(`<div class="sd_kv"><span class="sd_kv_key">主题</span><span class="sd_kv_value">${escapeHtml(o.theme)}</span></div>`);
         if (o.tone) rows.push(`<div class="sd_kv"><span class="sd_kv_key">基调</span><span class="sd_kv_value">${escapeHtml(o.tone)}</span></div>`);
         if (o.world) rows.push(`<div class="sd_kv sd_kv_world"><span class="sd_kv_key">世界观</span><span class="sd_kv_value">${escapeHtml(o.world)}</span></div>`);
@@ -178,6 +182,17 @@ function renderFocus(outline) {
     </section>`;
 }
 
+function syncTimelineInputs(outline) {
+    const o = normalizeOutline(outline);
+    const set = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value ?? '';
+    };
+    set('sd_timeline_start', o.timeline?.start);
+    set('sd_timeline_end', o.timeline?.end);
+    set('sd_timeline_note', o.timeline?.note);
+}
+
 function renderReport(report, label = '大纲体检') {
     const el = document.getElementById('sd_report');
     if (!el) return;
@@ -216,6 +231,7 @@ export function mountUI(ctx, adapter) {
     adapter.setRenderCallback((outline) => {
         renderOverview(outline);
         renderFocus(outline);
+        syncTimelineInputs(outline);
     });
 
     // 独立大界面由 index.js 负责加载到 body；若尚未就绪则等待 bindUI 时再补
@@ -274,9 +290,33 @@ export function bindUI(ctx, adapter) {
         adapter.director.refreshInjection();
     });
 
+    // 时间线约束：存进当前聊天的大纲（chat_metadata），生成时作为硬约束传给模型
+    const timelineField = (id) => document.getElementById(id);
+    const readTimeline = () => ({
+        start: timelineField('sd_timeline_start')?.value?.trim() || '',
+        end: timelineField('sd_timeline_end')?.value?.trim() || '',
+        note: timelineField('sd_timeline_note')?.value?.trim() || '',
+    });
+    const persistTimeline = () => {
+        const outline = adapter.getOutline();
+        outline.timeline = readTimeline();
+        adapter.setOutline(outline);
+        return outline.timeline;
+    };
+    const bindTimelineField = (id) => {
+        timelineField(id)?.addEventListener('input', () => persistTimeline());
+    };
+    syncTimelineInputs(adapter.getOutline());
+    bindTimelineField('sd_timeline_start');
+    bindTimelineField('sd_timeline_end');
+    bindTimelineField('sd_timeline_note');
+
     const runGenerate = (btn) => runAction(btn, {
         label: '生成',
-        call: () => adapter.director.generate({ userRequest: '' }),
+        call: () => {
+            persistTimeline();
+            return adapter.director.generate({ userRequest: '', timeline: readTimeline() });
+        },
     });
     const runRevise = (btn) => runAction(btn, {
         label: '修订',

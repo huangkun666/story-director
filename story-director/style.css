@@ -92,6 +92,43 @@
     opacity: 0.55;
 }
 
+/* ---------- 时间线约束编辑器 ---------- */
+.sd_timeline_editor {
+    margin-bottom: 10px;
+    padding: 9px 10px;
+    border: 1px solid #e2b05a;
+    border-left-width: 3px;
+    border-radius: 10px;
+    background: #fffdf7;
+}
+
+.sd_timeline_head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 8px;
+    color: #8a5a00;
+}
+
+.sd_timeline_head i {
+    color: #b07a1a;
+}
+
+.sd_timeline_head small {
+    color: #5c6470;
+    opacity: 0.85;
+}
+
+.sd_timeline_fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.sd_timeline_field {
+    background: #ffffff;
+}
+
 /* ---------- 工具栏 ---------- */
 .sd_toolbar {
     display: flex;

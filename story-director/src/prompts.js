@@ -5,11 +5,20 @@ import { serializeOutline } from './outline-store.js';
 export const OUTLINE_SCHEMA = {
     type: 'object',
     additionalProperties: true,
-    required: ['theme', 'tone', 'world', 'arcs', 'foreshadowing', 'acts', 'beats', 'focus'],
+    required: ['theme', 'tone', 'world', 'timeline', 'arcs', 'foreshadowing', 'acts', 'beats', 'focus'],
     properties: {
         theme: { type: 'string', description: '故事主题' },
         tone: { type: 'string', description: '情绪基调' },
         world: { type: 'string', description: '世界观与冲突根源' },
+        timeline: {
+            type: 'object',
+            required: ['start', 'end', 'note'],
+            properties: {
+                start: { type: 'string', description: '大纲覆盖的故事内开始时间' },
+                end: { type: 'string', description: '大纲覆盖的故事内结束时间' },
+                note: { type: 'string', description: '时间线补充约束' },
+            },
+        },
         arcs: {
             type: 'array',
             items: {
@@ -109,12 +118,27 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium' }) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
-    const system = '你是一位资深叙事设计师。根据角色卡和用户要求，构建一份完整的故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const t = (timeline && typeof timeline === 'object') ? timeline : {};
+    const hasTimeline = !!(t.start || t.end || t.note);
+    const timelineBlock = hasTimeline
+        ? `【时间线约束（必须遵守）】
+- 开始时间：${t.start || '（未指定，请根据故事背景推定）'}
+- 结束时间：${t.end || '（未指定，请根据故事背景推定）'}
+${t.note ? `- 补充约束：${t.note}` : ''}
+- 本大纲只覆盖上述时间线内发生的事，acts 与所有 beats 必须落在该区间内；
+- 每幕标题注明该幕覆盖的时间段；每个 beat 的 summary 明确写出大致发生时间；
+- 超出时间线的事件不要规划，时间线上的关键事件不要遗漏。`
+        : `【时间线约束】
+用户未指定时间线。请根据角色卡与题材自行推定一个合理的故事时间范围，并在 JSON 的 timeline 字段中填写 start/end/note；所有分幕与节点都必须有明确的时间归属。`;
+
+    const system = '你是一位资深叙事设计师。根据角色卡、时间线约束和用户要求，构建一份完整的故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `请为以下角色扮演构建一份${detailWord}的完整故事大纲。
 
 这是一份真正的大纲，而不是零散节点：必须包含分幕结构（起承转合）、每幕下的情节节点、角色弧光与伏笔，覆盖完整故事走向（含高潮与结局方向）。
+
+${timelineBlock}
 
 【角色卡】
 ${cardToText(characterCard)}
@@ -128,6 +152,7 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
   "theme": "故事主题",
   "tone": "情绪基调",
   "world": "世界观与冲突根源",
+  "timeline": { "start": "大纲开始时间", "end": "大纲结束时间", "note": "时间线说明" },
   "arcs": [
     { "character": "角色名", "arc": "该角色的完整弧光：欲望、缺陷、成长与结局方向" }
   ],
@@ -135,14 +160,14 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
     "伏笔一句话描述（含后续回收方式）"
   ],
   "acts": [
-    { "id": "act_1", "title": "第一幕：开端", "summary": "本幕讲什么", "beats": ["beat_1", "beat_2"] },
-    { "id": "act_2", "title": "第二幕：发展", "summary": "本幕讲什么", "beats": ["beat_3", "beat_4"] },
-    { "id": "act_3", "title": "第三幕：高潮", "summary": "本幕讲什么", "beats": ["beat_5", "beat_6"] },
-    { "id": "act_4", "title": "第四幕：结局", "summary": "本幕讲什么", "beats": ["beat_7", "beat_8"] }
+    { "id": "act_1", "title": "第一幕：开端（时间：起止时间）", "summary": "本幕讲什么", "beats": ["beat_1", "beat_2"] },
+    { "id": "act_2", "title": "第二幕：发展（时间：起止时间）", "summary": "本幕讲什么", "beats": ["beat_3", "beat_4"] },
+    { "id": "act_3", "title": "第三幕：高潮（时间：起止时间）", "summary": "本幕讲什么", "beats": ["beat_5", "beat_6"] },
+    { "id": "act_4", "title": "第四幕：结局（时间：起止时间）", "summary": "本幕讲什么", "beats": ["beat_7", "beat_8"] }
   ],
   "beats": [
-    { "id": "beat_1", "actId": "act_1", "title": "节点标题", "summary": "该节点发生什么", "status": "pending" },
-    { "id": "beat_2", "actId": "act_1", "title": "节点标题", "summary": "该节点发生什么", "status": "pending" }
+    { "id": "beat_1", "actId": "act_1", "title": "节点标题", "summary": "该节点发生什么（写明时间点）", "status": "pending" },
+    { "id": "beat_2", "actId": "act_1", "title": "节点标题", "summary": "该节点发生什么（写明时间点）", "status": "pending" }
   ],
   "focus": {
     "currentBeat": "beat_1",
@@ -152,7 +177,7 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
   }
 }
 
-要求：acts 按起承转合分 3-4 幕；beats 共 6-8 个并全部归属到 act（actId 必须与 acts.beats 对应）；每个 beat 的 summary 写清楚该节点发生什么、人物目标与转折；第一个 beat 的 status 设为 "active"，其余为 "pending"。`;
+要求：acts 按起承转合分 3-4 幕，每幕 title 标注时间跨度；beats 共 6-8 个并全部归属到 act（actId 必须与 acts.beats 对应）；每个 beat 的 summary 写清楚该节点发生什么、人物目标、转折和大致时间；第一个 beat 的 status 设为 "active"，其余为 "pending"。`;
     return { system, prompt };
 }
 
@@ -167,21 +192,21 @@ ${recentDialogue}
 【当前大纲】
 ${serializeOutline(outline)}
 
-请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态；4) 若插入或删除 beat，同步维护 acts 里的 beats 列表。
+请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态；4) 若插入或删除 beat，同步维护 acts 里的 beats 列表；5) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。
 
 严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
     return { system, prompt };
 }
 
 export function buildCheckPrompt({ recentDialogue = '', outline }) {
-    const system = '你是叙事导演。对比最近对话与当前大纲，输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const system = '你是叙事导演。对比最近对话与当前大纲（含时间线约束），输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `【最近对话】
 ${recentDialogue}
 
 【当前大纲】
 ${serializeOutline(outline)}
 
-请判断大纲（分幕结构、情节节点、伏笔与焦点）是否仍与剧情同步，并按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
+请判断大纲（timeline 时间线、分幕结构、情节节点、伏笔与焦点）是否仍与剧情同步，并按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
 
 {
   "verdict": "sync 或 minor-drift 或 major-drift",
@@ -191,6 +216,8 @@ ${serializeOutline(outline)}
   "reason": "判断依据",
   "updatedOutline": { ...完整大纲，结构与当前大纲一致... }
 }
+
+检查要点：1) 对话中体现的剧情时间是否还在 timeline.start 与 timeline.end 之间；2) 时间若已越过 timeline.end，应在 issues 中标注时间线漂移，并在 updatedOutline 中顺延 timeline 或补过渡节点；3) 分幕与节点是否仍然合理。
 
 若需要修改，changed=true 且 updatedOutline 输出修改后的完整大纲；若无需修改，changed=false，省略 updatedOutline。`;
     return { system, prompt };
@@ -207,6 +234,10 @@ export function buildDirectorInstruction(outline, strength = 'strong') {
     }
     if (f.currentBeat) lines.push(`- 当前情节节点：${f.currentBeat}`);
     if (f.nextStep) lines.push(`- 下一步应当发生：${f.nextStep}`);
+    const timeline = outline?.timeline;
+    if (timeline?.start || timeline?.end) {
+        lines.push(`- 当前时间线：${timeline.start || '?'} 至 ${timeline.end || '?'}`);
+    }
     if (Array.isArray(f.activeForeshadow) && f.activeForeshadow.length) {
         lines.push(`- 活跃伏笔：${f.activeForeshadow.join('、')}`);
     }

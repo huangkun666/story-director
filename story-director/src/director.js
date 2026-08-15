@@ -27,16 +27,33 @@ export function createDirector(deps) {
         deps.setInjectedInstruction(text);
     }
 
-    async function generate({ userRequest = '' } = {}) {
+    async function generate({ userRequest = '', timeline } = {}) {
         if (running) return null;
         running = true;
         try {
             const settings = deps.getSettings();
             const card = deps.getCharacterCard();
-            const bundle = buildGeneratePrompt({ characterCard: card, userRequest, detail: settings.outlineDetail || 'medium' });
+            const storedTimeline = deps.getOutline().timeline || {};
+            const requestedTimeline = (timeline && typeof timeline === 'object') ? timeline : storedTimeline;
+            const bundle = buildGeneratePrompt({
+                characterCard: card,
+                userRequest,
+                detail: settings.outlineDetail || 'medium',
+                timeline: requestedTimeline,
+            });
             const result = await gen(bundle);
             if (result) {
-                deps.setOutline(normalizeOutline(result));
+                const next = normalizeOutline(result);
+                // 用户显式指定过时间线时，以用户输入为准（模型输出只补漏）
+                const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
+                if (hasRequestedTimeline) {
+                    next.timeline = {
+                        start: requestedTimeline.start || next.timeline.start,
+                        end: requestedTimeline.end || next.timeline.end,
+                        note: requestedTimeline.note || next.timeline.note,
+                    };
+                }
+                deps.setOutline(next);
                 deps.renderOutline();
             }
             refreshInjection();
