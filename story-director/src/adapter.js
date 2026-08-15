@@ -37,14 +37,22 @@ export function getStoredOutline(ctx) {
 export function createSillyTavernAdapter(ctx) {
     const settings = ensureSettings(ctx);
 
+    // 注意：ctx.chatMetadata 是 getContext() 调用时的引用快照，
+    // 而 updateChatMetadata 会重新赋值模块级 chat_metadata（新对象），
+    // 导致缓存的 ctx.chatMetadata 过期。因此每次读写都要重新取最新 context。
+    function freshCtx() {
+        return (typeof window !== 'undefined' && window.SillyTavern?.getContext?.()) || ctx;
+    }
+
     function getOutline() {
-        return getStoredOutline(ctx);
+        return getStoredOutline(freshCtx());
     }
 
     function setOutline(outline) {
         const normalized = normalizeOutline(outline);
-        ctx.updateChatMetadata({ [META_KEY]: serializeOutline(normalized) });
-        ctx.saveMetadataDebounced?.();
+        const c = freshCtx();
+        c.updateChatMetadata({ [META_KEY]: serializeOutline(normalized) });
+        c.saveMetadataDebounced?.();
     }
 
     function setInjectedInstruction(text) {
@@ -52,8 +60,9 @@ export function createSillyTavernAdapter(ctx) {
     }
 
     function getCharacterCard() {
-        const chars = ctx.characters || [];
-        const chid = ctx.characterId;
+        const c = freshCtx();
+        const chars = c.characters || [];
+        const chid = c.characterId;
         const ch = chid != null ? chars[chid] : null;
         if (!ch) return {};
         // 世界书文本（若存在）
@@ -77,16 +86,17 @@ export function createSillyTavernAdapter(ctx) {
     }
 
     function getRecentDialogue(turns = 5) {
-        const chat = Array.isArray(ctx.chat) ? ctx.chat : [];
+        const c = freshCtx();
+        const chat = Array.isArray(c.chat) ? c.chat : [];
         const recent = chat.slice(-(turns * 2)); // 每轮 = 用户 + 角色两条
         return recent
             .filter(m => m && typeof m.mes === 'string')
-            .map(m => `${m.is_user ? (ctx.name1 || '用户') : (m.name || ctx.name2 || '角色')}: ${m.mes}`)
+            .map(m => `${m.is_user ? (c.name1 || '用户') : (m.name || c.name2 || '角色')}: ${m.mes}`)
             .join('\n');
     }
 
     const director = createDirector({
-        generateRaw: (opts) => ctx.generateRaw(opts),
+        generateRaw: (opts) => freshCtx().generateRaw(opts),
         getOutline,
         setOutline,
         setInjectedInstruction,
