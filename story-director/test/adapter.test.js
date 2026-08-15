@@ -134,6 +134,28 @@ test('getMemoryContext reads yuzuki-Memory when enabled', () => {
     }
 });
 
+test('getVectorMemoryContext searches yuzuki vector store', async () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            VectorStore: {
+                search: async (query) => [{ text: '赤壁之战资料'.repeat(300), source: '三国资料 #1' }],
+            },
+        },
+    };
+    try {
+        const ctx = makeCtx();
+        ctx.extensionSettings.story_director = { useVectorMemory: true, vectorMemoryLimit: 2000 };
+        const adapter = createSillyTavernAdapter(ctx);
+        const vector = await adapter.getVectorMemoryContext('赤壁之战');
+        assert.ok(vector.includes('赤壁之战资料'));
+        assert.ok(vector.includes('三国资料 #1'));
+        assert.ok(vector.length <= 2000);
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
 test('adapter records and restores outline history snapshots', () => {    const ctx = makeCtx();
     const adapter = createSillyTavernAdapter(ctx);
     const first = adapter.getOutline();

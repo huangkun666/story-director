@@ -30,6 +30,8 @@ export const DEFAULT_SETTINGS = {
     dialogueContextLimit: 8000,     // 修订/体检时回看对话的最大字符数
     useMemoryPlugin: true,          // 生成/修订/体检时接入 yuzuki-Memory 等长时记忆插件
     memoryContextLimit: 8000,       // 记忆插件上下文的字符上限
+    useVectorMemory: true,          // 使用 yuzuki-Memory 向量库检索相关资料
+    vectorMemoryLimit: 6000,        // 向量检索结果的字符上限
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
     llm: { ...DEFAULT_LLM_SETTINGS },
 };
@@ -241,6 +243,28 @@ export function createSillyTavernAdapter(ctx) {
         }
     }
 
+    // 向量检索：复用柚月已经向量化好的资料库。
+    // 它内部会做 query embedding -> cosine 相似度初筛 -> 可选 rerank，最后返回相关 chunk。
+    async function getVectorMemoryContext(query) {
+        if (settings.useVectorMemory === false) return '';
+        try {
+            const store = (typeof window !== 'undefined') ? window.YuzukiMemory?.VectorStore : null;
+            if (!store || typeof store.search !== 'function') return '';
+            const sourceQuery = String(query || '').trim().slice(0, 2000);
+            if (!sourceQuery) return '';
+            const results = await store.search(sourceQuery);
+            if (!Array.isArray(results) || !results.length) return '';
+            const limit = Math.max(1000, Number(settings.vectorMemoryLimit) || 6000);
+            let text = results
+                .map(r => `【${r.source || '向量资料'}】${r.text || ''}`)
+                .join('\n');
+            return text.slice(0, limit);
+        } catch (err) {
+            console.warn('[story-director] vector memory search failed:', err);
+            return '';
+        }
+    }
+
     function getRecentDialogue(turns = 5) {
         const c = freshCtx();
         const chat = Array.isArray(c.chat) ? c.chat : [];
@@ -289,6 +313,7 @@ export function createSillyTavernAdapter(ctx) {
         getRecentDialogue,
         getCharacterCard,
         getMemoryContext,
+        getVectorMemoryContext,
         recordHistory,
         renderOutline,
     });
@@ -315,6 +340,7 @@ export function createSillyTavernAdapter(ctx) {
         getCharacterCard,
         getRecentDialogue,
         getMemoryContext,
+        getVectorMemoryContext,
         renderOutline,
         setRenderCallback,
     };

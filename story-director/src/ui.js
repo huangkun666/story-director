@@ -476,10 +476,17 @@ export function bindUI(ctx, adapter) {
     setNumber('sd_card_context_limit', adapter.settings.cardContextLimit ?? 12000);
     setNumber('sd_dialogue_context_limit', adapter.settings.dialogueContextLimit ?? 8000);
     setNumber('sd_memory_context_limit', adapter.settings.memoryContextLimit ?? 8000);
+    setNumber('sd_vector_memory_limit', adapter.settings.vectorMemoryLimit ?? 6000);
     const memoryToggleEl = document.getElementById('sd_use_memory_plugin');
     if (memoryToggleEl) memoryToggleEl.value = adapter.settings.useMemoryPlugin === false ? 'false' : 'true';
     memoryToggleEl?.addEventListener('change', (e) => {
         adapter.settings.useMemoryPlugin = e.target.value !== 'false';
+        saveSettings();
+    });
+    const vectorToggleEl = document.getElementById('sd_use_vector_memory');
+    if (vectorToggleEl) vectorToggleEl.value = adapter.settings.useVectorMemory === false ? 'false' : 'true';
+    vectorToggleEl?.addEventListener('change', (e) => {
+        adapter.settings.useVectorMemory = e.target.value !== 'false';
         saveSettings();
     });
 
@@ -498,6 +505,7 @@ export function bindUI(ctx, adapter) {
     bindNumber('sd_card_context_limit', 'cardContextLimit', { min: 2000, max: 200000 });
     bindNumber('sd_dialogue_context_limit', 'dialogueContextLimit', { min: 1000, max: 50000 });
     bindNumber('sd_memory_context_limit', 'memoryContextLimit', { min: 1000, max: 50000 });
+    bindNumber('sd_vector_memory_limit', 'vectorMemoryLimit', { min: 1000, max: 30000 });
 
     // 独立 API 配置（任务 A）：即时写回 extension_settings
     const llm = adapter.settings.llm || { mode: 'main', api: '', baseUrl: '', apiKey: '', model: '' };

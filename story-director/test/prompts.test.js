@@ -65,6 +65,12 @@ test('buildGeneratePrompt injects long-term memory context when provided', () =>
     assert.ok(prompt.includes('已发生赤壁之战'));
 });
 
+test('buildGeneratePrompt injects vector-retrieved lore when provided', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: {}, vectorContext: '【三国资料 #1】赤壁水文' });
+    assert.ok(prompt.includes('向量检索到的相关资料'));
+    assert.ok(prompt.includes('赤壁水文'));
+});
+
 test('OUTLINE_SCHEMA requires acts for full outline', () => {
     assert.ok(OUTLINE_SCHEMA.required.includes('acts'));
     assert.ok(OUTLINE_SCHEMA.properties.acts);

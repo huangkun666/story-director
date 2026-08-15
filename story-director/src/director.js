@@ -43,12 +43,20 @@ export function createDirector(deps) {
             const card = deps.getCharacterCard();
             const storedTimeline = deps.getOutline().timeline || {};
             const requestedTimeline = (timeline && typeof timeline === 'object') ? timeline : storedTimeline;
+            const vectorQuery = [
+                userRequest,
+                requestedTimeline?.start,
+                requestedTimeline?.end,
+                requestedTimeline?.note,
+            ].filter(Boolean).join(' ').trim();
+            const vectorContext = await deps.getVectorMemoryContext?.(vectorQuery) || '';
             const bundle = buildGeneratePrompt({
                 characterCard: card,
                 userRequest,
                 detail: settings.outlineDetail || 'medium',
                 timeline: requestedTimeline,
                 memoryContext: deps.getMemoryContext?.(),
+                vectorContext,
             });
             const result = await gen(bundle);
             if (result) {
@@ -80,12 +88,21 @@ export function createDirector(deps) {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
             const outline = deps.getOutline();
+            const vectorQuery = [
+                dialogue.slice(0, 600),
+                outline.focus?.nextStep,
+                outline.focus?.currentBeat,
+                outline.timeline?.start,
+                outline.timeline?.end,
+            ].filter(Boolean).join(' ').trim();
+            const vectorContext = await deps.getVectorMemoryContext?.(vectorQuery) || '';
             const bundle = buildRevisePrompt({
                 recentDialogue: dialogue,
                 outline,
                 driftTolerance: settings.driftTolerance || 'loose',
                 locked: settings.lockOutline === true,
                 memoryContext: deps.getMemoryContext?.(),
+                vectorContext,
             });
             const result = await gen(bundle);
             if (result) {
@@ -107,10 +124,19 @@ export function createDirector(deps) {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
             const outline = deps.getOutline();
+            const vectorQuery = [
+                dialogue.slice(0, 600),
+                outline.focus?.nextStep,
+                outline.focus?.currentBeat,
+                outline.timeline?.start,
+                outline.timeline?.end,
+            ].filter(Boolean).join(' ').trim();
+            const vectorContext = await deps.getVectorMemoryContext?.(vectorQuery) || '';
             const bundle = buildCheckPrompt({
                 recentDialogue: dialogue,
                 outline,
                 memoryContext: deps.getMemoryContext?.(),
+                vectorContext,
             });
             const report = await genCheck(bundle);
             if (!report) {

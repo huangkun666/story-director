@@ -129,11 +129,13 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, memoryContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
+    const vectorText = String(vectorContext || '').trim();
+    const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note);
     const timelineBlock = hasTimeline
         ? `【时间线约束（必须遵守）】
@@ -154,7 +156,7 @@ ${t.note ? `- 补充约束：${t.note}` : ''}
 
 ${timelineBlock}
 
-${memoryBlock}【角色卡】
+${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【用户要求】
@@ -195,10 +197,12 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
     return { system, prompt };
 }
 
-export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, memoryContext = '' }) {
+export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。根据最近的对话进展，更新故事大纲（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
+    const vectorText = String(vectorContext || '').trim();
+    const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
     const driftInstruction = driftTolerance === 'strict'
         ? '若剧情偏离当前方向，请严格拉回：不要为偏离新增节点，优先把 focus.currentBeat / focus.nextStep 调整回既定节点与方向；仅当偏离已成为不可逆事实时，才做最小化吸收并说明理由。'
         : '若剧情偏离当前方向，请宽松吸收：把新走向写进大纲（改写 focus.nextStep 或插入新 beat），而非强行拉回。';
@@ -208,7 +212,7 @@ export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance
     const prompt = `【最近对话】
 ${recentDialogue}
 
-${memoryBlock}【当前大纲】
+${memoryBlock}${vectorBlock}【当前大纲】
 ${serializeOutline(outline)}
 
 请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。${lockInstruction ? `\n\n${lockInstruction}` : ''}
@@ -217,14 +221,16 @@ ${serializeOutline(outline)}
     return { system, prompt };
 }
 
-export function buildCheckPrompt({ recentDialogue = '', outline, memoryContext = '' }) {
+export function buildCheckPrompt({ recentDialogue = '', outline, memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。对比最近对话与当前大纲（含时间线约束），输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
+    const vectorText = String(vectorContext || '').trim();
+    const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
     const prompt = `【最近对话】
 ${recentDialogue}
 
-${memoryBlock}【当前大纲】
+${memoryBlock}${vectorBlock}【当前大纲】
 ${serializeOutline(outline)}
 
 请判断大纲（timeline 时间线、分幕结构、情节节点、伏笔与焦点）是否仍与剧情同步，并按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
