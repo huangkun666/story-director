@@ -190,10 +190,11 @@
                         <label class="sd_setting">
                             <span class="sd_setting_label">修订节奏</span>
                             <select id="sd_revise_frequency">
-                                <option value="every">每轮自动修订</option>
-                                <option value="everyN">每 N 轮修订</option>
+                                <option value="every">每轮校准方向（不推进节点）</option>
+                                <option value="everyN">每 N 轮修订一次</option>
                                 <option value="manual">仅手动修订</option>
                             </select>
+                            <small>常规轮次只校准焦点与偏离；节点推进只在里程碑式完成时发生</small>
                         </label>
                         <label class="sd_setting" id="sd_revise_every_n_row">
                             <span class="sd_setting_label">修订间隔 N</span>

@@ -222,6 +222,21 @@ test('buildRevisePrompt instructs pacing-aware new beats', () => {
     assert.ok(prompt.includes('不要与既有节点全部扎堆'));
 });
 
+test('buildRevisePrompt tells model not to record every turn as a new beat', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o });
+    assert.ok(prompt.includes('大纲不是剧情日志')); // 定位声明
+    assert.ok(prompt.includes('常规对话轮次不要推进节点状态')); // 保守推进
+    assert.ok(prompt.includes('里程碑式')); // 只认里程碑
+});
+
+test('buildRevisePatchPrompt also restricts beat advancement to milestones', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePatchPrompt({ recentDialogue: '', outline: o });
+    assert.ok(prompt.includes('大纲不是剧情日志'));
+    assert.ok(prompt.includes('常规对话轮次不要推进节点'));
+});
+
 test('buildCheckPrompt checks pacing distribution across the span', () => {
     const o = createEmptyOutline();
     const { prompt } = buildCheckPrompt({ recentDialogue: '', outline: o });
@@ -255,6 +270,18 @@ test('buildHistoryContext lists only done beats with summaries', () => {
     assert.ok(ctx.includes('已发生'));
     assert.ok(ctx.includes('前情概要'));
     assert.ok(!ctx.includes('未发生'));
+});
+
+test('buildHistoryContext includes in-progress beats marked as ongoing', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', title: '正在进行', summary: 's', status: 'active' },
+        { id: 'b2', title: '计划中', status: 'pending' },
+    ];
+    const ctx = buildHistoryContext(o);
+    assert.ok(ctx.includes('正在进行'));
+    assert.ok(ctx.includes('（进行中）'));
+    assert.ok(!ctx.includes('计划中'));
 });
 
 test('buildHistoryContext returns empty when nothing happened yet', () => {

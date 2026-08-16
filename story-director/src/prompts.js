@@ -135,12 +135,16 @@ function pacingInfo(key) {
     return PACING_META[key] || PACING_META.balanced;
 }
 
-// 前情参考块：旧大纲中已发生的节点（status=done），作为「既定事实」传给生成 prompt。
+// 前情参考块：旧大纲中已发生或正在进行的节点（status=done/active），
+// 作为「既定事实」传给生成 prompt。
 // 模型负责判断哪些旧剧情发生在新时间线之前并衔接，哪些旧规划作废。
 export function buildHistoryContext(outline) {
-    const done = (outline?.beats || []).filter(b => b.status === 'done');
-    if (!done.length) return '';
-    const lines = done.map(b => `- ${b.title || b.id}：${b.summary || '（无概要）'}`);
+    const happened = (outline?.beats || []).filter(b => b.status === 'done' || b.status === 'active');
+    if (!happened.length) return '';
+    const lines = happened.map(b => {
+        const state = b.status === 'active' ? '（进行中）' : '';
+        return `- ${state}${b.title || b.id}：${b.summary || '（无概要）'}`;
+    });
     return `【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n${lines.join('\n')}\n`;
 }
 
@@ -281,7 +285,7 @@ ${serializeOutline(compactOutlineForRevision(outline))}
 
 （注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题。输出时请原样保留这些节点及其全部字段——它们已经发生，不要改写或补写它们的 summary/cast/type。）
 
-请执行：1) 判断当前情节节点是否完成，若完成则推进到下一个节点（将该 beat 的 status 改为 "done"，并把下一个 beat 的 status 改为 "active"）；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。7) 新增节点的时间点遵循当前节点节奏档位（${pacingInfo(pacing).label}）：间隔相对总跨度合理分布，不要与既有节点全部扎堆在同一时刻。${lockInstruction ? `\n\n${lockInstruction}` : ''}
+请执行：1) 判断当前情节节点是否真正到达终点（目标达成、冲突收场或场景明确结束）。大纲不是剧情日志：常规对话轮次不要推进节点状态、不要新建节点，只需微调 focus；只有里程碑式的完成才把该 beat 的 status 改为 "done" 并推进下一个为 "active"；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。7) 新增节点的时间点遵循当前节点节奏档位（${pacingInfo(pacing).label}）：间隔相对总跨度合理分布，不要与既有节点全部扎堆在同一时刻。${lockInstruction ? `\n\n${lockInstruction}` : ''}
 
 严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
     return { system, prompt };
@@ -320,10 +324,10 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 }
 
 规则：
-1) statusChanges：节点完成则置 "done"，并推进下一个节点为 "active"；没有状态变化就省略；
+1) statusChanges：仅当节点真正到达终点（目标达成/冲突收场/场景明确结束）才置 "done" 并推进下一个为 "active"；大纲不是剧情日志，常规对话轮次不要推进节点、不要新增节点，只更新 focus 即可；没有状态变化就省略；
 2) focus 建议总是输出（这是导演指令的核心）；
 3) foreshadowing/arcs：只列出状态发生变化的条目；
-4) newBeats：仅在剧情确实需要新节点时使用，数量越少越好，并给出 newBeatActId 归属幕（必须是现有 act id）；
+4) newBeats：仅在剧情确实需要新节点时使用（真正的里程碑/新情节线），数量越少越好，并给出 newBeatActId 归属幕（必须是现有 act id）；
 5) 禁止任何字段修改现有 beat/act/timeline 的标题、概要、类型与时间线。`;
     return { system, prompt };
 }

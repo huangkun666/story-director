@@ -341,26 +341,27 @@ export function renumberActTitles(outline) {
 
 const HISTORY_ACT_ID = 'act_history';
 
-// 生成新大纲时保留「已发生」剧情：旧大纲中 status=done 的节点收进前情幕，
-// 置于新大纲最前。旧节点 id 加 hist_ 前缀防冲突（已是 hist_ 的保持原名，幂等）。
+// 生成新大纲时保留「已发生/正在进行」剧情：旧大纲中 status=done 或 active 的节点
+// 收进前情幕，置于新大纲最前。done 保持 done；active 保持 active（进度不丢，不改成完成）。
+// 旧节点 id 加 hist_ 前缀防冲突（已是 hist_ 的保持原名，幂等）。
 // 旧伏笔/弧光/焦点/时间线一律以新大纲为准（生成 prompt 已把旧剧情作为前情参考传入）。
 export function mergeHistoryIntoOutline(newOutline, oldOutline) {
     const o = normalizeOutline(newOutline);
     if (!oldOutline || typeof oldOutline !== 'object') return o;
     const old = normalizeOutline(oldOutline);
-    const doneBeats = old.beats.filter(b => b.status === 'done');
-    if (!doneBeats.length) return o;
+    const historyBeats = old.beats.filter(b => b.status === 'done' || b.status === 'active');
+    if (!historyBeats.length) return o;
 
-    const historyBeats = doneBeats.map((b) => {
+    const keptBeats = historyBeats.map((b) => {
         const newId = String(b.id).startsWith('hist_') ? b.id : `hist_${b.id || 'b'}`;
-        return { ...b, id: newId, actId: HISTORY_ACT_ID, status: 'done' };
+        return { ...b, id: newId, actId: HISTORY_ACT_ID, status: b.status };
     });
     // 前情幕幂等：新大纲已带前情幕时替换其内容，而不是叠加
     const existing = o.acts.find(a => a.id === HISTORY_ACT_ID);
     const historyAct = {
         id: HISTORY_ACT_ID,
-        title: '前情·已完成（保留自旧大纲）',
-        summary: '时间线调整前已发生的剧情，新规划必须与之衔接',
+        title: '前情·已发生（保留自旧大纲）',
+        summary: '时间线调整前已发生或正在进行的剧情，新规划必须与之衔接',
         beats: [],
     };
     if (existing) {
@@ -369,6 +370,6 @@ export function mergeHistoryIntoOutline(newOutline, oldOutline) {
     } else {
         o.acts.unshift(historyAct);
     }
-    o.beats = [...historyBeats, ...o.beats];
+    o.beats = [...keptBeats, ...o.beats];
     return normalizeOutline(o);
 }

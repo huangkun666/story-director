@@ -419,6 +419,23 @@ test('mergeHistoryIntoOutline moves done beats into a leading history act', () =
     assert.deepEqual(out.acts[1].beats, ['beat_1']);
 });
 
+test('mergeHistoryIntoOutline keeps in-progress beats without marking them done', () => {
+    const oldOutline = createEmptyOutline();
+    oldOutline.beats = [
+        { id: 'b1', title: '已发生', status: 'done' },
+        { id: 'b2', title: '正在进行', summary: 's', status: 'active' },
+        { id: 'b3', title: '未发生', status: 'pending' },
+    ];
+    const newOutline = createEmptyOutline();
+    newOutline.beats = [{ id: 'beat_1', title: '新节点', status: 'active' }];
+    const out = mergeHistoryIntoOutline(newOutline, oldOutline);
+    assert.equal(out.beats.length, 3); // b1 + b2 保留 + 新节点
+    assert.equal(out.beats[0].status, 'done');
+    assert.equal(out.beats[1].id, 'hist_b2');
+    assert.equal(out.beats[1].status, 'active'); // 进行中状态保留，不改成完成
+    assert.equal(out.beats[2].id, 'beat_1');
+});
+
 test('mergeHistoryIntoOutline is idempotent on repeated merge', () => {
     const oldOutline = createEmptyOutline();
     oldOutline.beats = [{ id: 'hist_b1', title: '已发生', status: 'done' }];
