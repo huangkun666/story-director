@@ -171,15 +171,26 @@ function outlineSectionHtml(o) {
         beats.forEach(b => usedBeatIds.add(b.id));
         // 幕序号由数组顺序派生：删插/移动幕都不会跳号
         const numBadge = `<span class="sd_act_badge" title="第 ${index + 1} 幕（按当前顺序）">${index + 1}</span>`;
-        return `<div class="sd_act" data-act-id="${escapeHtml(act.id)}">
-            <div class="sd_act_head" title="双击编辑幕">
+        const head = `<div class="sd_act_head" title="双击编辑幕">
                 ${numBadge}
                 <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
                 ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
-            </div>
-            ${beats.length ? `<div class="sd_timeline">${beats.map(renderBeatItem).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>'}
-        </div>`;
+            </div>`;
+        const body = beats.length ? `<div class="sd_timeline">${beats.map(renderBeatItem).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>';
+        // 前情幕默认折叠（原生 details/summary，零 JS）
+        const isHistory = String(act.id).startsWith('act_history');
+        if (isHistory) {
+            return `<details class="sd_act sd_act_history" data-act-id="${escapeHtml(act.id)}">
+                <summary class="sd_act_head" title="点击展开/折叠前情">${numBadge}
+                    <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
+                    <span class="sd_act_summary">${escapeHtml(act.summary || '已发生的剧情（点击展开）')}</span>
+                    <span class="sd_act_toggle"><i class="fa-solid fa-chevron-down"></i></span>
+                </summary>
+                ${body}
+            </details>`;
+        }
+        return `<div class="sd_act" data-act-id="${escapeHtml(act.id)}">${head}${body}</div>`;
     }).join('');
 
     const unassigned = o.beats.filter(b => !usedBeatIds.has(b.id));
@@ -547,6 +558,7 @@ export function bindUI(ctx, adapter) {
     setSelect('sd_drift_tolerance', adapter.settings.driftTolerance);
     setSelect('sd_outline_detail', adapter.settings.outlineDetail);
     setSelect('sd_beat_pacing', adapter.settings.beatPacing || 'balanced');
+    setSelect('sd_preserve_history', adapter.settings.preserveHistory === false ? 'false' : 'true');
     setSelect('sd_generate_memory_mode', adapter.settings.generateMemoryMode || 'auto');
     const setNumber = (id, value) => {
         const el = document.getElementById(id);
@@ -584,6 +596,11 @@ export function bindUI(ctx, adapter) {
     bindSelect('sd_drift_tolerance', 'driftTolerance');
     bindSelect('sd_outline_detail', 'outlineDetail');
     bindSelect('sd_beat_pacing', 'beatPacing');
+    bindSelect('sd_preserve_history', 'preserveHistory', () => {
+        // bindSelect 存的是字符串 'true'/'false'，这里转回布尔
+        adapter.settings.preserveHistory = adapter.settings.preserveHistory !== 'false';
+        saveSettings();
+    });
     bindSelect('sd_generate_memory_mode', 'generateMemoryMode');
     bindNumber('sd_recent_turns', 'recentTurns', { min: 1, max: 50 });
     bindNumber('sd_card_context_limit', 'cardContextLimit', { min: 2000, max: 200000 });

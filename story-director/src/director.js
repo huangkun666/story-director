@@ -1,11 +1,12 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
 import { normalizeOutline, createEmptyOutline } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, buildHistoryContext, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
 import { renderInstruction } from './injector.js';
+import { mergeHistoryIntoOutline } from './outline-store.js';
 
 export function createDirector(deps) {
     let running = false;
@@ -41,7 +42,8 @@ export function createDirector(deps) {
         try {
             const settings = deps.getSettings();
             const card = deps.getCharacterCard();
-            const storedTimeline = deps.getOutline().timeline || {};
+            const currentOutline = deps.getOutline();
+            const storedTimeline = currentOutline.timeline || {};
             const requestedTimeline = (timeline && typeof timeline === 'object') ? timeline : storedTimeline;
 
             // 生成大纲的记忆模式：auto = 摘要+向量；summary = 只读记忆表；vector = 只检索资料；none = 只看角色卡和用户要求
@@ -52,7 +54,7 @@ export function createDirector(deps) {
             const vectorQueries = [
                 [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedTimeline?.mustRead].filter(Boolean).join(' '),
                 card.cast ? `角色与关系：${card.cast}` : '',
-                deps.getOutline().focus?.nextStep || deps.getOutline().theme || '',
+                currentOutline.focus?.nextStep || currentOutline.theme || '',
             ].filter(q => String(q || '').trim());
             let vectorContext = '';
             let vectorHits = [];
@@ -68,18 +70,24 @@ export function createDirector(deps) {
             }
             deps.setRetrievalHits?.(vectorHits);
 
+            // 保留已发生剧情：旧大纲的 done 节点作为前情参考传入（prompt），
+            // 生成后由 mergeHistoryIntoOutline 收进「前情·已完成」幕
+            const preserveHistory = String(settings.preserveHistory) !== 'false';
+            const historyContext = preserveHistory ? buildHistoryContext(currentOutline) : '';
+
             const bundle = buildGeneratePrompt({
                 characterCard: card,
                 userRequest,
                 detail: settings.outlineDetail || 'medium',
                 timeline: requestedTimeline,
                 pacing: settings.beatPacing || 'balanced',
+                historyContext,
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
             });
             const result = await gen(bundle);
             if (result) {
-                const next = normalizeOutline(result);
+                let next = normalizeOutline(result);
                 // 用户显式指定过时间线时，以用户输入为准（模型输出只补漏）
                 const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note || requestedTimeline?.mustRead);
                 if (hasRequestedTimeline) {
@@ -89,6 +97,9 @@ export function createDirector(deps) {
                         note: requestedTimeline.note || next.timeline.note,
                         mustRead: requestedTimeline.mustRead || next.timeline.mustRead,
                     };
+                }
+                if (preserveHistory) {
+                    next = mergeHistoryIntoOutline(next, currentOutline);
                 }
                 recordHistory('generate');
                 deps.setOutline(next);

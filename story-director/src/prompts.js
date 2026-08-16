@@ -135,6 +135,15 @@ function pacingInfo(key) {
     return PACING_META[key] || PACING_META.balanced;
 }
 
+// 前情参考块：旧大纲中已发生的节点（status=done），作为「既定事实」传给生成 prompt。
+// 模型负责判断哪些旧剧情发生在新时间线之前并衔接，哪些旧规划作废。
+export function buildHistoryContext(outline) {
+    const done = (outline?.beats || []).filter(b => b.status === 'done');
+    if (!done.length) return '';
+    const lines = done.map(b => `- ${b.title || b.id}：${b.summary || '（无概要）'}`);
+    return `【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n${lines.join('\n')}\n`;
+}
+
 function cardToText(card) {
     const c = card || {};
     return [
@@ -151,13 +160,17 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', memoryContext = '', vectorContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
     const vectorText = String(vectorContext || '').trim();
     const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
+    const historyText = String(historyContext || '').trim();
+    const historyBlock = historyText ? `${historyText}
+
+注意：以上旧剧情中，发生在新时间线开始之前的属于既定事实，新大纲必须与之衔接、不得矛盾；发生在新时间线内或之后的旧规划一律作废，按本次要求重新设计；旧大纲中的伏笔若尚未揭晓，可重新设计为新伏笔。\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note || t.mustRead);
     const mustReadBlock = t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
     const timelineBlock = (t.start || t.end || t.note)
@@ -192,7 +205,7 @@ ${mustReadBlock}${timelineBlock}
 
 ${pacingBlock}
 
-${memoryBlock}${vectorBlock}【角色卡】
+${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【用户要求】

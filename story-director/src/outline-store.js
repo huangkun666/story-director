@@ -338,3 +338,37 @@ export function renumberActTitles(outline) {
     });
     return o;
 }
+
+const HISTORY_ACT_ID = 'act_history';
+
+// 生成新大纲时保留「已发生」剧情：旧大纲中 status=done 的节点收进前情幕，
+// 置于新大纲最前。旧节点 id 加 hist_ 前缀防冲突（已是 hist_ 的保持原名，幂等）。
+// 旧伏笔/弧光/焦点/时间线一律以新大纲为准（生成 prompt 已把旧剧情作为前情参考传入）。
+export function mergeHistoryIntoOutline(newOutline, oldOutline) {
+    const o = normalizeOutline(newOutline);
+    if (!oldOutline || typeof oldOutline !== 'object') return o;
+    const old = normalizeOutline(oldOutline);
+    const doneBeats = old.beats.filter(b => b.status === 'done');
+    if (!doneBeats.length) return o;
+
+    const historyBeats = doneBeats.map((b) => {
+        const newId = String(b.id).startsWith('hist_') ? b.id : `hist_${b.id || 'b'}`;
+        return { ...b, id: newId, actId: HISTORY_ACT_ID, status: 'done' };
+    });
+    // 前情幕幂等：新大纲已带前情幕时替换其内容，而不是叠加
+    const existing = o.acts.find(a => a.id === HISTORY_ACT_ID);
+    const historyAct = {
+        id: HISTORY_ACT_ID,
+        title: '前情·已完成（保留自旧大纲）',
+        summary: '时间线调整前已发生的剧情，新规划必须与之衔接',
+        beats: [],
+    };
+    if (existing) {
+        o.acts = o.acts.map(a => (a.id === HISTORY_ACT_ID ? historyAct : a));
+        o.beats = o.beats.filter(b => b.actId !== HISTORY_ACT_ID);
+    } else {
+        o.acts.unshift(historyAct);
+    }
+    o.beats = [...historyBeats, ...o.beats];
+    return normalizeOutline(o);
+}

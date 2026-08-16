@@ -1519,6 +1519,32 @@
     margin-right: 7px;
 }
 
+/* 前情幕：默认折叠（details/summary） */
+.sd_act_history {
+    border-left: 3px solid #b9c2d4;
+}
+
+.sd_act_history summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sd_act_history summary::-webkit-details-marker {
+    display: none;
+}
+
+.sd_act_toggle {
+    margin-left: 8px;
+    color: #8a94a6;
+    font-size: 0.8em;
+    transition: transform 0.15s;
+}
+
+.sd_act_history[open] .sd_act_toggle {
+    transform: rotate(180deg);
+}
+
 .sd_beat_body {
     border-radius: 9px;
     padding: 5px 7px;

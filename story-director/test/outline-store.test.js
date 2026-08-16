@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -389,4 +389,53 @@ test('renumberActTitles uses arabic numerals beyond ten acts', () => {
     assert.equal(out.acts[9].title, '第十幕：'); // ≤10 用中文数字
     assert.equal(out.acts[10].title, '第11幕：'); // >10 用阿拉伯数字
     assert.equal(out.acts[11].title, '第12幕：');
+});
+
+test('mergeHistoryIntoOutline moves done beats into a leading history act', () => {
+    const oldOutline = createEmptyOutline();
+    oldOutline.acts = [{ id: 'a1', title: '旧幕', beats: ['b1', 'b2'] }];
+    oldOutline.beats = [
+        { id: 'b1', title: '已发生一', summary: 's1', type: 'conflict', status: 'done', actId: 'a1', cast: ['主角'] },
+        { id: 'b2', title: '未发生', summary: 's2', type: 'setup', status: 'pending', actId: 'a1' },
+    ];
+
+    const newOutline = createEmptyOutline();
+    newOutline.acts = [{ id: 'n1', title: '新幕', beats: [] }];
+    newOutline.beats = [{ id: 'beat_1', actId: 'n1', title: '新节点', status: 'active' }];
+
+    const out = mergeHistoryIntoOutline(newOutline, oldOutline);
+    assert.equal(out.acts.length, 2);
+    assert.equal(out.acts[0].id, 'act_history');
+    assert.equal(out.acts[0].title.includes('前情'), true);
+    // 只保留 done 节点，id 加 hist_ 前缀，排在前面
+    assert.equal(out.beats.length, 2);
+    assert.equal(out.beats[0].id, 'hist_b1');
+    assert.equal(out.beats[0].title, '已发生一');
+    assert.equal(out.beats[0].status, 'done');
+    assert.equal(out.beats[0].actId, 'act_history');
+    assert.deepEqual(out.acts[0].beats, ['hist_b1']); // 派生列表
+    // 新大纲节点不受影响
+    assert.equal(out.beats[1].id, 'beat_1');
+    assert.deepEqual(out.acts[1].beats, ['beat_1']);
+});
+
+test('mergeHistoryIntoOutline is idempotent on repeated merge', () => {
+    const oldOutline = createEmptyOutline();
+    oldOutline.beats = [{ id: 'hist_b1', title: '已发生', status: 'done' }];
+    const newOutline = createEmptyOutline();
+    newOutline.beats = [{ id: 'beat_1', title: '新节点', status: 'active' }];
+    const once = mergeHistoryIntoOutline(newOutline, oldOutline);
+    const twice = mergeHistoryIntoOutline(once, oldOutline);
+    assert.equal(twice.beats.filter(b => b.id === 'hist_b1').length, 1); // 不叠加
+    assert.equal(twice.acts.filter(a => a.id === 'act_history').length, 1);
+});
+
+test('mergeHistoryIntoOutline returns new outline unchanged when no done beats', () => {
+    const oldOutline = createEmptyOutline();
+    oldOutline.beats = [{ id: 'b1', title: '未发生', status: 'pending' }];
+    const newOutline = createEmptyOutline();
+    newOutline.beats = [{ id: 'beat_1', title: '新', status: 'active' }];
+    const out = mergeHistoryIntoOutline(newOutline, oldOutline);
+    assert.deepEqual(out.acts.map(a => a.id), []);
+    assert.deepEqual(out.beats.map(b => b.id), ['beat_1']);
 });

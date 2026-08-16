@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = {
     driftTolerance: 'loose',        // 'loose' | 'strict'
     outlineDetail: 'medium',        // 'low' | 'medium' | 'high'
     beatPacing: 'balanced',         // 节点节奏：'balanced' 均衡 / 'dense' 紧凑 / 'sparse' 宽松（间隔相对大纲总跨度）
+    preserveHistory: true,          // 生成大纲时保留旧大纲已发生（done）节点为「前情·已完成」幕
     recentTurns: 5,
     cardContextLimit: 12000,        // 生成大纲时角色卡内容的最大字符数（防止巨型世界书/深度提示撑爆 prompt）
     dialogueContextLimit: 8000,     // 修订/体检时回看对话的最大字符数

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
     OUTLINE_SCHEMA, CHECK_SCHEMA,
     buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, buildDirectorInstruction,
-    buildBeatPrompt,
+    buildBeatPrompt, buildHistoryContext,
     compactOutlineForRevision,
 } from '../src/prompts.js';
 import { createEmptyOutline } from '../src/outline-store.js';
@@ -243,4 +243,34 @@ test('buildBeatPrompt handles empty hint with a default instruction', () => {
     const o = createEmptyOutline();
     const { prompt } = buildBeatPrompt({ outline: o });
     assert.ok(prompt.includes('（未指定，请根据大纲当前焦点')); // 默认引导文案
+});
+
+test('buildHistoryContext lists only done beats with summaries', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', title: '已发生', summary: '前情概要', status: 'done' },
+        { id: 'b2', title: '未发生', summary: 'x', status: 'pending' },
+    ];
+    const ctx = buildHistoryContext(o);
+    assert.ok(ctx.includes('已发生'));
+    assert.ok(ctx.includes('前情概要'));
+    assert.ok(!ctx.includes('未发生'));
+});
+
+test('buildHistoryContext returns empty when nothing happened yet', () => {
+    const o = createEmptyOutline();
+    assert.equal(buildHistoryContext(o), '');
+    o.beats = [{ id: 'b1', title: 'x', status: 'pending' }];
+    assert.equal(buildHistoryContext(o), '');
+});
+
+test('buildGeneratePrompt includes history block with continuation rules', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        historyContext: '【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n- 落马余波：焦土决断',
+    });
+    assert.ok(prompt.includes('已发生的剧情事实'));
+    assert.ok(prompt.includes('落马余波'));
+    assert.ok(prompt.includes('发生在新时间线开始之前的属于既定事实'));
+    assert.ok(prompt.includes('发生在新时间线内或之后的旧规划一律作废'));
 });

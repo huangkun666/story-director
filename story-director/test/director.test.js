@@ -286,3 +286,37 @@ test('director.suggestBeat returns null on garbage output', async () => {
     const d = createDirector(deps);
     assert.equal(await d.suggestBeat({ userHint: 'x' }), null);
 });
+
+test('director.generate preserves done beats as history by default', async () => {
+    const prev = createEmptyOutline();
+    prev.beats = [{ id: 'b1', title: '已发生', summary: 's', status: 'done' }];
+    let stored = prev;
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({ theme: '新', beats: [{ id: 'beat_1', title: '新节点', status: 'active' }] }),
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    assert.ok(stored.acts.some(a => a.id === 'act_history')); // 前情幕
+    assert.equal(stored.beats[0].id, 'hist_b1'); // 旧 done 节点保留在最前
+    assert.equal(stored.beats[0].status, 'done');
+    assert.equal(stored.beats[1].title, '新节点');
+});
+
+test('director.generate skips history merge when preserveHistory is false', async () => {
+    const prev = createEmptyOutline();
+    prev.beats = [{ id: 'b1', title: '已发生', status: 'done' }];
+    let stored = prev;
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({ theme: '新', beats: [{ id: 'beat_1', title: '新节点', status: 'active' }] }),
+        getSettings: () => ({ enabled: true, recentTurns: 5, preserveHistory: false }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    assert.ok(!stored.acts.some(a => a.id === 'act_history'));
+    assert.deepEqual(stored.beats.map(b => b.id), ['beat_1']);
+});
