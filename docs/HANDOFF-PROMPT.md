@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**236/236 通过**。
+当前测试数：**244/244 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+e0b8688 fix: dialogue extraction understands HTML tags (content/think), not char pairs; compact API settings card
 050bb15 feat: debug terminal - ring-buffered event log with LLM budget, retrieval, memory pointer and self-healing visibility
 0b77da4 feat: operation-level undo stack for manual outline edits (Ctrl+Z + toolbar button)
 70ee612 feat: split must-read lore into top-level outline field, independent from timeline
@@ -99,7 +100,7 @@ story-director/
 │   ├── prompts.js         # 提示词模板 + schema + 群像/时间线/节奏/前情/事实边界/方向草案块
 │   ├── llm-client.js      # extractJson/stripCodeFence/makeStructuredGenerator
 │   ├── openai-compat.js   # 独立 API 直连 + /v1/models 列表 + 连接测试
-│   ├── dialogue-extract.js# 对话正文提取纯函数（标签规则，无匹配回退原文）
+│   ├── dialogue-extract.js# 对话正文提取纯函数（HTML 标签模式优先 + 字符对兼容，无匹配回退原文）
 │   ├── logger.js          # 调试终端日志核心：环形缓冲 500 条 + 分级过滤 + 订阅（纯逻辑可单测）
 │   ├── injector.js        # focus → 导演指令 + 截断
 │   ├── tracker.js         # applyRevision/applyPatch/mergeLockedOutline（锁定保护）
@@ -120,7 +121,7 @@ story-director/
 5. **时间线约束**：`timeline {start,end,note}`，所有节点必须落在区间内；**必读设定**是顶层独立字段（`outline.mustRead`，世界观级硬约束，旧数据 `timeline.mustRead` 由 normalize 自动迁移），最高优先级；**节点节奏**（beatPacing 相对跨度三档）。
 6. **事实边界 + 前情保留**：`preserveHistory`（默认 true）——重新生成时旧 done/active 节点收进「前情·已完成」幕（默认折叠）；active 保持 active 并成为唯一焦点（新大纲第一个 active 降为 pending）；prompt 硬约束 start 早于进行中节点自动顺延。关掉 = 弃史重来；重玩 = 用户快照回滚。
 7. **近期对话上下文（记忆指针驱动）**：记忆插件每 N 轮（默认 20）更新一次并维护记忆指针。`adapter.getMemoryGap()` 只读调用 `YuzukiMemory.Storage.loadState()` 读 `settings.manualPointers.summary`，`getRecentDialogue` 的轮数 = **指针之后缺失楼层数（+1 轮余量，clamp 60 轮）**，无指针（记忆未启用/无状态/读取失败）回落 `recentTurns`。对话**始终携带**（生成/修订/体检）。
-8. **对话正文提取**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数按标签（如【】、* *）提取正文，无匹配行保留原文、全部无匹配/无规则回退原文；UI「AI 分析」让模型扫描最近对话给出规则建议（含真实提取示例），**用户逐条确认**后才生效，也可手动添加；作用于生成/修订/体检。
+8. **对话正文提取**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数，**两种规则形态**——① HTML 标签模式（推荐）：`{ tag: 'content' }`，全文提取 `<content>…</content>`（可带属性、跨行），`<think>` 等思考标签自然排除，**标签名不硬编码**，由用户输入或 AI 分析识别；② 字符对模式（兼容旧规则）：`{ open, close }` 按标签逐行提取保留说话人前缀。标签规则优先，无规则/全部无匹配/提取为空 → **返回原文（默认提取全文）**；UI「AI 分析」让模型扫描最近对话识别正文标签样式（html_tag / pair 两种输出，think/reasoning 不算正文），**用户逐条确认**后才生效；作用于生成/修订/体检。
 9. **保守修订**：prompt 明确「大纲不是剧情日志」——常规轮次只校准 focus，里程碑才推进节点；锁定模式用增量补丁（buildRevisePatchPrompt + applyPatch，输出省 ~90%）；输入侧压缩 done 节点（compactOutlineForRevision），合并时恢复细节。
 10. **向量检索**：多路 query（模型定向优先 + 时间线/角色前5/焦点保底），**每路 top 3** 防低相关占预算；命中清单实时展示（总览页「本次检索命中」卡）。
 11. **上下文预算**：cardContextLimit（12000）、dialogueContextLimit（8000）、memoryContextLimit（8000）、vectorMemoryLimit（6000）。
@@ -129,7 +130,7 @@ story-director/
 14. **伏笔高亮**：总览页节点行显示指向它的活跃伏笔 chips（hover 看 hint）；伏笔卡「回收于 X」可点击跳转总览闪烁定位。
 15. **派生幕编号**：渲染徽章按数组顺序派生；「重编幕号」工具（renumberActTitles）。
 16. **AI 生成节点**：节点编辑器顶部「AI 生成」——一句话提示 + 当前大纲 → 建议节点填入表单确认后保存（suggestBeat）。
-17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；API 类型下拉。
+17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；**API 卡已压缩**：连接模式与「获取模型/测试连接」同行（sd_llm_mode_row），字段只剩 Base URL / API Key / 模型——API 类型下拉已移除（custom 直连实际只用到这三项，旧设置 `llm.api` 字段仍兼容保留）。
 18. **体检**：verdict/issues/changed/reason + 时间线漂移 + 节点节奏检查点；**体检历史留痕**（meta.checkHistory 10 条，统计行图标序列）；锁定模式下只吸收状态类变更。
 19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
 20. **调试终端**：「API 与工具」页签内嵌面板（`sd_term_*`）——**五类日志**：llm（每次生成/修订/体检/方向草案的模型/耗时/结果、角色卡预算占用）、retrieval（方向草案 queries、每路命中数）、memory（记忆指针缺口、生效轮数、正文提取）、engine（大纲保存诊断 diagnoseOutline：节点统计 + normalize 自愈清单）、edit（撤销栈编辑流）、lifecycle（就绪/消息触发修订/切换聊天）；分级过滤（debug/info/warn/error + 分类 + 关键字）、点击展开详情、清空、导出 JSON；**环形 500 条仅存内存**，warn/error 同时透传 console。
