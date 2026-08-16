@@ -454,7 +454,7 @@ ${String(dialogue || '').slice(0, 8000)}
 }
 
 要求：
-1. 若正文包裹在 HTML 标签中（如 <content>…</content>、<speech>…</speech> 等），输出 type 为 "html_tag"、exclude 为 false，tag 为标签名（不含尖括号，按对话中真实出现的标签）；
+1. 若正文包裹在 HTML 标签中（如 <content>…</content>、<speech>…</speech> 等），输出 type 为 "html_tag"、exclude 为 false，tag 为标签名（不含尖括号，按对话中真实出现的标签）；sample 只写标签内的正文示例（如 "我们进城吧"），**不要包含标签本身**；
 2. 若对话中存在明显的非正文标签（如 <think>、<reasoning>、<thought> 等思考/推理内容），也输出为 html_tag 规则且 exclude 为 true（黑名单：提取时删除这些标签块，保留其余全文）——尤其是正文没有标签包裹时，黑名单是唯一可用的清理方式；
 3. 若正文用字符对包裹（如【…】、*…*），输出 type 为 "pair"，open/close 为真实开始/结束符；
 4. 只输出对话中真实出现的样式（1-4 条，白名单与黑名单都算）；若对话中既没有正文标签也没有可排除的标签，patterns 输出空数组；不要臆造不存在的标签。`;

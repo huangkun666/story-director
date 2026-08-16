@@ -362,6 +362,34 @@ test('director.analyzeDialogueTags normalizes html_tag rules and filters invalid
     assert.equal(suggestion.note, '正文在 content 标签里');
 });
 
+test('director.analyzeDialogueTags falls back to parsing tag from sample', async () => {
+    // 模型没给 tag 字段、只给了示例（示例里带标签）：从 sample 兜底解析标签名
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            patterns: [
+                { type: 'html_tag', label: '正文', sample: '<content>我们进城吧</content>' },
+                { type: 'html_tag', label: '思考', sample: '<think>让我想想</think>' },
+                { label: '无标签示例', sample: '纯文本没有标签' }, // 解析不出 → 被过滤
+            ],
+        }),
+        getRecentDialogue: () => 'AI: <content>我们进城吧</content>',
+    });
+    const d = createDirector(deps);
+    const suggestion = await d.analyzeDialogueTags();
+    assert.equal(suggestion.rules.length, 2);
+    assert.equal(suggestion.rules[0].tag, 'content');
+    assert.equal(suggestion.rules[1].tag, 'think');
+    // 兼容 html_tag / tagName 字段名
+    const { deps: deps2 } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            patterns: [{ html_tag: '<speech>', label: '正文', sample: '说话' }],
+        }),
+        getRecentDialogue: () => '',
+    });
+    const s2 = await createDirector(deps2).analyzeDialogueTags();
+    assert.equal(s2.rules[0].tag, 'speech');
+});
+
 test('director.analyzeDialogueTags returns null on garbage output', async () => {
     const { deps } = makeDeps({ generateRaw: async () => 'garbage' });
     const d = createDirector(deps);

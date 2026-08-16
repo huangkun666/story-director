@@ -820,57 +820,53 @@ export function bindUI(ctx, adapter) {
         renderFsFilter();
     });
 
-    // ---------- 对话正文提取规则（HTML 标签优先 + 字符对兼容） ----------
-    const extractRulesEl = document.getElementById('sd_extract_rules');
+    // ---------- 对话正文提取规则（输入即生效，白名单 + 黑名单） ----------
     const extractResultEl = document.getElementById('sd_extract_result');
+    const extractTagEl = document.getElementById('sd_extract_tag');
+    const extractExcludeTagEl = document.getElementById('sd_extract_exclude_tag');
     const ruleLabel = (r) => {
         if (r && typeof r.tag === 'string' && r.tag) return `<${escapeHtml(r.tag)}> … </${escapeHtml(r.tag)}>`;
         return `${escapeHtml(r?.open || '')} … ${escapeHtml(r?.close || '')}`;
     };
-    const renderExtractRules = () => {
-        if (!extractRulesEl) return;
+    // 逗号/空格/顿号分隔，容忍 <content> 写法，过滤非法标签名
+    const splitTags = (v) => String(v || '')
+        .split(/[,，、;；\s]+/)
+        .map(t => t.replace(/[<>/]/g, '').trim())
+        .filter(t => /^[A-Za-z][A-Za-z0-9_-]*$/.test(t));
+    // 从设置回填输入框（AI 分析采用 tag 规则后也会重新同步）
+    const syncExtractInputs = () => {
         const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : [];
-        if (!rules.length) {
-            extractRulesEl.innerHTML = '<small class="sd_hint">未设置提取规则：生成/修订/体检使用对话全文（原文）。</small>';
-            return;
-        }
-        extractRulesEl.innerHTML = `<div class="sd_extract_chips">${rules.map((r, i) => `
-            <span class="sd_chip sd_extract_chip${r.exclude === true ? ' sd_extract_chip_exclude' : ''}" title="${escapeHtml(r.sample ? `示例：${r.sample}` : (r.label || '正文'))}">
-                ${r.exclude === true ? '<i class="fa-solid fa-ban" title="黑名单：排除该标签块"></i> ' : ''}${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）
-                <i class="fa-solid fa-xmark sd_extract_remove" data-extract-remove="${i}" title="删除该规则"></i>
-            </span>`).join('')}</div>`;
+        const keep = rules.filter(r => r && typeof r.tag === 'string' && r.tag && r.exclude !== true).map(r => r.tag);
+        const exclude = rules.filter(r => r && typeof r.tag === 'string' && r.tag && r.exclude === true).map(r => r.tag);
+        if (extractTagEl) extractTagEl.value = keep.join(', ');
+        if (extractExcludeTagEl) extractExcludeTagEl.value = exclude.join(', ');
     };
-    extractRulesEl?.addEventListener('click', (e) => {
-        const rm = e.target.closest('[data-extract-remove]');
-        if (!rm) return;
-        const idx = Number(rm.getAttribute('data-extract-remove'));
-        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
-        if (Number.isInteger(idx) && rules[idx]) {
-            rules.splice(idx, 1);
-            adapter.settings.dialogueExtractRules = rules;
+    // 输入框内容 → 重建设置：tag 规则全部由输入框决定，字符对规则（AI 采用而来）保留
+    const applyExtractInputs = () => {
+        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : [];
+        const pairRules = rules.filter(r => r && !r.tag);
+        const keepTags = splitTags(extractTagEl?.value);
+        const excludeTags = splitTags(extractExcludeTagEl?.value);
+        const next = [
+            ...keepTags.map(tag => ({ tag, label: '正文', sample: '' })),
+            ...excludeTags.map(tag => ({ tag, exclude: true, label: '排除', sample: '' })),
+            ...pairRules,
+        ];
+        if (JSON.stringify(next) !== JSON.stringify(rules)) {
+            adapter.settings.dialogueExtractRules = next;
             ctx.saveSettingsDebounced?.();
-            renderExtractRules();
         }
-    });
-    const addExtractRule = (rule, inputId) => {
-        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
-        rules.push(rule);
-        adapter.settings.dialogueExtractRules = rules;
-        ctx.saveSettingsDebounced?.();
-        const input = document.getElementById(inputId);
-        if (input) input.value = '';
-        renderExtractRules();
     };
-    document.getElementById('sd_extract_add_btn')?.addEventListener('click', () => {
-        const tag = document.getElementById('sd_extract_tag')?.value?.replace(/[<>/]/g, '').trim() || '';
-        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(tag)) return;
-        addExtractRule({ tag, label: '正文', sample: '' }, 'sd_extract_tag');
+    let extractInputTimer = null;
+    extractTagEl?.addEventListener('input', () => {
+        clearTimeout(extractInputTimer);
+        extractInputTimer = setTimeout(applyExtractInputs, 300);
     });
-    document.getElementById('sd_extract_exclude_btn')?.addEventListener('click', () => {
-        const tag = document.getElementById('sd_extract_exclude_tag')?.value?.replace(/[<>/]/g, '').trim() || '';
-        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(tag)) return;
-        addExtractRule({ tag, exclude: true, label: '排除', sample: '' }, 'sd_extract_exclude_tag');
+    extractExcludeTagEl?.addEventListener('input', () => {
+        clearTimeout(extractInputTimer);
+        extractInputTimer = setTimeout(applyExtractInputs, 300);
     });
+    syncExtractInputs();
     document.getElementById('sd_extract_analyze')?.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
         if (btn.classList.contains('sd_loading')) return;
@@ -879,7 +875,7 @@ export function bindUI(ctx, adapter) {
         try {
             const suggestion = await adapter.director.analyzeDialogueTags({ turns: 10 });
             if (!suggestion || !suggestion.rules?.length) {
-                if (extractResultEl) extractResultEl.innerHTML = '<small class="sd_extract_msg">AI 未识别出明显的正文标签，可手动添加规则。</small>';
+                if (extractResultEl) extractResultEl.innerHTML = '<small class="sd_extract_msg">AI 未识别出明显的正文标签，可手动填写标签名。</small>';
                 return;
             }
             const keyOf = (r) => (typeof r.tag === 'string' && r.tag) ? `tag:${r.tag}:${r.exclude === true ? 'ex' : 'keep'}` : `pair:${r.open}|${r.close}`;
@@ -914,7 +910,7 @@ export function bindUI(ctx, adapter) {
         rules.push(rule);
         adapter.settings.dialogueExtractRules = rules;
         ctx.saveSettingsDebounced?.();
-        renderExtractRules();
+        syncExtractInputs(); // tag 规则被采用后回填输入框
         adopt.closest('.sd_extract_suggest')?.remove();
     });
 

@@ -290,16 +290,13 @@
                         </div>
                     </header>
                     <div class="sd_card_body">
-                        <div class="sd_extract_rules" id="sd_extract_rules"></div>
                         <div class="sd_extract_add">
-                            <input id="sd_extract_tag" type="text" placeholder="保留标签（白名单），如 content / speech" />
-                            <div id="sd_extract_add_btn" class="menu_button sd_btn" title="只提取该标签内的内容"><i class="fa-solid fa-plus"></i><span>添加保留</span></div>
-                            <input id="sd_extract_exclude_tag" type="text" placeholder="排除标签（黑名单），如 think / reasoning" />
-                            <div id="sd_extract_exclude_btn" class="menu_button sd_btn" title="删除该标签块及其内容，保留其余全文"><i class="fa-solid fa-ban"></i><span>添加排除</span></div>
+                            <input id="sd_extract_tag" type="text" placeholder="保留标签（白名单）：content, speech（逗号分隔，输入即生效）" />
+                            <input id="sd_extract_exclude_tag" type="text" placeholder="排除标签（黑名单）：think, reasoning（逗号分隔，输入即生效）" />
                             <div id="sd_extract_analyze" class="menu_button sd_btn" title="让 AI 扫描最近对话，自动识别正文标签与应排除的标签，结果由你确认"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI 分析</span></div>
                         </div>
                         <div id="sd_extract_result" class="sd_extract_result"></div>
-                        <small class="sd_hint">白名单：正文包裹在 &lt;content&gt; 等标签里时，只提取标签内内容；黑名单：正文没标签包裹时，排除 &lt;think&gt; 等无用标签块、保留其余全文。两者可叠加（先排除再提取）；都不设置 = 提取全文。</small>
+                        <small class="sd_hint">白名单：正文包裹在 &lt;content&gt; 等标签里时，只提取标签内内容；黑名单：正文没标签包裹时，排除 &lt;think&gt; 等无用标签块、保留其余全文。两者可叠加（先排除再提取）；都不填 = 提取全文。</small>
                     </div>
                 </section>
             </section>

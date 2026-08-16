@@ -200,11 +200,16 @@ export function createDirector(deps) {
                 if (!p || typeof p !== 'object') continue;
                 const label = String(p.label || '正文').trim();
                 const sample = String(p.sample || '').trim();
-                // HTML 标签规则：tag 为合法 HTML 标识符（容忍 <content> 写法）；
-                // exclude: true = 黑名单（删除该标签块），否则白名单（只提取标签内容）
-                const rawTag = String(p.tag || '').replace(/[<>/]/g, '').trim();
-                if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(rawTag)) {
-                    rules.push({ tag: rawTag, exclude: p.exclude === true, label, sample });
+                // HTML 标签规则：兼容 tag / html_tag / tagName 字段名，容忍 <content> 写法
+                const rawTag = String(p.tag ?? p.html_tag ?? p.tagName ?? '').replace(/[<>/]/g, '').trim();
+                let tag = /^[A-Za-z][A-Za-z0-9_-]*$/.test(rawTag) ? rawTag : '';
+                // 模型可能没给 tag 只给了示例（如 <content>正文</content>）：从 sample 兜底解析
+                if (!tag && sample) {
+                    const m = sample.match(/<([A-Za-z][A-Za-z0-9_-]*)\b[^>]*>/);
+                    if (m) tag = m[1];
+                }
+                if (tag) {
+                    rules.push({ tag, exclude: p.exclude === true, label, sample });
                     continue;
                 }
                 // 字符对规则（兼容旧模型输出）
