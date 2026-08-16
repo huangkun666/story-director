@@ -5,7 +5,7 @@
   "version": "0.11.1",
   "description": "双层结构化大纲 + 每轮动态修订，为 RP 生成注入叙事锚点。独立大界面挂在魔法棒菜单，支持独立 API 配置。",
   "author": "huangkun",
-  "homepage": "",
+  "homepage": "https://github.com/huangkun666/story-director",
   "auto_update": false,
   "requires": [],
   "js": "index.js",
