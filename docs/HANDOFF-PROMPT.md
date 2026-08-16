@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**216/216 通过**。
+当前测试数：**224/224 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+0b77da4 feat: operation-level undo stack for manual outline edits (Ctrl+Z + toolbar button)
 70ee612 feat: split must-read lore into top-level outline field, independent from timeline
 1969261 docs: mark release governance done in handoff prompt
 09993d7 docs: fill homepage with GitHub repo URL
@@ -128,7 +129,7 @@ story-director/
 16. **AI 生成节点**：节点编辑器顶部「AI 生成」——一句话提示 + 当前大纲 → 建议节点填入表单确认后保存（suggestBeat）。
 17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；API 类型下拉。
 18. **体检**：verdict/issues/changed/reason + 时间线漂移 + 节点节奏检查点；**体检历史留痕**（meta.checkHistory 10 条，统计行图标序列）；锁定模式下只吸收状态类变更。
-19. **快照/导入导出**：自动留快照 30 条可回滚；JSON 导出/导入。
+19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
 20. **并发友好**：director.isRunning() + UI 忙碌提示。
 
 ### 关键实现细节与坑
@@ -143,6 +144,7 @@ story-director/
 - **bindSelect 的 after 回调无参数**：不要把事件对象当参数用；select 存的是字符串（'true'/'false'），布尔设置要在 after 里转换。
 - **样式规范**：颜色只走 `--sd-*` 变量（白天/夜晚双值），语义浅底用 color-mix；类型徽章等特殊色在暗色块单独覆盖。
 - **锁定大纲**：tracker.applyRevision/applyPatch/checker.applyCheckResult 均支持 lockOutline——只推进状态/focus/伏笔，不改写手动编辑内容。
+- **操作级撤销的实现前提**：受控函数「写时复制」——normalizeOutline 深拷贝后只改副本，变更前引用永不被修改，撤销栈才能只存 prev 引用；editOutline 用 serializeOutline 字符串比较判「无实质变更」（受控函数永远返回新对象，不能靠引用比较）；连续同类编辑靠「栈顶同 label 跳过 push」合并；Ctrl+Z 在 input/textarea/contentEditable 内不拦截（交给浏览器原生文本撤销）。
 - **数据模型约定**：acts[].beats 是派生的（不要手工维护）；引用完整性交给 normalize；编辑一律走 outline-store 的受控纯函数，不要直接在 UI mutate。
 - **生成上下文构成**（按序）：角色卡（预算内，含名录/世界书）→ 用户要求 → 时间线/必读设定 → 节点节奏 → 事实边界（进行中节点）→ 近期对话（指针驱动窗口 + 可提取正文）→ 前情块（done/active 摘要）→ 方向草案 → 记忆摘要 → 向量资料 → 固定指令（四线/新人物许可/JSON 模板）。
 
@@ -152,7 +154,7 @@ story-director/
 - UI 层测试仍少（ui-render 部分函数有测，事件绑定靠手动验证）。
 - 记忆指针的 UI 展示（如「记忆缺口 N 层」状态显示）——可选。
 - ✅ **必读设定已拆为独立字段**：`outline.mustRead` 顶层字段（时间线只剩 start/end/note）；normalize 自动迁移旧 `timeline.mustRead`/`must_read`/`requiredLore`；UI 独立卡片 + 独立输入框 `sd_must_read`；prompts 顶层优先、兼容旧 timeline 传入；锁定合并保留 base.mustRead。
-- 可选：操作级撤销（增量变更日志，比整份快照更细）。
+- ✅ **操作级撤销已完成**：内存撤销栈 20 步（adapter.pushUndo/editOutline/undo/canUndo/clearUndo/setUndoChangeCallback）；受控函数写时复制保证 prev 引用不被修改；editOutline 用序列化比较判「无实质变更」不入栈；连续同类编辑合并（栈顶同 label）；工具栏撤销按钮（sd_undo，无历史置灰）+ Ctrl+Z（输入框内不拦截）；新增 updateAct 受控函数（幕编辑不再直接 mutate）。注意：撤销栈是内存态，刷新页面即失，跨会话回滚仍靠 30 条快照。
 - 可选：修订频率默认值（当前 every；可考虑 everyN=3 省 token）。
 - 用户可能继续提 UI 细节、token 优化、记忆插件工作流等需求。
 
