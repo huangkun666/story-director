@@ -265,6 +265,27 @@
                         </label>
                     </div>
                 </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-scroll"></i></span>
+                        <div class="sd_card_titles">
+                            <b>对话正文提取</b>
+                            <small>记忆库落后约 20 轮，近期剧情靠对话原文；按标签提取正文可覆盖更多轮次</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body">
+                        <div class="sd_extract_rules" id="sd_extract_rules"></div>
+                        <div class="sd_extract_add">
+                            <input id="sd_extract_open" type="text" placeholder="开始符，如 【" />
+                            <input id="sd_extract_close" type="text" placeholder="结束符，如 】" />
+                            <div id="sd_extract_add_btn" class="menu_button sd_btn" title="手动添加标签规则"><i class="fa-solid fa-plus"></i><span>添加</span></div>
+                            <div id="sd_extract_analyze" class="menu_button sd_btn" title="让 AI 扫描最近对话，自动识别正文标签样式，结果由你确认"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI 分析</span></div>
+                        </div>
+                        <div id="sd_extract_result" class="sd_extract_result"></div>
+                        <small class="sd_hint">无规则时使用对话原文；提取不到内容会自动回退原文。规则保存在插件设置里，作用于生成/修订/体检。</small>
+                    </div>
+                </section>
             </section>
 
             <section id="sd_view_characters" class="sd_view sd_hidden">

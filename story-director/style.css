@@ -1900,6 +1900,81 @@
     background: color-mix(in srgb, var(--sd-green) 12%, transparent) !important;
 }
 
+/* 对话正文提取规则 */
+.sd_extract_chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.sd_extract_chip {
+    cursor: default;
+}
+
+.sd_extract_remove {
+    margin-left: 5px;
+    cursor: pointer;
+    color: var(--sd-muted);
+}
+
+.sd_extract_remove:hover {
+    color: var(--sd-red);
+}
+
+.sd_extract_add {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.sd_extract_add input {
+    width: 110px;
+}
+
+.sd_extract_suggests {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0;
+}
+
+.sd_extract_suggest {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    border: 1px dashed var(--sd-border-soft);
+    border-radius: 8px;
+    padding: 6px 9px;
+}
+
+.sd_extract_sample {
+    color: var(--sd-muted);
+    font-size: 0.78em;
+    flex: 1;
+    min-width: 140px;
+}
+
+.sd_extract_msg {
+    color: var(--sd-muted);
+    font-size: 0.8em;
+}
+
+.sd_extract_adopt {
+    cursor: pointer;
+    color: var(--sd-green);
+    font-size: 0.82em;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.sd_extract_adopt:hover {
+    background: color-mix(in srgb, var(--sd-green) 12%, transparent);
+}
+
 /* 工具 */
 .sd_tool_row {
     color: var(--sd-text-2);

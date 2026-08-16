@@ -810,6 +810,92 @@ export function bindUI(ctx, adapter) {
         renderFsFilter();
     });
 
+    // ---------- 对话正文提取规则 ----------
+    const extractRulesEl = document.getElementById('sd_extract_rules');
+    const extractResultEl = document.getElementById('sd_extract_result');
+    const renderExtractRules = () => {
+        if (!extractRulesEl) return;
+        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : [];
+        if (!rules.length) {
+            extractRulesEl.innerHTML = '<small class="sd_hint">未设置提取规则：生成/修订/体检使用对话原文。</small>';
+            return;
+        }
+        extractRulesEl.innerHTML = `<div class="sd_extract_chips">${rules.map((r, i) => `
+            <span class="sd_chip sd_extract_chip" title="${escapeHtml(r.sample ? `示例：${r.sample}` : (r.label || '正文'))}">
+                ${escapeHtml(r.open)} … ${escapeHtml(r.close)}（${escapeHtml(r.label || '正文')}）
+                <i class="fa-solid fa-xmark sd_extract_remove" data-extract-remove="${i}" title="删除该规则"></i>
+            </span>`).join('')}</div>`;
+    };
+    extractRulesEl?.addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-extract-remove]');
+        if (!rm) return;
+        const idx = Number(rm.getAttribute('data-extract-remove'));
+        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
+        if (Number.isInteger(idx) && rules[idx]) {
+            rules.splice(idx, 1);
+            adapter.settings.dialogueExtractRules = rules;
+            ctx.saveSettingsDebounced?.();
+            renderExtractRules();
+        }
+    });
+    document.getElementById('sd_extract_add_btn')?.addEventListener('click', () => {
+        const open = document.getElementById('sd_extract_open')?.value?.trim() || '';
+        const close = document.getElementById('sd_extract_close')?.value?.trim() || '';
+        if (!open || !close) return;
+        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
+        rules.push({ open, close, label: '正文', sample: '' });
+        adapter.settings.dialogueExtractRules = rules;
+        ctx.saveSettingsDebounced?.();
+        document.getElementById('sd_extract_open').value = '';
+        document.getElementById('sd_extract_close').value = '';
+        renderExtractRules();
+    });
+    document.getElementById('sd_extract_analyze')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        if (btn.classList.contains('sd_loading')) return;
+        setButtonLoading(btn, true);
+        if (extractResultEl) extractResultEl.innerHTML = '';
+        try {
+            const suggestion = await adapter.director.analyzeDialogueTags({ turns: 10 });
+            if (!suggestion || !suggestion.rules?.length) {
+                if (extractResultEl) extractResultEl.innerHTML = '<small class="sd_extract_msg">AI 未识别出明显的正文标签，可手动添加规则。</small>';
+                return;
+            }
+            const current = (Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : []).map(r => `${r.open}|${r.close}`);
+            if (extractResultEl) extractResultEl._suggestion = suggestion; // 供「采用」按钮取用
+            const items = suggestion.rules.map((r, i) => {
+                const exists = current.includes(`${r.open}|${r.close}`);
+                return `<div class="sd_extract_suggest">
+                    <span class="sd_chip">${escapeHtml(r.open)} … ${escapeHtml(r.close)}（${escapeHtml(r.label || '正文')}）</span>
+                    ${r.sample ? `<small class="sd_extract_sample">示例：${escapeHtml(r.sample)}</small>` : ''}
+                    ${exists ? '<small class="sd_extract_msg">已存在</small>'
+                        : `<span class="sd_extract_adopt" data-extract-adopt="${i}" title="采用这条规则"><i class="fa-solid fa-check"></i>采用</span>`}
+                </div>`;
+            }).join('');
+            if (extractResultEl) extractResultEl.innerHTML = `<div class="sd_extract_suggests">${items}</div>
+                ${suggestion.note ? `<small class="sd_hint">${escapeHtml(suggestion.note)}</small>` : ''}
+                <small class="sd_hint">AI 建议仅供参考，请检查标签样式与示例是否符合你的对话格式。</small>`;
+        } catch (err) {
+            if (extractResultEl) extractResultEl.innerHTML = `<small class="sd_extract_msg">分析失败：${escapeHtml(err?.message || err)}</small>`;
+        } finally {
+            setButtonLoading(btn, false);
+        }
+    });
+    extractResultEl?.addEventListener('click', (e) => {
+        const adopt = e.target.closest('[data-extract-adopt]');
+        if (!adopt) return;
+        const suggestion = document.getElementById('sd_extract_result')?._suggestion;
+        const idx = Number(adopt.getAttribute('data-extract-adopt'));
+        const rule = suggestion?.rules?.[idx];
+        if (!rule) return;
+        const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
+        rules.push(rule);
+        adapter.settings.dialogueExtractRules = rules;
+        ctx.saveSettingsDebounced?.();
+        renderExtractRules();
+        adopt.closest('.sd_extract_suggest')?.remove();
+    });
+
     renderHistoryOptions();
 }
 
