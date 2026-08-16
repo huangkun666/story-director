@@ -107,6 +107,27 @@ test('getRecentDialogue respects dialogueContextLimit budget', () => {
     assert.ok(dialogue.length <= 2000);
 });
 
+test('getRecentDialogue extracts bodies per rules and falls back to raw', () => {
+    const ctx = makeCtx({
+        chat: [
+            { mes: '【我们进城吧】然后闲聊了几句', is_user: true },
+            { mes: '【好，出发】路上小心', name: '角色' },
+            { mes: '没有标签的普通轮次', is_user: true },
+        ],
+    });
+    // 必须在创建 adapter 之前设置（ensureSettings 会锁定 settings 引用）
+    ctx.extensionSettings.story_director = { dialogueExtractRules: [{ open: '【', close: '】', label: '正文' }] };
+    const adapter = createSillyTavernAdapter(ctx);
+    const extracted = adapter.getRecentDialogue(3);
+    assert.ok(extracted.includes('我们进城吧'));
+    assert.ok(extracted.includes('好，出发'));
+    assert.ok(!extracted.includes('然后闲聊了几句')); // 标签外内容被剔除
+    // 无规则时回退原文
+    delete ctx.extensionSettings.story_director.dialogueExtractRules;
+    const raw = adapter.getRecentDialogue(3);
+    assert.ok(raw.includes('然后闲聊了几句'));
+});
+
 test('getCharacterCard includes a lightweight cast list to avoid invented NPCs', () => {
     const ctx = makeCtx({
         characters: [
@@ -311,9 +332,11 @@ test('main LLM mode delegates to SillyTavern generateRaw', async () => {
     const result = await adapter.director.generate({ userRequest: '测试' });
     assert.ok(result);
     assert.equal(result.theme, '主API');
-    assert.equal(ctx.rawCalls.length, 1);
-    assert.equal(ctx.rawCalls[0].jsonSchema, undefined); // 回归：绝不传 jsonSchema
-    assert.equal(typeof ctx.rawCalls[0].systemPrompt, 'string');
+    assert.equal(ctx.rawCalls.length, 2); // 两阶段：方向草案 + 正式生成
+    for (const call of ctx.rawCalls) {
+        assert.equal(call.jsonSchema, undefined); // 回归：绝不传 jsonSchema
+        assert.equal(typeof call.systemPrompt, 'string');
+    }
 });
 
 test('custom LLM mode degrades to null when independent API is broken', async () => {

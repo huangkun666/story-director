@@ -3,6 +3,7 @@
 import { createDirector } from './director.js';
 import { normalizeOutline, createEmptyOutline, deserializeOutline, serializeOutline } from './outline-store.js';
 import { createOpenAiCompatibleGenerator, listModels as listModelsApi, testConnection as testConnectionApi } from './openai-compat.js';
+import { extractDialogueBodies } from './dialogue-extract.js';
 
 const META_KEY = 'story_director';
 const INJECT_KEY = 'story_director';
@@ -30,11 +31,13 @@ export const DEFAULT_SETTINGS = {
     recentTurns: 5,
     cardContextLimit: 12000,        // 生成大纲时角色卡内容的最大字符数（防止巨型世界书/深度提示撑爆 prompt）
     dialogueContextLimit: 8000,     // 修订/体检时回看对话的最大字符数
+    dialogueExtractRules: [],      // 对话正文提取规则：[{open, close, label, sample}]，空 = 用原文
     useMemoryPlugin: true,          // 生成/修订/体检时接入 yuzuki-Memory 等长时记忆插件
     memoryContextLimit: 8000,       // 记忆插件上下文的字符上限
     generateMemoryMode: 'auto',     // 生成大纲时的记忆模式：auto / summary / vector / none
     useVectorMemory: true,          // 使用 yuzuki-Memory 向量库检索相关资料
     vectorMemoryLimit: 6000,        // 向量检索结果的字符上限
+    advancedRetrieval: true,        // 两阶段检索：先定方向草案再定向检索（更准，多一次轻量调用）
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
     windowPos: null,                // {left, top}：独立窗口上次拖拽位置（打开时恢复）
     theme: 'light',                 // 'light' 白天 / 'dark' 黑灰夜晚
@@ -321,7 +324,11 @@ export function createSillyTavernAdapter(ctx) {
             .filter(m => m && typeof m.mes === 'string')
             .map(m => `${m.is_user ? (c.name1 || '用户') : (m.name || c.name2 || '角色')}: ${String(m.mes).slice(0, 1200)}`)
             .join('\n');
-        return text.slice(0, limit);
+        // 有提取规则时按标签提取正文（无匹配自动回退原文），
+        // 相同预算覆盖更多轮次——记忆库落后约 20 轮，近期剧情靠对话
+        const rules = settings.dialogueExtractRules;
+        const finalText = (Array.isArray(rules) && rules.length) ? extractDialogueBodies(text, rules) : text;
+        return finalText.slice(0, limit);
     }
 
     function getLlmSettings() {

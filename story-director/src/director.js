@@ -1,7 +1,7 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
 import { normalizeOutline, createEmptyOutline } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, buildHistoryContext, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, buildHistoryContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
@@ -13,6 +13,7 @@ export function createDirector(deps) {
 
     const gen = makeStructuredGenerator(deps.generateRaw, OUTLINE_SCHEMA);
     const genCheck = makeStructuredGenerator(deps.generateRaw, CHECK_SCHEMA);
+    const genDirection = makeStructuredGenerator(deps.generateRaw, DIRECTION_SCHEMA);
 
     function recordHistory(reason) {
         try {
@@ -51,12 +52,60 @@ export function createDirector(deps) {
             const useSummary = memoryMode === 'auto' || memoryMode === 'summary';
             const useVector = memoryMode === 'auto' || memoryMode === 'vector';
 
-            const vectorQueries = [
+            // 保留已发生剧情：旧大纲的 done 节点作为前情参考传入（prompt），
+            // 生成后由 mergeHistoryIntoOutline 收进「前情·已完成」幕。
+            // 进行中节点是事实边界：时间线只能规划它之后（prompt 硬约束 + 合并兜底）。
+            const preserveHistory = String(settings.preserveHistory) !== 'false';
+            const historyContext = preserveHistory ? buildHistoryContext(currentOutline) : '';
+            const ongoingBeat = preserveHistory ? currentOutline.beats.find(b => b.status === 'active') : null;
+            const ongoingBeatText = ongoingBeat
+                ? `${ongoingBeat.title || ongoingBeat.id}（${ongoingBeat.summary || '进行中'}）`
+                : '';
+
+            // 近期对话始终携带：记忆插件的记忆库落后最近约 20 轮，最近剧情只有
+            // 聊天历史里有——无论首次生成、继续当前还是跳时间线重规划都要带，
+            // 它是「当前剧情位置」的事实来源。轮数与预算由 recentTurns /
+            // dialogueContextLimit 控制（adapter.getRecentDialogue）。
+            const recentDialogue = deps.getRecentDialogue?.(settings.recentTurns ?? 5) || '';
+
+            // 两阶段检索（advancedRetrieval，默认开）：
+            // 第一步先让模型「想清楚怎么写」——输出方向草案与精准检索词（草案看过
+            // 全部上下文但没看过资料）；第二步用这些检索词定向检索，而不是在还没
+            // 想好写什么时就拿泛 query 去检索。草案失败时降级为保底查询（单轮行为）。
+            const advancedRetrieval = String(settings.advancedRetrieval) !== 'false' && useVector;
+            let direction = '';
+            let modelQueries = [];
+            if (advancedRetrieval) {
+                try {
+                    const dirBundle = buildDirectionPrompt({
+                        characterCard: card,
+                        userRequest,
+                        timeline: requestedTimeline,
+                        pacing: settings.beatPacing || 'balanced',
+                        historyContext,
+                        ongoingBeatText,
+                        recentDialogue,
+                    });
+                    const dirResult = await genDirection(dirBundle);
+                    if (dirResult && typeof dirResult === 'object') {
+                        direction = String(dirResult.direction || '').trim();
+                        modelQueries = Array.isArray(dirResult.queries)
+                            ? dirResult.queries.map(q => String(q || '').trim().slice(0, 2000)).filter(Boolean).slice(0, 3)
+                            : [];
+                    }
+                } catch (err) {
+                    console.warn('[story-director] direction draft failed, falling back:', err);
+                }
+            }
+
+            // 向量检索：模型定向查询优先 + 保底查询（时间线/角色/焦点）
+            const baseQueries = [
                 [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedTimeline?.mustRead].filter(Boolean).join(' '),
                 // 角色查询词精简：全量名录会让 query 过长过泛，只取前 5 个主要角色
                 card.cast ? `角色与关系：${String(card.cast).split('；').slice(0, 5).join('；')}` : '',
                 currentOutline.focus?.nextStep || currentOutline.theme || '',
             ].filter(q => String(q || '').trim());
+            const vectorQueries = [...modelQueries, ...baseQueries];
             let vectorContext = '';
             let vectorHits = [];
             if (useVector) {
@@ -71,31 +120,6 @@ export function createDirector(deps) {
             }
             deps.setRetrievalHits?.(vectorHits);
 
-            // 保留已发生剧情：旧大纲的 done 节点作为前情参考传入（prompt），
-            // 生成后由 mergeHistoryIntoOutline 收进「前情·已完成」幕。
-            // 进行中节点是事实边界：时间线只能规划它之后（prompt 硬约束 + 合并兜底）。
-            const preserveHistory = String(settings.preserveHistory) !== 'false';
-            const historyContext = preserveHistory ? buildHistoryContext(currentOutline) : '';
-            const ongoingBeat = preserveHistory ? currentOutline.beats.find(b => b.status === 'active') : null;
-            const ongoingBeatText = ongoingBeat
-                ? `${ongoingBeat.title || ongoingBeat.id}（${ongoingBeat.summary || '进行中'}）`
-                : '';
-
-            // 近期对话携带规则：首次生成（无旧大纲）或时间线未被用户修改（从当前位置继续）
-            // 时携带近期对话，消除「新大纲与当前剧情脱节」；时间线被修改（跳到未来重规划）
-            // 时不带——事实边界 + 前情块已足够，且正如用户洞察：起点太远时近期对话无意义。
-            const stored = currentOutline.timeline || {};
-            const req = requestedTimeline || {};
-            const timelineEdited = !!(req.start || req.end || req.note || req.mustRead) && (
-                req.start !== stored.start
-                || req.end !== stored.end
-                || req.note !== stored.note
-                || req.mustRead !== stored.mustRead
-            );
-            const hasOutlineContent = !!(currentOutline.beats?.length || currentOutline.acts?.length);
-            const needsRecentDialogue = !hasOutlineContent || !timelineEdited;
-            const recentDialogue = needsRecentDialogue ? (deps.getRecentDialogue?.(settings.recentTurns ?? 5) || '') : '';
-
             const bundle = buildGeneratePrompt({
                 characterCard: card,
                 userRequest,
@@ -105,6 +129,7 @@ export function createDirector(deps) {
                 historyContext,
                 ongoingBeatText,
                 recentDialogue,
+                direction,
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
             });
@@ -130,6 +155,32 @@ export function createDirector(deps) {
             }
             refreshInjection();
             return result;
+        } finally {
+            running = false;
+        }
+    }
+
+    // 对话正文标签分析：扫描最近对话，让 AI 识别正文的包裹标签样式，
+    // 返回规则建议（不自动生效，由用户检查确认后写入设置）。
+    async function analyzeDialogueTags({ turns = 10 } = {}) {
+        if (running) return null;
+        running = true;
+        try {
+            const dialogue = deps.getRecentDialogue?.(turns) || '';
+            const bundle = buildDialogueAnalyzePrompt({ dialogue });
+            const result = await gen(bundle);
+            if (!result || typeof result !== 'object') return null;
+            const patterns = Array.isArray(result.patterns) ? result.patterns : [];
+            const rules = patterns
+                .filter(p => p && typeof p.open === 'string' && p.open && typeof p.close === 'string' && p.close)
+                .map(p => ({
+                    open: String(p.open).trim(),
+                    close: String(p.close).trim(),
+                    label: String(p.label || '正文').trim(),
+                    sample: String(p.sample || '').trim(),
+                }))
+                .slice(0, 5);
+            return { rules, note: String(result.note || '').trim() };
         } finally {
             running = false;
         }
@@ -256,5 +307,5 @@ export function createDirector(deps) {
         }
     }
 
-    return { generate, revise, check, suggestBeat, refreshInjection, isRunning: () => running };
+    return { generate, revise, check, suggestBeat, analyzeDialogueTags, refreshInjection, isRunning: () => running };
 }

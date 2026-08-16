@@ -164,7 +164,26 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', memoryContext = '', vectorContext = '' } = {}) {
+// 方向草案 schema：两阶段生成的第一步——先定方向与检索意图，再定向检索，最后正式生成。
+// 解决「query 在还没想好写什么时执行」导致的检索不准确问题。
+export const DIRECTION_SCHEMA = {
+    type: 'object',
+    additionalProperties: true,
+    required: ['direction', 'queries'],
+    properties: {
+        direction: {
+            type: 'string',
+            description: '大纲方向：当前剧情位置与接下来要规划的内容，几句话即可',
+        },
+        queries: {
+            type: 'array',
+            description: '2-4 条检索词：为写出这个方向需要查证的资料（人名/地名/关键事件/设定术语，越具体越好）',
+            items: { type: 'string' },
+        },
+    },
+};
+
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -189,6 +208,10 @@ export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 
 ${dialogueText}
 
 注意：以上对话发生在当前剧情位置，新大纲的开头必须与这些对话自然衔接，不得矛盾、不得重复已发生的事。\n` : '';
+    // 方向草案（两阶段生成第一步的产物）：按此展开细化
+    const directionText = String(direction || '').trim();
+    const directionBlock = directionText ? `【大纲方向（先行草案，请按此展开并细化）】
+${directionText}\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note || t.mustRead);
     const mustReadBlock = t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
     const timelineBlock = (t.start || t.end || t.note)
@@ -223,7 +246,7 @@ ${mustReadBlock}${timelineBlock}
 
 ${pacingBlock}
 
-${ongoingBlock}${dialogueBlock}${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
+${ongoingBlock}${dialogueBlock}${historyBlock}${directionBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【新人物许可（允许但须交代）】
@@ -283,6 +306,55 @@ export function compactOutlineForRevision(outline) {
             ? { id: b.id, title: b.title, status: b.status, actId: b.actId }
             : b)),
     };
+}
+
+// 两阶段生成第一步：方向草案。输入与正式生成相同的上下文（不含向量结果），
+// 让模型先「想清楚怎么写」并输出精准检索词，再执行第二轮检索，最后正式生成。
+// 解决「query 在还没想好写什么时执行」导致的检索不准确问题。
+export function buildDirectionPrompt({ characterCard, userRequest = '', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '' } = {}) {
+    const t = (timeline && typeof timeline === 'object') ? timeline : {};
+    const historyText = String(historyContext || '').trim();
+    const historyBlock = historyText ? `【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n${historyText}\n` : '';
+    const ongoingText = String(ongoingBeatText || '').trim();
+    const ongoingBlock = ongoingText ? `【事实边界（必须遵守）】
+当前剧情正在进行：「${ongoingText}」。该节点及它之前的一切是既定事实，不可重新规划，大纲只能规划它之后。\n` : '';
+    const dialogueText = String(recentDialogue || '').trim();
+    const dialogueBlock = dialogueText ? `【近期对话（当前剧情位置的最新事实）】
+${dialogueText}\n` : '';
+    const timelineBlock = (t.start || t.end || t.note)
+        ? `【时间线约束】
+- 开始时间：${t.start || '（未指定）'}，结束时间：${t.end || '（未指定）'}
+${t.note ? `- 补充约束：${t.note}` : ''}\n`
+        : '【时间线约束】用户未指定时间线，请自行推定。\n';
+    const pacingMeta = pacingInfo(pacing);
+    const system = '你是叙事导演。先想清楚新大纲的方向，再列出为写出这个方向需要查证哪些资料（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const prompt = `请为以下角色扮演规划新大纲的方向。方向由故事逻辑与上下文决定，不要只围绕已有资料写。
+
+${mustReadPrompt(t)}${timelineBlock}【节点节奏（档位：${pacingMeta.label}）】
+${pacingMeta.desc}。
+
+${ongoingBlock}${dialogueBlock}${historyBlock}【角色卡】
+${cardToText(characterCard)}
+
+【用户要求】
+${userRequest || '（未指定，请自行设计一个有深度的完整故事方向）'}
+
+请按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
+
+{
+  "direction": "大纲方向：当前剧情位置 + 接下来要规划的内容（几句话，具体到人物、事件、冲突）",
+  "queries": ["检索词1", "检索词2", "检索词3"]
+}
+
+要求：
+1) direction 要具体：新时间线内会发生什么、谁与谁冲突、关键转折；
+2) queries 是 2-4 条检索词，用于查证方向中不确定的资料（人名/地名/关键事件/设定术语，越具体越好，如「曹操的皮甲」「沁水渠」）；
+3) 检索词不要是「角色扮演」「故事大纲」这类泛词。`;
+    return { system, prompt };
+}
+
+function mustReadPrompt(t) {
+    return t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
 }
 
 export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, pacing = 'balanced', memoryContext = '', vectorContext = '' }) {
@@ -354,6 +426,26 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 
 // 单个节点的 AI 生成：基于当前大纲 + 用户一句话提示，输出一个新 beat 的 JSON。
 // 用于节点编辑器的「AI 生成」入口（生成后填入表单，由用户确认再保存）。
+// 对话正文标签分析：让 AI 扫描最近对话，识别正文的包裹标签样式，
+// 返回规则建议供用户检查确认（不做自动生效）。
+export function buildDialogueAnalyzePrompt({ dialogue = '' } = {}) {
+    const system = '你是叙事导演。分析角色扮演对话中「正文」的标签样式，输出 JSON。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const prompt = `【最近对话】
+${String(dialogue || '').slice(0, 8000)}
+
+请分析这段对话中正文（角色实际说出/做出的内容，区别于动作旁白、系统提示、括号内注释等）的包裹标签样式，按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
+
+{
+  "patterns": [
+    { "open": "标签开始符，如 【 或 *", "close": "标签结束符，如 】 或 *", "label": "该标签含义，如 正文", "sample": "从对话中摘一句真实提取结果示例" }
+  ],
+  "note": "一句话说明这些规则如何工作（可选）"
+}
+
+要求：只输出对话中真实出现的标签样式（1-3 条）；若对话中没有明显的标签包裹正文，patterns 输出空数组；不要臆造不存在的标签。`;
+    return { system, prompt };
+}
+
 export function buildBeatPrompt({ outline, userHint = '' } = {}) {
     const system = '你是叙事导演。根据当前大纲与用户提示，设计一个新情节节点（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `【当前大纲】

@@ -287,6 +287,32 @@ test('director.suggestBeat returns null on garbage output', async () => {
     assert.equal(await d.suggestBeat({ userHint: 'x' }), null);
 });
 
+test('director.analyzeDialogueTags returns normalized rule suggestions', async () => {
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            patterns: [
+                { open: '【', close: '】', label: '正文', sample: '主角: 我们进城吧' },
+                { open: '', close: 'x', label: '坏的' }, // 非法规则被过滤
+            ],
+            note: '正文包裹在【】中',
+        }),
+        getRecentDialogue: () => '主角: 【我们进城吧】',
+    });
+    const d = createDirector(deps);
+    const suggestion = await d.analyzeDialogueTags();
+    assert.equal(suggestion.rules.length, 1);
+    assert.equal(suggestion.rules[0].open, '【');
+    assert.equal(suggestion.rules[0].close, '】');
+    assert.equal(suggestion.rules[0].sample, '主角: 我们进城吧');
+    assert.equal(suggestion.note, '正文包裹在【】中');
+});
+
+test('director.analyzeDialogueTags returns null on garbage output', async () => {
+    const { deps } = makeDeps({ generateRaw: async () => 'garbage' });
+    const d = createDirector(deps);
+    assert.equal(await d.analyzeDialogueTags(), null);
+});
+
 test('director.generate preserves done beats as history by default', async () => {
     const prev = createEmptyOutline();
     prev.beats = [{ id: 'b1', title: '已发生', summary: 's', status: 'done' }];
@@ -364,7 +390,7 @@ test('director.generate includes recent dialogue when timeline unchanged (contin
     assert.ok(receivedPrompt.includes('我们进城吧'));
 });
 
-test('director.generate omits recent dialogue when timeline was edited (jump to future)', async () => {
+test('director.generate includes recent dialogue even when timeline was edited (memory lags ~20 turns)', async () => {
     let receivedPrompt = '';
     const prev = createEmptyOutline();
     prev.timeline = { start: '建安五年', end: '建安十三年', note: '', mustRead: '' };
@@ -382,8 +408,9 @@ test('director.generate omits recent dialogue when timeline was edited (jump to 
     deps.setOutline = (o) => { stored = o; };
     const d = createDirector(deps);
     await d.generate({ userRequest: '测试', timeline: { start: '建安十年', end: '建安十三年', note: '', mustRead: '' } });
-    assert.ok(!receivedPrompt.includes('近期对话'));
-    assert.ok(!receivedPrompt.includes('我们进城吧'));
+    // 记忆库落后最近约 20 轮：无论是否改时间线，近期对话始终携带
+    assert.ok(receivedPrompt.includes('近期对话'));
+    assert.ok(receivedPrompt.includes('我们进城吧'));
 });
 
 test('director.generate includes recent dialogue on first generation (empty outline)', async () => {
@@ -418,4 +445,71 @@ test('director.generate trims cast query to the first five characters', async ()
     const castQuery = receivedQueries.find(q => q.startsWith('角色与关系'));
     assert.ok(castQuery.includes('角色4')); // 前 5 个在内
     assert.ok(!castQuery.includes('角色5')); // 第 6 个被截掉
+});
+
+test('director.generate runs two-stage retrieval with model queries first', async () => {
+    const calls = [];
+    const receivedQueries = [];
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            calls.push(opts.prompt);
+            // 第一次调用 = 方向草案；第二次 = 正式生成
+            if (calls.length === 1) {
+                return JSON.stringify({ direction: '追查曹操的皮甲，沁水渠决战', queries: ['曹操的皮甲', '沁水渠'] });
+            }
+            return JSON.stringify({ theme: '新' });
+        },
+        getVectorMemory: async (queries) => {
+            receivedQueries.push(...queries);
+            return { text: '【资料】皮甲情报', hits: [{ query: '曹操的皮甲', source: '资料', text: '皮甲情报' }] };
+        },
+        getCharacterCard: () => ({ name: 'Alice', cast: '黄坤（主角）；司马朗（配角）' }),
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    // 定向查询在最前，保底查询随后
+    assert.equal(receivedQueries[0], '曹操的皮甲');
+    assert.equal(receivedQueries[1], '沁水渠');
+    assert.ok(receivedQueries.some(q => q.startsWith('角色与关系')));
+    // 正式生成 prompt 含方向草案与检索资料
+    const finalPrompt = calls[1];
+    assert.ok(finalPrompt.includes('大纲方向（先行草案'));
+    assert.ok(finalPrompt.includes('追查曹操的皮甲'));
+    assert.ok(finalPrompt.includes('皮甲情报'));
+});
+
+test('director.generate degrades to single-stage when direction draft fails', async () => {
+    const calls = [];
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            calls.push(opts.prompt);
+            if (calls.length === 1) return 'garbage'; // 草案解析失败
+            return JSON.stringify({ theme: '新' });
+        },
+        getVectorMemory: async () => ({ text: '资料', hits: [] }),
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    const d = createDirector(deps);
+    const result = await d.generate({ userRequest: '测试' });
+    assert.ok(result); // 生成不中断
+    assert.equal(calls.length, 2);
+    assert.ok(!calls[1].includes('大纲方向（先行草案')); // 无 direction 块
+    assert.ok(calls[1].includes('资料')); // 保底检索结果仍在
+});
+
+test('director.generate skips direction draft when advancedRetrieval is off', async () => {
+    const calls = [];
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            calls.push(opts.prompt);
+            return JSON.stringify({ theme: '新' });
+        },
+        getVectorMemory: async () => ({ text: '', hits: [] }),
+        getSettings: () => ({ enabled: true, recentTurns: 5, advancedRetrieval: false }),
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    assert.equal(calls.length, 1); // 单轮
+    assert.ok(!calls[0].includes('大纲方向（先行草案'));
 });
