@@ -1,12 +1,11 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
-import { normalizeOutline, createEmptyOutline } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, buildHistoryContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
+import { normalizeOutline, createEmptyOutline, mergeHistoryIntoOutline, mergePlannedOutline } from './outline-store.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, buildHistoryContext, buildPlannedOutlineContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
 import { renderInstruction } from './injector.js';
-import { mergeHistoryIntoOutline } from './outline-store.js';
 import { log } from './logger.js';
 
 export function createDirector(deps) {
@@ -67,6 +66,13 @@ export function createDirector(deps) {
             const ongoingBeat = preserveHistory ? currentOutline.beats.find(b => b.status === 'active') : null;
             const ongoingBeatText = ongoingBeat
                 ? `${ongoingBeat.title || ongoingBeat.id}（${ongoingBeat.summary || '进行中'}）`
+                : '';
+            // 部分重规划：用户显式指定了时间线 = 只重设计该范围内的部分，
+            // 范围外的既有规划（含 pending）由 prompt 要求照抄 + mergePlannedOutline
+            // 按 id 强制保留——其他时间范围的大纲不会被覆盖
+            const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
+            const plannedOutline = (hasRequestedTimeline && preserveHistory)
+                ? buildPlannedOutlineContext(currentOutline)
                 : '';
 
             // 近期对话始终携带：记忆插件的记忆库落后最近约 20 轮，最近剧情只有
@@ -162,13 +168,13 @@ export function createDirector(deps) {
                 direction,
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
+                plannedOutline,
             });
             const result = await gen(bundle);
             if (result) {
                 let next = normalizeOutline(result);
                 log('info', 'llm', '生成完成', `耗时 ${Date.now() - t0}ms；${next.beats.length} 节点 / ${next.acts.length} 幕 / ${next.arcs.length} 弧光`);
                 // 用户显式指定过时间线时，以用户输入为准（模型输出只补漏）
-                const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
                 if (hasRequestedTimeline) {
                     next.timeline = {
                         start: requestedTimeline.start || next.timeline.start,
@@ -182,6 +188,10 @@ export function createDirector(deps) {
                 }
                 if (preserveHistory) {
                     next = mergeHistoryIntoOutline(next, currentOutline);
+                    // 部分重规划：范围外既有节点按 id 强制恢复原细节（不可重规划）
+                    if (hasRequestedTimeline) {
+                        next = mergePlannedOutline(next, currentOutline);
+                    }
                 }
                 recordHistory('generate');
                 deps.setOutline(next);

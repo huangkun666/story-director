@@ -451,6 +451,47 @@ export function mergeHistoryIntoOutline(newOutline, oldOutline) {
     return normalizeOutline(o);
 }
 
+// 部分重规划合并（用户显式指定时间线时的代码层事实边界）：
+// 模型输出中 id 与旧大纲相同的节点 = 「时间线范围外」的既有规划，强制恢复旧细节
+// （title/summary/type/cast/actId）——模型就算偷偷改了也改不回去，不依赖模型纪律。
+// 模型新增/重新设计的节点（新 id）保持原样；旧大纲中未保留在输出里的节点视为
+// 范围内被重规划，丢弃。恢复 actId 时若对应幕不在输出中，用旧幕标题补幕。
+export function mergePlannedOutline(newOutline, oldOutline) {
+    const o = normalizeOutline(newOutline);
+    if (!oldOutline || typeof oldOutline !== 'object') return o;
+    const old = normalizeOutline(oldOutline);
+    if (!old.beats.length) return o;
+    const oldById = new Map(old.beats.map(b => [b.id, b]));
+    const oldActById = new Map(old.acts.map(a => [a.id, a]));
+
+    o.beats = o.beats.map(beat => {
+        const prev = oldById.get(beat.id);
+        if (!prev) return beat;
+        return {
+            ...beat,
+            title: prev.title,
+            summary: prev.summary,
+            type: prev.type,
+            cast: [...prev.cast],
+            actId: prev.actId || beat.actId,
+        };
+    });
+
+    // 范围外节点恢复原幕归属；幕缺失时用旧幕信息补幕（幂等）
+    for (const beat of o.beats) {
+        if (!beat.actId) continue;
+        if (o.acts.some(a => a.id === beat.actId)) continue;
+        const oldAct = oldActById.get(beat.actId);
+        o.acts.push({
+            id: beat.actId,
+            title: oldAct?.title || beat.actId,
+            summary: oldAct?.summary || '',
+            beats: [],
+        });
+    }
+    return normalizeOutline(o);
+}
+
 // ---------- 角色（arcs）与伏笔的受控编辑 ----------
 // 与节点编辑同一约定：不可变返回、char 名/id 定位、引用自愈交给 normalize。
 

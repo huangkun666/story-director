@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, diagnoseOutline } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, mergePlannedOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, diagnoseOutline } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -628,4 +628,51 @@ test('diagnoseOutline flags legacy timeline.mustRead migration and empty outline
     assert.equal(empty.beats, 0);
     assert.equal(empty.focusBeat, '（无）');
     assert.equal(empty.issues.length, 0);
+});
+
+test('mergePlannedOutline restores out-of-range beats by id and keeps new ones', () => {
+    const oldOutline = normalizeOutline({
+        acts: [
+            { id: 'act_1', title: '第一章：开端', summary: 's1', beats: [] },
+            { id: 'act_2', title: '第二章：发展', summary: 's2', beats: [] },
+        ],
+        beats: [
+            { id: 'beat_1', actId: 'act_1', title: '城外相遇', summary: '旧概要', type: 'setup', status: 'done', cast: ['主角'] },
+            { id: 'beat_2', actId: 'act_2', title: '城内调查', summary: '旧调查', type: 'conflict', status: 'pending', cast: ['主角', '配角'] },
+        ],
+    });
+    // 模型输出：beat_1 被改写（应为范围外保留）、新增 beat_3、旧 beat_2 被删除
+    const modelOut = normalizeOutline({
+        acts: [{ id: 'act_2', title: '第二章', summary: '', beats: [] }],
+        beats: [
+            { id: 'beat_1', actId: 'act_2', title: '模型改的标题', summary: '模型改的概要', type: 'twist', status: 'pending', cast: ['反派'] },
+            { id: 'beat_3', actId: 'act_2', title: '新节点', summary: '范围内新规划', type: 'conflict', status: 'pending', cast: ['主角'] },
+        ],
+    });
+    const merged = mergePlannedOutline(modelOut, oldOutline);
+    // beat_1（id 匹配旧大纲）= 范围外 → 强制恢复旧细节与原幕
+    const b1 = merged.beats.find(b => b.id === 'beat_1');
+    assert.equal(b1.title, '城外相遇');
+    assert.equal(b1.summary, '旧概要');
+    assert.equal(b1.type, 'setup');
+    assert.equal(b1.actId, 'act_1');
+    // 旧幕 act_1 被补回（含旧标题）
+    assert.ok(merged.acts.some(a => a.id === 'act_1' && a.title === '第一章：开端'));
+    // 模型新节点保留
+    const b3 = merged.beats.find(b => b.id === 'beat_3');
+    assert.equal(b3.title, '新节点');
+    // 旧 beat_2 不在输出中 = 范围内被重规划，丢弃
+    assert.ok(!merged.beats.some(b => b.id === 'beat_2'));
+    // 引用完整：每个 beat 都有幕归属
+    for (const b of merged.beats) {
+        assert.ok(merged.acts.some(a => a.id === b.actId), `beat ${b.id} 缺少幕 ${b.actId}`);
+    }
+});
+
+test('mergePlannedOutline returns new outline unchanged when old has no beats', () => {
+    const oldOutline = createEmptyOutline();
+    const modelOut = normalizeOutline({ beats: [{ id: 'b1', title: 'x', summary: 's', status: 'pending' }] });
+    const merged = mergePlannedOutline(modelOut, oldOutline);
+    assert.equal(merged.beats.length, 1);
+    assert.equal(merged.beats[0].title, 'x');
 });

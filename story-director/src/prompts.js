@@ -148,6 +148,26 @@ export function buildHistoryContext(outline) {
     return `【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n${lines.join('\n')}\n`;
 }
 
+// 部分重规划：用户显式指定新时间线时，旧大纲中「时间线范围外」的规划必须保留。
+// 输出全部节点（含 pending，按幕组织、带 id），让模型判断哪些在范围外并照抄；
+// 合并层（mergePlannedOutline）再按 id 强制恢复旧细节——代码层兜底，不依赖模型纪律。
+export function buildPlannedOutlineContext(outline) {
+    const o = normalizeOutline(outline);
+    if (!o.beats.length) return '';
+    const lines = o.acts.map(act => {
+        const actBeats = o.beats.filter(b => b.actId === act.id);
+        if (!actBeats.length) return `- 【${act.title || act.id}】（无节点）`;
+        return [
+            `- 【${act.title || act.id}】`,
+            ...actBeats.map(b => {
+                const state = b.status === 'done' ? '已完成' : (b.status === 'active' ? '进行中' : '待规划');
+                return `  - ${b.id}｜${state}｜${b.title || '（无标题）'}：${b.summary || '（无概要）'}${b.cast?.length ? `（参与：${b.cast.join('、')}）` : ''}`;
+            }),
+        ].join('\n');
+    });
+    return `【既有大纲（时间线范围外的部分必须原样保留）】\n${lines.join('\n')}\n`;
+}
+
 function cardToText(card) {
     const c = card || {};
     return [
@@ -183,7 +203,7 @@ export const DIRECTION_SCHEMA = {
     },
 };
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '', plannedOutline = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -212,6 +232,14 @@ ${dialogueText}
     const directionText = String(direction || '').trim();
     const directionBlock = directionText ? `【大纲方向（先行草案，请按此展开并细化）】
 ${directionText}\n` : '';
+    // 部分重规划（用户显式指定时间线）：时间线范围外的既有规划必须原样保留，
+    // 只重新设计范围内的部分；合并层会按 id 强制恢复范围外节点的原细节
+    const plannedText = String(plannedOutline || '').trim();
+    const plannedBlock = plannedText ? `${plannedText}
+规则：
+- 时间线范围之外的既有节点：必须原样保留（id、title、summary、cast、所属幕一字不改），把它们照抄进输出的 JSON；
+- 时间线范围之内的既有节点：可以重新设计（也可以保留）；
+- 只重新设计时间线内的部分，不要改动时间线之外的任何既有规划。\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note);
     // 必读设定：顶层独立字段优先；兼容旧调用把 mustRead 放在 timeline 对象里
     const mustReadText = String(mustRead || '').trim() || String(t.mustRead || '').trim();
@@ -248,7 +276,7 @@ ${mustReadBlock}${timelineBlock}
 
 ${pacingBlock}
 
-${ongoingBlock}${dialogueBlock}${historyBlock}${directionBlock}${memoryBlock}${vectorBlock}【角色卡】
+${ongoingBlock}${dialogueBlock}${historyBlock}${plannedBlock}${directionBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【新人物许可（允许但须交代）】

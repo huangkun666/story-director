@@ -617,3 +617,64 @@ test('director.generate runs vector retrieval in two batches (model queries then
     assert.deepEqual(batchCalls[0], ['皮甲']); // 第一批 = 模型定向查询
     assert.ok(batchCalls[1].some(q => q.startsWith('角色与关系'))); // 第二批 = 保底查询
 });
+
+test('director.generate with timeline preserves out-of-range planned beats (partial replan)', async () => {
+    // 用户指定新时间线（部分重规划）：旧大纲中范围外的既有规划必须保留
+    let stored = createEmptyOutline();
+    stored.timeline = { start: '第一章', end: '第十章' };
+    stored.acts = [{ id: 'act_1', title: '第一卷', summary: '', beats: ['b1', 'b2'] }];
+    stored.beats = [
+        { id: 'b1', actId: 'act_1', title: '旧开端', summary: '旧概要', type: 'setup', status: 'done', cast: ['主角'] },
+        { id: 'b2', actId: 'act_1', title: '旧规划节点', summary: '旧规划概要', type: 'conflict', status: 'pending', cast: ['主角'] },
+    ];
+    let receivedPrompt = '';
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            // 模型输出：保留了 b1（但改了内容，应被强制恢复）+ 删了 b2 + 新增 b3
+            return JSON.stringify({
+                theme: '新主题',
+                timeline: { start: '第三章', end: '第五章' },
+                acts: [{ id: 'act_2', title: '新幕', summary: '', beats: ['b1', 'b3'] }],
+                beats: [
+                    { id: 'b1', actId: 'act_2', title: '模型改写', summary: '模型概要', type: 'twist', status: 'done', cast: ['反派'] },
+                    { id: 'b3', actId: 'act_2', title: '新节点', summary: '新规划', type: 'conflict', status: 'pending', cast: ['主角'] },
+                ],
+            });
+        },
+        getSettings: () => ({ enabled: true, recentTurns: 5, preserveHistory: true }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '', timeline: { start: '第三章', end: '第五章' } });
+    // prompt 要求范围外节点原样保留（含 id）
+    assert.ok(receivedPrompt.includes('原样保留'));
+    assert.ok(receivedPrompt.includes('b2'));
+    const o = deps.getOutline();
+    // b1 被强制恢复旧细节（模型改写无效）
+    const b1 = o.beats.find(b => b.id === 'b1');
+    assert.equal(b1.title, '旧开端');
+    assert.equal(b1.summary, '旧概要');
+    // b2 未出现在模型输出 = 范围内被重规划，丢弃
+    assert.ok(!o.beats.some(b => b.id === 'b2'));
+    // b3 新节点保留
+    assert.ok(o.beats.some(b => b.id === 'b3' && b.title === '新节点'));
+    // 用户时间线生效
+    assert.equal(o.timeline.start, '第三章');
+    assert.equal(o.timeline.end, '第五章');
+});
+
+test('director.generate without timeline does not include planned-outline block', async () => {
+    let receivedPrompt = '';
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify({ theme: '新' });
+        },
+        getSettings: () => ({ enabled: true, recentTurns: 5, preserveHistory: true }),
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '' });
+    assert.ok(!receivedPrompt.includes('原样保留')); // 未指定时间线 = 完整重生成，不走部分重规划
+});
