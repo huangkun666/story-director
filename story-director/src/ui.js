@@ -632,6 +632,26 @@ export function bindUI(ctx, adapter) {
         baseUrl: document.getElementById('sd_llm_base_url')?.value?.trim() || '',
         apiKey: document.getElementById('sd_llm_api_key')?.value?.trim() || '',
     });
+    const llmModelInput = document.getElementById('sd_llm_model');
+    const llmModelChips = document.getElementById('sd_llm_model_chips');
+    // 模型 chip 面板：全部模型常驻可见，点击填入输入框（datalist 会被输入值过滤，弃用）
+    const renderModelChips = (models) => {
+        if (!llmModelChips) return;
+        if (!models?.length) { llmModelChips.innerHTML = ''; return; }
+        const current = llmModelInput?.value?.trim() || '';
+        llmModelChips.innerHTML = models.map(m => `
+            <span class="sd_chip sd_llm_model_chip${m === current ? ' sd_llm_model_chip_active' : ''}" data-model="${escapeHtml(m)}">${escapeHtml(m)}</span>
+        `).join('');
+    };
+    llmModelChips?.addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-model]');
+        if (!chip || !llmModelInput) return;
+        const model = chip.getAttribute('data-model');
+        llmModelInput.value = model;
+        llm.model = model;
+        saveSettings();
+        renderModelChips([...llmModelChips.querySelectorAll('[data-model]')].map(c => c.getAttribute('data-model')));
+    });
     document.getElementById('sd_llm_fetch_models')?.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
         if (btn.classList.contains('sd_loading')) return;
@@ -639,14 +659,14 @@ export function bindUI(ctx, adapter) {
         showLlmTest('', true);
         try {
             const models = await adapter.listModels(currentLlmForm());
-            const dl = document.getElementById('sd_llm_model_list');
-            if (dl) dl.innerHTML = models.map(m => `<option value="${escapeHtml(m)}"></option>`).join('');
+            renderModelChips(models);
             if (models.length) {
-                showLlmTest(`已获取 ${models.length} 个模型，点击模型输入框可选`, true);
+                showLlmTest(`已获取 ${models.length} 个模型，点击下方标签即可选用`, true);
             } else {
                 showLlmTest('获取失败：连接成功但未返回模型列表', false);
             }
         } catch (err) {
+            renderModelChips([]);
             showLlmTest(`获取失败：${err?.message || err}`, false);
         } finally {
             setButtonLoading(btn, false);

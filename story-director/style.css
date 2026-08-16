@@ -846,6 +846,31 @@
     color: #d64545;
 }
 
+/* 模型 chip 面板：全部候选常驻可见，点击选用 */
+.sd_llm_model_chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    max-height: 96px;
+    overflow-y: auto;
+    margin-top: 2px;
+}
+
+.sd_llm_model_chip {
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+
+.sd_llm_model_chip:hover {
+    background: #e8edff;
+}
+
+.sd_llm_model_chip_active {
+    background: #6b8cff;
+    color: #ffffff;
+    border-color: #6b8cff;
+}
+
 /* ---------- 分栏工作台 ---------- */
 .sd_workspace {
     display: flex;
