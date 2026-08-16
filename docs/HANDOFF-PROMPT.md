@@ -125,7 +125,8 @@ story-director/
 3. **五个页签**：大纲总览 / 故事设定（时间线+必读设定+节点节奏+保留前情+故事总览卡）/ 生成与记忆（生成参数+修订参数+记忆插件+对话正文提取）/ 角色与伏笔 / API 与工具。
 4. **完整大纲生成（两阶段检索）**：`advancedRetrieval`（默认开）——① 方向草案（模型先输出 direction + 2-4 条精准检索词）→ ② 用草案 queries + 保底三路（时间线/角色前5/焦点）定向检索 → ③ 正式生成（direction 块 + 资料）。草案失败自动降级单轮。题材通用，强制四线；新人物许可块。
 5. **时间线约束**：`timeline {start,end,note}`，所有节点必须落在区间内；**必读设定**是顶层独立字段（`outline.mustRead`，世界观级硬约束，旧数据 `timeline.mustRead` 由 normalize 自动迁移），最高优先级；**节点节奏**（beatPacing 相对跨度三档）。
-6. **事实边界 + 前情保留 + 部分重规划**：`preserveHistory`（默认 true）——重新生成时旧 done/active 节点收进「前情·已完成」幕（默认折叠）；active 保持 active 并成为唯一焦点（新大纲第一个 active 降为 pending）；prompt 硬约束 start 早于进行中节点自动顺延。**部分重规划**：用户**显式指定时间线** = 只重设计该范围内的部分——prompt 传全部旧节点（buildPlannedOutlineContext，含 id/pending）并要求范围外原样保留；合并层 `mergePlannedOutline` 按 id **强制恢复**范围外节点原细节（title/summary/type/cast/actId + 补旧幕）——代码层兜底，模型改写无效；旧 pending 未出现在输出 = 视为范围内被重规划，丢弃。未指定时间线 = 完整重新生成（现状）。关掉 preserveHistory = 弃史重来；重玩 = 用户快照回滚。
+6. **事实边界 + 前情保留**：`preserveHistory`（默认 true）——重新生成时旧 done/active 节点收进「前情·已完成」幕（默认折叠）；active 保持 active 并成为唯一焦点（新大纲第一个 active 降为 pending）；prompt 硬约束 start 早于进行中节点自动顺延。**时间线只是生成约束（故事跨度），不再触发部分重规划**——局部重做统一走「修改这一幕」（幕级结构化边界，比时间范围可靠）；生成按钮在有内容时弹「全量重写」确认警示。关掉 preserveHistory = 弃史重来；重玩 = 用户快照回滚。
+
 7. **近期对话上下文（记忆指针驱动）**：记忆插件每 N 轮（默认 20）更新一次并维护记忆指针。`adapter.getMemoryGap()` 只读调用 `YuzukiMemory.Storage.loadState()` 读 `settings.manualPointers.summary`，`getRecentDialogue` 的轮数 = **指针之后缺失楼层数（+1 轮余量，clamp 60 轮）**，无指针（记忆未启用/无状态/读取失败）回落 `recentTurns`。对话**始终携带**（生成/修订/体检）。
 8. **对话正文提取（白名单 + 黑名单，输入即生效）**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数，**HTML 标签规则分两种**——① 白名单 `{ tag: 'content' }`：只提取 `<content>…</content>`（可带属性、跨行）；② 黑名单 `{ tag: 'think', exclude: true }`：**删除 `<think>` 等无用标签块、保留其余全文**（正文没标签包裹时的兜底）。先黑名单清理、再白名单提取（可叠加）；无规则/白名单无匹配 → 返回清理后的全文（默认提取全文）。标签名不硬编码；字符对模式（{ open, close }）兼容旧规则。**UI 无按钮无 chips**：两个输入框（保留/排除，逗号分隔多标签）输入即生效（300ms 防抖写设置）；「AI 分析」识别正文标签（exclude: false）与应排除标签（exclude: true），**归一化容错**：兼容 tag/html_tag/tagName 字段名、模型没给 tag 时从 sample 里的 `<标签>` 兜底解析，用户逐条确认后生效；作用于生成/修订/体检。
 9. **保守修订**：prompt 明确「大纲不是剧情日志」——常规轮次只校准 focus，里程碑才推进节点；锁定模式用增量补丁（buildRevisePatchPrompt + applyPatch，输出省 ~90%）；输入侧压缩 done 节点（compactOutlineForRevision），合并时恢复细节。
@@ -135,7 +136,8 @@ story-director/
 13. **角色与伏笔页签**：角色卡网格（欲望/缺陷/成长 + 状态 + **出场节点派生 chips 跳转高亮**）+ 编辑/新增/删除（arc 编辑器 modal）；伏笔管理（状态筛选 + 编辑/一键回收/删除 + 回收节点选择器 + 跳转高亮）。
 14. **伏笔高亮**：总览页节点行显示指向它的活跃伏笔 chips（hover 看 hint）；伏笔卡「回收于 X」可点击跳转总览闪烁定位。
 15. **派生幕编号**：渲染徽章按数组顺序派生；「重编幕号」工具（renumberActTitles）。
-16. **AI 生成节点 + 幕级重规划**：节点编辑器顶部「AI 生成」——一句话提示 + 当前大纲 → 建议节点填入表单确认后保存（suggestBeat）；**幕级重规划（replanAct）**——总览页每幕头部「修改这一幕」按钮（前情幕除外），点击打开**模态小窗口**（sd_replan_editor，同节点编辑器样式）：目标幕信息条（第 N 幕/现有节点数）+ 修改要求 textarea（可留空）→ 确认后执行。prompt 给目标幕 + **前后幕衔接锚点**（前一幕结尾非 done 节点 + 后一幕开头节点）+ 必读设定/时间线/用户要求，模型只输出这一幕（标题/概要/新节点）；合并层 `replaceActBeats` **只替换该幕节点**（新 id），其他幕代码级不动，旧节点删除后的悬空引用（伏笔 beatId/focus）由 normalize 自愈，焦点若在被删节点则指向新幕第一个节点；入撤销栈 + 留快照。**比时间线部分重规划可靠**（幕是结构化边界，不依赖模型对时间范围的理解；时间线的 mergePlannedOutline 仍保留作兜底）。
+16. **AI 生成节点 + 幕级重规划**：节点编辑器顶部「AI 生成」——一句话提示 + 当前大纲 → 建议节点填入表单确认后保存（suggestBeat）；**幕级重规划（replanAct）**——总览页每幕头部「修改这一幕」按钮（前情幕除外），模态小窗口（sd_replan_editor）输入要求后执行。prompt 含**当前剧情位置（active + nextStep + 时间线）+ 近期对话 + 节点节奏档位 + 前后幕衔接锚点**；合并层 `replaceActBeats` 只替换目标幕节点（新 id、**强制 pending**），其他幕代码级不动，**被删的 done 节点挪进前情幕**（历史不可重规划），被删幕含 active 时新幕首节点承接 active（唯一进行中）；悬空引用 normalize 自愈；入撤销栈 + 留快照。
+
 17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；**API 卡已压缩**：连接模式与「获取模型/测试连接」同行（sd_llm_mode_row），字段只剩 Base URL / API Key / 模型——API 类型下拉已移除（custom 直连实际只用到这三项，旧设置 `llm.api` 字段仍兼容保留）。
 18. **体检**：verdict/issues/changed/reason + 时间线漂移 + 节点节奏检查点；**体检历史留痕**（meta.checkHistory 10 条，统计行图标序列）；锁定模式下只吸收状态类变更。
 19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
@@ -144,11 +146,11 @@ story-director/
 
 ### 一致性模型（所有修改入口共同遵守的不变量）
 
-1. **唯一 active**：全大纲 ≤1 个「进行中」节点；任何入口删除 active 节点时必须转交——幕重规划（被删幕含 active → 新幕首节点承接 + focus 指向）、生成（前情幕兜底）、跳转（唯一化逻辑）。
-2. **事实边界**：done/active 的内容与状态是剧情事实，规划类操作不得改写——mergePlannedOutline 恢复范围外节点时**含 status**；mergeHistoryIntoOutline 保留 active；replaceActBeats 承接 active。
-3. **手动编辑保护（统一增量）**：修订/体检/幕重规划一律增量合并（tracker.applyPatch / checker.mergeCheckOutline / replaceActBeats），只推进状态/焦点/伏笔/时间线顺延，**全量重写只留给「生成大纲」入口**；mergeLockedOutline 防漏删（patch 缺失的既有节点保留，只增不删）；applyPatch 的 allowNewBeats=false（锁定）禁止追加节点。
-4. **AI 入口统一携带「当前剧情位置」**：生成（事实边界块）/修订（最近对话）/体检（最近对话）/幕重规划（currentBeat + nextStep + 时间线块）/AI 节点（大纲序列化）——时间对不上问题的根治。
-5. **部分重规划去重**：generate 部分重规划时先 mergeHistory（excludeIds=模型已保留的旧 id，防双份）→ 再 mergePlannedOutline（按 id 强制恢复含 status）。
+1. **唯一 active**：全大纲 ≤1 个「进行中」节点——applyPatch / mergeLockedOutline 吸收模型输出后强制唯一化（多个 active 只保留最后一个）；幕重规划（被删幕含 active → 新幕首节点承接 + focus 指向）；生成（前情幕兜底）；跳转（唯一化逻辑）。
+2. **事实边界**：done/active 的内容与状态是剧情事实，规划类操作不得改写——幕重规划删除节点时 **done 节点挪进前情幕**（历史不可重规划）、新节点强制 pending（重规划的是未来，不接受模型输出 done）；mergeHistoryIntoOutline 保留 active。
+3. **手动编辑保护（统一增量）**：修订/体检/幕重规划一律增量合并（tracker.applyPatch / checker.mergeCheckOutline / replaceActBeats），只推进状态/焦点/伏笔/时间线顺延，**全量重写只留给「生成大纲」入口**（且有 confirm 警示）；mergeLockedOutline 防漏删（patch 缺失的既有节点保留，只增不删）；applyPatch 的 allowNewBeats=false（锁定）禁止追加节点。
+4. **AI 入口统一携带「当前剧情位置」**：幕重规划（currentBeat + nextStep + 时间线 + **近期对话 + 节点节奏档位**块）/生成（事实边界块）/修订（最近对话 + **必读设定显式块 + 新人物许可 + 唯一 active 指令**）/体检（最近对话）/AI 节点（大纲序列化）。
+5. **无时间线部分重规划**：mergePlannedOutline/buildPlannedOutlineContext 已删除——时间线只作生成约束，局部重做只有幕重规划一条路（避免两套语义并存）。
 
 ### 关键实现细节与坑
 

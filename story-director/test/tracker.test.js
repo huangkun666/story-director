@@ -170,3 +170,41 @@ test('applyPatch honors allowNewBeats=false and skips newBeats', () => {
     const out2 = applyPatch(prev, patch, { allowNewBeats: true });
     assert.equal(out2.beats.length, 2); // 默认允许追加
 });
+
+test('applyPatch enforces single active - later activation demotes previous', () => {
+    const prev = createEmptyOutline();
+    prev.beats = [
+        { id: 'b1', title: '进行中', summary: 's', status: 'active' },
+        { id: 'b2', title: '待规划', summary: 's', status: 'pending' },
+        { id: 'b3', title: '待规划二', summary: 's', status: 'pending' },
+    ];
+    const out = applyPatch(prev, {
+        statusChanges: [
+            { beatId: 'b1', status: 'done' },
+            { beatId: 'b2', status: 'active' },
+            { beatId: 'b3', status: 'active' }, // 模型误给第二个 active
+        ],
+    });
+    const actives = out.beats.filter(b => b.status === 'active');
+    assert.equal(actives.length, 1); // 唯一 active
+    assert.equal(actives[0].id, 'b3'); // 最后一个 active 胜出
+    assert.equal(out.beats.find(b => b.id === 'b2').status, 'pending');
+});
+
+test('mergeLockedOutline enforces single active from patch', () => {
+    const prev = createEmptyOutline();
+    prev.beats = [
+        { id: 'b1', title: '手动一', summary: 's', status: 'active' },
+        { id: 'b2', title: '手动二', summary: 's', status: 'pending' },
+    ];
+    const patch = createEmptyOutline();
+    patch.beats = [
+        { id: 'b1', title: '模型一', summary: 's', status: 'pending' },
+        { id: 'b2', title: '模型二', summary: 's', status: 'active' },
+        { id: 'b3', title: '模型三', summary: 's', status: 'active' },
+    ];
+    const out = applyRevision(prev, patch, { lockOutline: true });
+    const actives = out.beats.filter(b => b.status === 'active');
+    assert.equal(actives.length, 1);
+    assert.equal(actives[0].id, 'b3');
+});

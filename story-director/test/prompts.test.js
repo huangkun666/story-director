@@ -406,3 +406,26 @@ test('buildReplanActPrompt scopes to target act with衔接 anchors', () => {
     assert.ok(prompt.includes('197年'));
     assert.ok(prompt.includes('不要输出其他幕'));
 });
+
+test('buildRevisePatchPrompt includes must-read block and new-character permission', () => {
+    const o = createEmptyOutline();
+    o.mustRead = '魔法会消耗寿命';
+    o.beats = [{ id: 'b1', title: '开端', status: 'active' }];
+    const { prompt } = buildRevisePatchPrompt({ recentDialogue: 'A: hi', outline: o });
+    assert.ok(prompt.includes('必读设定（最高优先级'));
+    assert.ok(prompt.includes('魔法会消耗寿命'));
+    assert.ok(prompt.includes('名录外新角色'));
+    assert.ok(prompt.includes('全大纲只能有一个 "active"'));
+});
+
+test('buildReplanActPrompt carries recent dialogue and pacing band', () => {
+    const { prompt } = buildReplanActPrompt({
+        characterCard: { name: 'Alice' },
+        act: { id: 'act_2', title: '第二幕', summary: '', beats: [] },
+        recentDialogue: '主角: 我们出发了',
+        pacing: 'dense',
+    });
+    assert.ok(prompt.includes('最近对话（当前剧情位置的最新事实）'));
+    assert.ok(prompt.includes('我们出发了'));
+    assert.ok(prompt.includes('紧凑'));
+});

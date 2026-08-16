@@ -1,7 +1,7 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
-import { normalizeOutline, createEmptyOutline, mergeHistoryIntoOutline, mergePlannedOutline, replaceActBeats } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildReplanActPrompt, buildCheckPrompt, buildHistoryContext, buildPlannedOutlineContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
+import { normalizeOutline, createEmptyOutline, mergeHistoryIntoOutline, replaceActBeats } from './outline-store.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildReplanActPrompt, buildCheckPrompt, buildHistoryContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
@@ -61,19 +61,16 @@ export function createDirector(deps) {
             // 保留已发生剧情：旧大纲的 done 节点作为前情参考传入（prompt），
             // 生成后由 mergeHistoryIntoOutline 收进「前情·已完成」幕。
             // 进行中节点是事实边界：时间线只能规划它之后（prompt 硬约束 + 合并兜底）。
+            // 时间线只是生成约束（故事跨度），不触发部分重规划——
+            // 局部重做统一走「修改这一幕」（replanAct，幕级结构化边界）。
             const preserveHistory = String(settings.preserveHistory) !== 'false';
             const historyContext = preserveHistory ? buildHistoryContext(currentOutline) : '';
             const ongoingBeat = preserveHistory ? currentOutline.beats.find(b => b.status === 'active') : null;
             const ongoingBeatText = ongoingBeat
                 ? `${ongoingBeat.title || ongoingBeat.id}（${ongoingBeat.summary || '进行中'}）`
                 : '';
-            // 部分重规划：用户显式指定了时间线 = 只重设计该范围内的部分，
-            // 范围外的既有规划（含 pending）由 prompt 要求照抄 + mergePlannedOutline
-            // 按 id 强制保留——其他时间范围的大纲不会被覆盖
+            // 用户显式指定时间线时以用户输入为准（模型输出只补漏）
             const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
-            const plannedOutline = (hasRequestedTimeline && preserveHistory)
-                ? buildPlannedOutlineContext(currentOutline)
-                : '';
 
             // 近期对话始终携带：记忆插件的记忆库落后最近约 20 轮，最近剧情只有
             // 聊天历史里有——无论首次生成、继续当前还是跳时间线重规划都要带，
@@ -168,7 +165,6 @@ export function createDirector(deps) {
                 direction,
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
-                plannedOutline,
             });
             const result = await gen(bundle);
             if (result) {
@@ -187,16 +183,8 @@ export function createDirector(deps) {
                     next.mustRead = requestedMustRead;
                 }
                 if (preserveHistory) {
-                    if (hasRequestedTimeline) {
-                        // 部分重规划：模型输出中保留了旧 id 的节点 = 范围外保留——
-                        // 不再重复收进前情幕（防双份），随后按 id 强制恢复原细节（含 status）
-                        const keptIds = next.beats.map(b => b.id);
-                        next = mergeHistoryIntoOutline(next, currentOutline, { excludeIds: keptIds });
-                        next = mergePlannedOutline(next, currentOutline);
-                    } else {
-                        // 完整重新生成：旧 done/active 全部收进前情幕
-                        next = mergeHistoryIntoOutline(next, currentOutline);
-                    }
+                    // 完整重新生成：旧 done/active 全部收进前情幕（历史不可重规划）
+                    next = mergeHistoryIntoOutline(next, currentOutline);
                 }
                 recordHistory('generate');
                 deps.setOutline(next);
@@ -306,6 +294,8 @@ export function createDirector(deps) {
             const actBeats = outline.beats.filter(b => b.actId === actId);
             // 当前剧情位置：进行中节点（含时间点）+ 下一步——新设计必须与之对齐
             const currentBeat = outline.beats.find(b => b.status === 'active') || null;
+            // 近期对话：幕重规划也携带（active 节点久未推进时信息不滞后）
+            const recentDialogue = deps.getRecentDialogue?.(settings.recentTurns ?? 5) || '';
 
             const bundle = buildReplanActPrompt({
                 characterCard: card,
@@ -314,6 +304,8 @@ export function createDirector(deps) {
                 nextBeat,
                 currentBeat,
                 nextStep: outline.focus?.nextStep || '',
+                recentDialogue,
+                pacing: settings.beatPacing || 'balanced',
                 userHint,
                 mustRead: outline.mustRead || '',
                 timeline: outline.timeline || {},

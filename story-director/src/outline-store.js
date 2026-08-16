@@ -454,54 +454,11 @@ export function mergeHistoryIntoOutline(newOutline, oldOutline, { excludeIds = [
     return normalizeOutline(o);
 }
 
-// 部分重规划合并（用户显式指定时间线时的代码层事实边界）：
-// 模型输出中 id 与旧大纲相同的节点 = 「时间线范围外」的既有规划，强制恢复旧细节
-// （title/summary/type/cast/actId/status）——模型就算偷偷改了也改不回去，不依赖模型纪律；
-// status 一并恢复：进行中/已完成状态是剧情事实，规划类操作不得改写。
-// 模型新增/重新设计的节点（新 id）保持原样；旧大纲中未保留在输出里的节点视为
-// 范围内被重规划，丢弃。恢复 actId 时若对应幕不在输出中，用旧幕标题补幕。
-export function mergePlannedOutline(newOutline, oldOutline) {
-    const o = normalizeOutline(newOutline);
-    if (!oldOutline || typeof oldOutline !== 'object') return o;
-    const old = normalizeOutline(oldOutline);
-    if (!old.beats.length) return o;
-    const oldById = new Map(old.beats.map(b => [b.id, b]));
-    const oldActById = new Map(old.acts.map(a => [a.id, a]));
-
-    o.beats = o.beats.map(beat => {
-        const prev = oldById.get(beat.id);
-        if (!prev) return beat;
-        return {
-            ...beat,
-            title: prev.title,
-            summary: prev.summary,
-            type: prev.type,
-            cast: [...prev.cast],
-            actId: prev.actId || beat.actId,
-            status: prev.status, // 状态是剧情事实，一并恢复（active/done 不被规划操作改写）
-        };
-    });
-
-    // 范围外节点恢复原幕归属；幕缺失时用旧幕信息补幕（幂等）
-    for (const beat of o.beats) {
-        if (!beat.actId) continue;
-        if (o.acts.some(a => a.id === beat.actId)) continue;
-        const oldAct = oldActById.get(beat.actId);
-        o.acts.push({
-            id: beat.actId,
-            title: oldAct?.title || beat.actId,
-            summary: oldAct?.summary || '',
-            beats: [],
-        });
-    }
-    return normalizeOutline(o);
-}
-
 // 幕级重规划合并：只替换目标幕的节点（其他幕代码级不动）。
 // 旧节点删除（伏笔回收点 / focus 等悬空引用由 normalize 自愈）；
-// 新节点生成新 id；若被删节点是当前焦点，焦点指向新幕第一个节点；
-// **若被删节点含「进行中」（active），新幕第一个节点自动承接 active**
-// （唯一进行中不变量：剧情不因重规划而中断）。
+// **done 节点（已发生的剧情）不删除，挪进「前情·已发生」幕**——历史不可重规划；
+// 新节点强制 pending 并生成新 id；**若被删节点含「进行中」（active），新幕第一个节点
+// 自动承接 active**（唯一进行中不变量：剧情不因重规划而中断）。
 // 幕不存在时返回原大纲（normalize 后的新对象，内容不变）。
 export function replaceActBeats(outline, actId, newBeats, { title = '', summary = '' } = {}) {
     const o = normalizeOutline(outline);
@@ -513,12 +470,36 @@ export function replaceActBeats(outline, actId, newBeats, { title = '', summary 
     const removedIds = new Set(removed.map(b => b.id));
     const hadActive = removed.some(b => b.status === 'active');
     const focusWasHere = removedIds.has(o.focus.currentBeat);
+    const historyBeats = removed.filter(b => b.status === 'done');
     o.beats = o.beats.filter(b => b.actId !== actId);
+    // 已发生的剧情（done）挪进前情幕：历史不可重规划
+    if (historyBeats.length) {
+        const existing = o.acts.find(a => a.id === HISTORY_ACT_ID);
+        const historyAct = {
+            id: HISTORY_ACT_ID,
+            title: '前情·已发生（保留自旧大纲）',
+            summary: '重规划前已发生的剧情，新规划必须与之衔接',
+            beats: [],
+        };
+        if (existing) {
+            o.acts = o.acts.map(a => (a.id === HISTORY_ACT_ID ? historyAct : a));
+            o.beats = o.beats.filter(b => b.actId !== HISTORY_ACT_ID);
+        } else {
+            o.acts.unshift(historyAct);
+        }
+        const moved = historyBeats.map(b => ({
+            ...b,
+            id: String(b.id).startsWith('hist_') ? b.id : `hist_${b.id || 'b'}`,
+            actId: HISTORY_ACT_ID,
+        }));
+        o.beats = [...moved, ...o.beats];
+    }
+    // 新节点强制 pending（重规划的是未来，不应出现"已发生"的新节点）
     const list = (Array.isArray(newBeats) ? newBeats : [])
         .map((raw, i) => normalizeBeat({
             ...(raw && typeof raw === 'object' ? raw : {}),
             id: `beat_${Date.now()}_${i + 1}`,
-            status: raw?.status || 'pending',
+            status: 'pending',
             actId,
         }, o.beats.length + i))
         .filter(Boolean);

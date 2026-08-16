@@ -148,26 +148,6 @@ export function buildHistoryContext(outline) {
     return `【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n${lines.join('\n')}\n`;
 }
 
-// 部分重规划：用户显式指定新时间线时，旧大纲中「时间线范围外」的规划必须保留。
-// 输出全部节点（含 pending，按幕组织、带 id），让模型判断哪些在范围外并照抄；
-// 合并层（mergePlannedOutline）再按 id 强制恢复旧细节——代码层兜底，不依赖模型纪律。
-export function buildPlannedOutlineContext(outline) {
-    const o = normalizeOutline(outline);
-    if (!o.beats.length) return '';
-    const lines = o.acts.map(act => {
-        const actBeats = o.beats.filter(b => b.actId === act.id);
-        if (!actBeats.length) return `- 【${act.title || act.id}】（无节点）`;
-        return [
-            `- 【${act.title || act.id}】`,
-            ...actBeats.map(b => {
-                const state = b.status === 'done' ? '已完成' : (b.status === 'active' ? '进行中' : '待规划');
-                return `  - ${b.id}｜${state}｜${b.title || '（无标题）'}：${b.summary || '（无概要）'}${b.cast?.length ? `（参与：${b.cast.join('、')}）` : ''}`;
-            }),
-        ].join('\n');
-    });
-    return `【既有大纲（时间线范围外的部分必须原样保留）】\n${lines.join('\n')}\n`;
-}
-
 function cardToText(card) {
     const c = card || {};
     return [
@@ -203,7 +183,7 @@ export const DIRECTION_SCHEMA = {
     },
 };
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '', plannedOutline = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -232,14 +212,6 @@ ${dialogueText}
     const directionText = String(direction || '').trim();
     const directionBlock = directionText ? `【大纲方向（先行草案，请按此展开并细化）】
 ${directionText}\n` : '';
-    // 部分重规划（用户显式指定时间线）：时间线范围外的既有规划必须原样保留，
-    // 只重新设计范围内的部分；合并层会按 id 强制恢复范围外节点的原细节
-    const plannedText = String(plannedOutline || '').trim();
-    const plannedBlock = plannedText ? `${plannedText}
-规则：
-- 时间线范围之外的既有节点：必须原样保留（id、title、summary、cast、所属幕一字不改），把它们照抄进输出的 JSON；
-- 时间线范围之内的既有节点：可以重新设计（也可以保留）；
-- 只重新设计时间线内的部分，不要改动时间线之外的任何既有规划。\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note);
     // 必读设定：顶层独立字段优先；兼容旧调用把 mustRead 放在 timeline 对象里
     const mustReadText = String(mustRead || '').trim() || String(t.mustRead || '').trim();
@@ -276,7 +248,7 @@ ${mustReadBlock}${timelineBlock}
 
 ${pacingBlock}
 
-${ongoingBlock}${dialogueBlock}${historyBlock}${plannedBlock}${directionBlock}${memoryBlock}${vectorBlock}【角色卡】
+${ongoingBlock}${dialogueBlock}${historyBlock}${directionBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【新人物许可（允许但须交代）】
@@ -426,6 +398,8 @@ export function buildRevisePatchPrompt({ recentDialogue = '', outline, driftTole
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
     const vectorText = String(vectorContext || '').trim();
     const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
+    const mustReadText = String(outline?.mustRead || '').trim();
+    const mustReadBlock = mustReadText ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${mustReadText}\n` : '';
     const driftInstruction = driftTolerance === 'strict'
         ? '若剧情偏离当前方向，请严格拉回：不新增节点，只把 focus.currentBeat / focus.nextStep 调整回既定方向；仅当偏离已成不可逆事实时才最小化吸收。'
         : '若剧情偏离当前方向，请宽松吸收：把新走向写进 focus.nextStep；确有必要时用 newBeats 追加一个节点。';
@@ -435,7 +409,7 @@ export function buildRevisePatchPrompt({ recentDialogue = '', outline, driftTole
     const prompt = `【最近对话】
 ${recentDialogue}
 
-${memoryBlock}${vectorBlock}【当前大纲（禁止改动任何现有内容，只能推进状态与焦点）】
+${memoryBlock}${vectorBlock}${mustReadBlock}【当前大纲（禁止改动任何现有内容，只能推进状态与焦点）】
 ${serializeOutline(compactOutlineForRevision(outline))}
 
 （注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题，无需处理它们。）
@@ -454,11 +428,12 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 }
 
 规则：
-1) statusChanges：仅当节点真正到达终点（目标达成/冲突收场/场景明确结束）才置 "done" 并推进下一个为 "active"；大纲不是剧情日志，常规对话轮次不要推进节点、不要新增节点，只更新 focus 即可；没有状态变化就省略；
+1) statusChanges：仅当节点真正到达终点（目标达成/冲突收场/场景明确结束）才置 "done" 并推进下一个为 "active"；大纲不是剧情日志，常规对话轮次不要推进节点、不要新增节点，只更新 focus 即可；没有状态变化就省略；全大纲只能有一个 "active" 节点；
 2) focus 建议总是输出（这是导演指令的核心）；
 3) foreshadowing/arcs：只列出状态发生变化的条目；
 ${newBeatsInstruction}
-5) 禁止任何字段修改现有 beat/act/timeline 的标题、概要、类型与时间线。`;
+5) 禁止任何字段修改现有 beat/act/timeline 的标题、概要、类型与时间线；
+6) 对话中出现的名录外新角色（新对手/新势力等）：允许将其纳入 arcs 或后续节点，但须简要交代其身份与动机；不得与既有角色重名冲突。`;
     return { system, prompt };
 }
 
@@ -520,7 +495,7 @@ ${userHint || '（未指定，请根据大纲当前焦点与未完成节点，�
 // 幕级重规划：用户指定「只重新设计这一幕」——幕是结构化边界，
 // 合并层（replaceActBeats）只替换目标幕的节点，其他幕代码级不动，
 // 不依赖模型对时间范围的理解（比时间线部分重规划可靠）。
-export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, currentBeat = null, nextStep = '', userHint = '', mustRead = '', timeline = {} } = {}) {
+export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, currentBeat = null, nextStep = '', recentDialogue = '', pacing = 'balanced', userHint = '', mustRead = '', timeline = {} } = {}) {
     const system = '你是叙事导演。只重新设计指定的一幕，其他幕一律不动（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const beats = Array.isArray(act?.beats) ? act.beats : [];
     const beatLines = beats.length
@@ -530,6 +505,11 @@ export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, c
     const nextLine = nextBeat ? `- ${nextBeat.title || nextBeat.id}：${nextBeat.summary || '（无概要）'}` : '（没有后一幕，这是大纲结尾）';
     const mustReadText = String(mustRead || '').trim();
     const timelineText = [timeline?.start, timeline?.end].filter(Boolean).join(' → ');
+    const dialogueText = String(recentDialogue || '').trim();
+    const dialogueBlock = dialogueText ? `【最近对话（当前剧情位置的最新事实）】
+${dialogueText}
+新设计的节点必须与最近对话中已发生的内容衔接，不得矛盾、不得重复。\n` : '';
+    const pacingMeta = pacingInfo(pacing);
     // 当前剧情位置：剧情进行到哪个节点（含时间点）——新设计必须与之对齐，不能时间错乱
     const currentLine = currentBeat
         ? `- 正在进行：「${currentBeat.title || currentBeat.id}」：${currentBeat.summary || '（无概要）'}${nextStep ? `\n- 下一步（focus.nextStep）：${nextStep}` : ''}`
@@ -557,10 +537,13 @@ ${prevLine}
 ${nextLine}
 新节点要与前后幕自然衔接、时间不冲突、不回退。
 
-${mustReadText ? `【必读设定（最高优先级）】\n${mustReadText}\n` : ''}【用户要求】
+${dialogueBlock}${mustReadText ? `【必读设定（最高优先级）】\n${mustReadText}\n` : ''}【节点节奏（档位：${pacingMeta.label}）】
+${pacingMeta.desc}
+
+【用户要求】
 ${userHint || '（未指定，请基于当前幕的定位重新设计这一幕）'}
 
-请重新设计这一幕：可以调整幕标题与概要；重新设计节点（数量 3-6 个为宜，类型与时间分布遵循大纲的节点节奏）。
+请重新设计这一幕：可以调整幕标题与概要；重新设计节点（数量 3-6 个为宜，类型与时间分布遵循上面的节点节奏档位）。
 
 严格按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块；只输出这一幕的数据，不要输出其他幕）：
 {

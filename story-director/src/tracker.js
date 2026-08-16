@@ -33,6 +33,12 @@ export function mergeLockedOutline(prevOutline, patch) {
     // patch 新增的节点追加（保持其内容与状态）
     const added = merged.beats.filter(b => !base.beats.some(x => x.id === b.id));
     merged.beats = [...kept, ...added];
+    // 唯一 active 不变量：patch 吸收后若出现多个进行中节点，只保留最后一个
+    // （模型推进到的位置是当前剧情进行处），其余降为 pending
+    const actives = merged.beats.filter(b => b.status === 'active');
+    if (actives.length > 1) {
+        for (const b of actives.slice(0, -1)) b.status = 'pending';
+    }
     return merged;
 }
 
@@ -75,7 +81,15 @@ export function applyPatch(prevOutline, patch, { allowNewBeats = true } = {}) {
     for (const sc of Array.isArray(patch.statusChanges) ? patch.statusChanges : []) {
         if (!sc || typeof sc !== 'object') continue;
         const beat = base.beats.find(b => b.id === sc.beatId);
-        if (beat && VALID_STATUS.has(sc.status)) beat.status = sc.status;
+        if (beat && VALID_STATUS.has(sc.status)) {
+            if (sc.status === 'active') {
+                // 唯一 active：推进新节点时，把现有进行中节点降为 pending
+                for (const b of base.beats) {
+                    if (b.status === 'active' && b.id !== sc.beatId) b.status = 'pending';
+                }
+            }
+            beat.status = sc.status;
+        }
     }
 
     const focus = (patch.focus && typeof patch.focus === 'object') ? patch.focus : null;

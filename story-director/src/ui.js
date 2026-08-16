@@ -199,6 +199,12 @@ export function bindUI(ctx, adapter) {
     const runGenerate = (btn) => runAction(btn, {
         label: '生成',
         call: () => {
+            // 全量重写警示：已有大纲时生成会替换手动编辑与未完成规划，局部重做请用幕重规划
+            const existing = adapter.getOutline();
+            const hasContent = existing.beats.length > 0 || existing.acts.length > 0;
+            if (hasContent && !confirm('生成将全量重写当前大纲（手动编辑与未完成规划会被替换，已发生剧情保留为前情幕）。\n\n只想重做某一段？请用各幕的「修改这一幕」按钮。\n继续生成？')) {
+                return null;
+            }
             persistTimeline();
             return adapter.director.generate({ userRequest: '', timeline: readTimeline(), mustRead: readMustRead() });
         },
