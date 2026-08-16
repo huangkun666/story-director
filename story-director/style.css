@@ -34,7 +34,7 @@
 
 /* 夜晚模式：黑灰底、浅色文字，同样走变量 */
 #story_director_window.sd_window.sd_theme_dark,
-#story_director_panel.sd_panel_content.sd_theme_dark {
+#story_director_window.sd_theme_dark #story_director_panel.sd_panel_content {
     --sd-bg: #17191e;
     --sd-card: #1f2229;
     --sd-card-soft: #262a33;
@@ -783,7 +783,7 @@
 }
 
 .sd_subdrawer_header small {
-    opacity: 0.6;
+    color: var(--sd-muted);
 }
 
 .sd_subdrawer_icon {
@@ -842,7 +842,7 @@
 
 .sd_setting small,
 .sd_hint {
-    opacity: 0.6;
+    color: var(--sd-muted);
     font-size: 0.82em;
 }
 
@@ -864,7 +864,7 @@
 }
 
 .sd_section_head small {
-    opacity: 0.6;
+    color: var(--sd-muted);
 }
 
 .sd_llm_fields {
@@ -1009,7 +1009,7 @@
 .sd_fs_hint small.sd_fs_payoff {
     display: block;
     margin-top: 2px;
-    opacity: 0.65;
+    color: var(--sd-muted);
 }
 
 /* 工具卡 */

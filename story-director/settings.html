@@ -111,6 +111,14 @@
                                     </select>
                                     <small>节点间隔相对大纲总跨度：跨度长则间隔长、跨度短则间隔短，不按绝对时间硬套</small>
                                 </label>
+                                <label class="sd_setting sd_setting_wide">
+                                    <span class="sd_setting_label">保留已发生剧情</span>
+                                    <select id="sd_preserve_history">
+                                        <option value="true">保留（只能规划当前进行中节点之后）</option>
+                                        <option value="false">不保留（全新大纲，已发生剧情一并覆盖）</option>
+                                    </select>
+                                    <small>事实边界：重新生成时保留旧 done/active 节点为前情幕；时间线只能规划未来。重玩请用快照回滚；推翻重来请选不保留或清空。</small>
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -171,12 +179,9 @@
                             <small>想摆脱旧聊天约束时选 none</small>
                         </label>
                         <label class="sd_setting">
-                            <span class="sd_setting_label">保留已发生剧情</span>
-                            <select id="sd_preserve_history">
-                                <option value="true">保留（只能规划当前进行中节点之后）</option>
-                                <option value="false">不保留（全新大纲，已发生剧情一并覆盖）</option>
-                            </select>
-                            <small>保留模式下时间线只能规划未来：进行中的剧情是事实边界，起点早于它会自动顺延。重玩请用快照回滚；推翻重来请选不保留或清空。</small>
+                            <span class="sd_setting_label">角色卡上下文上限</span>
+                            <input id="sd_card_context_limit" type="number" min="2000" max="200000" step="1000" />
+                            <small>生成时角色卡内容的最大字符数（字符）</small>
                         </label>
                     </div>
                 </section>
@@ -216,27 +221,10 @@
                             <input id="sd_recent_turns" type="number" min="1" max="50" step="1" />
                             <small>修订/体检时回看最近多少轮对话</small>
                         </label>
-                    </div>
-                </section>
-
-                <section class="sd_card sd_section_card">
-                    <header class="sd_card_header">
-                        <span class="sd_card_icon"><i class="fa-solid fa-scissors"></i></span>
-                        <div class="sd_card_titles">
-                            <b>上下文预算</b>
-                            <small>防止超长角色卡或对话把请求撑爆</small>
-                        </div>
-                    </header>
-                    <div class="sd_card_body sd_settings_grid">
-                        <label class="sd_setting">
-                            <span class="sd_setting_label">角色卡上下文上限</span>
-                            <input id="sd_card_context_limit" type="number" min="2000" max="200000" step="1000" />
-                            <small>字符数</small>
-                        </label>
                         <label class="sd_setting">
                             <span class="sd_setting_label">对话上下文上限</span>
                             <input id="sd_dialogue_context_limit" type="number" min="1000" max="50000" step="500" />
-                            <small>字符数</small>
+                            <small>修订/体检时回看对话的最大字符数（字符）</small>
                         </label>
                     </div>
                 </section>
