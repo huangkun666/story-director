@@ -286,19 +286,18 @@
                         <span class="sd_card_icon"><i class="fa-solid fa-scroll"></i></span>
                         <div class="sd_card_titles">
                             <b>对话正文提取</b>
-                            <small>记忆库落后约 20 轮，近期剧情靠对话原文；按标签提取正文可覆盖更多轮次</small>
+                            <small>记忆库落后约 20 轮，近期剧情靠对话原文；按正文标签提取可覆盖更多轮次</small>
                         </div>
                     </header>
                     <div class="sd_card_body">
                         <div class="sd_extract_rules" id="sd_extract_rules"></div>
                         <div class="sd_extract_add">
-                            <input id="sd_extract_open" type="text" placeholder="开始符，如 【" />
-                            <input id="sd_extract_close" type="text" placeholder="结束符，如 】" />
-                            <div id="sd_extract_add_btn" class="menu_button sd_btn" title="手动添加标签规则"><i class="fa-solid fa-plus"></i><span>添加</span></div>
+                            <input id="sd_extract_tag" type="text" placeholder="正文 HTML 标签名，如 content / speech（不含尖括号）" />
+                            <div id="sd_extract_add_btn" class="menu_button sd_btn" title="手动添加正文标签规则"><i class="fa-solid fa-plus"></i><span>添加</span></div>
                             <div id="sd_extract_analyze" class="menu_button sd_btn" title="让 AI 扫描最近对话，自动识别正文标签样式，结果由你确认"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI 分析</span></div>
                         </div>
                         <div id="sd_extract_result" class="sd_extract_result"></div>
-                        <small class="sd_hint">无规则时使用对话原文；提取不到内容会自动回退原文。规则保存在插件设置里，作用于生成/修订/体检。</small>
+                        <small class="sd_hint">正文包裹在 HTML 标签里时填标签名（如 &lt;content&gt;…&lt;/content&gt;）；&lt;think&gt; 等思考标签会自动排除，不设规则 = 提取全文。AI 分析可自动识别对话中的正文标签样式。</small>
                     </div>
                 </section>
             </section>
@@ -361,51 +360,35 @@
                         </div>
                     </header>
                     <div class="sd_card_body">
-                        <div class="sd_settings_grid">
-                            <label class="sd_setting sd_setting_wide">
+                        <div class="sd_llm_mode_row">
+                            <label class="sd_setting sd_llm_mode_select">
                                 <span class="sd_setting_label">连接模式</span>
                                 <select id="sd_llm_mode">
                                     <option value="main">复用主 API</option>
                                     <option value="custom">独立配置（OpenAI 兼容）</option>
                                 </select>
                             </label>
-                            <div id="sd_llm_fields" class="sd_llm_fields">
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label">API 类型</span>
-                                    <select id="sd_llm_api">
-                                        <option value="">（默认）</option>
-                                        <option value="openai">OpenAI 兼容</option>
-                                        <option value="textgenerationwebui">textgenerationwebui</option>
-                                        <option value="koboldhorde">Kobold Horde</option>
-                                        <option value="novel">NovelAI</option>
-                                        <option value="claude">Claude</option>
-                                        <option value="mistral">Mistral</option>
-                                        <option value="ollama">Ollama</option>
-                                        <option value="openrouter">OpenRouter</option>
-                                    </select>
-                                    <small>custom 直连模式实际只使用 Base URL / API Key / 模型；此项仅为兼容记录，主 API 模式由酒馆全局配置接管</small>
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label">Base URL</span>
-                                    <input id="sd_llm_base_url" type="text" placeholder="https://your-proxy.example/v1" />
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label">API Key</span>
-                                    <input id="sd_llm_api_key" type="password" autocomplete="off" placeholder="sk-..." />
-                                </label>
-                                <label class="sd_setting">
-                                    <span class="sd_setting_label">模型</span>
-                                    <input id="sd_llm_model" type="text" placeholder="留空使用服务端默认模型" />
-                                    <div id="sd_llm_model_chips" class="sd_llm_model_chips"></div>
-                                </label>
-                                <div class="sd_llm_actions">
-                                    <div id="sd_llm_fetch_models" class="menu_button sd_btn" title="从 Base URL 的 /v1/models 获取可用模型列表"><i class="fa-solid fa-list"></i><span>获取模型</span></div>
-                                    <div id="sd_llm_test" class="menu_button sd_btn" title="测试 Base URL 与 API Key 是否可用"><i class="fa-solid fa-plug-circle-check"></i><span>测试连接</span></div>
-                                    <span id="sd_llm_test_result" class="sd_llm_test_result"></span>
-                                </div>
+                            <div class="sd_llm_actions">
+                                <div id="sd_llm_fetch_models" class="menu_button sd_btn" title="从 Base URL 的 /v1/models 获取可用模型列表"><i class="fa-solid fa-list"></i><span>获取模型</span></div>
+                                <div id="sd_llm_test" class="menu_button sd_btn" title="测试 Base URL 与 API Key 是否可用"><i class="fa-solid fa-plug-circle-check"></i><span>测试连接</span></div>
+                                <span id="sd_llm_test_result" class="sd_llm_test_result"></span>
                             </div>
                         </div>
-                        <small class="sd_hint">custom 模式通过 /v1/chat/completions 直连；配置或网络出错时静默降级为沿用旧大纲，绝不中断 RP。</small>
+                        <div id="sd_llm_fields" class="sd_llm_fields">
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">Base URL</span>
+                                <input id="sd_llm_base_url" type="text" placeholder="https://your-proxy.example/v1" />
+                            </label>
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">API Key</span>
+                                <input id="sd_llm_api_key" type="password" autocomplete="off" placeholder="sk-..." />
+                            </label>
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">模型</span>
+                                <input id="sd_llm_model" type="text" placeholder="留空使用服务端默认模型" />
+                                <div id="sd_llm_model_chips" class="sd_llm_model_chips"></div>
+                            </label>
+                        </div>
                     </div>
                 </section>
 

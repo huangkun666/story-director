@@ -182,6 +182,7 @@ export function createDirector(deps) {
 
     // 对话正文标签分析：扫描最近对话，让 AI 识别正文的包裹标签样式，
     // 返回规则建议（不自动生效，由用户检查确认后写入设置）。
+    // 支持 HTML 标签规则（{ tag }，如 content/speech）与字符对规则（{ open, close }）两种形态。
     async function analyzeDialogueTags({ turns = 10 } = {}) {
         if (running) return null;
         running = true;
@@ -194,16 +195,23 @@ export function createDirector(deps) {
                 return null;
             }
             const patterns = Array.isArray(result.patterns) ? result.patterns : [];
-            const rules = patterns
-                .filter(p => p && typeof p.open === 'string' && p.open && typeof p.close === 'string' && p.close)
-                .map(p => ({
-                    open: String(p.open).trim(),
-                    close: String(p.close).trim(),
-                    label: String(p.label || '正文').trim(),
-                    sample: String(p.sample || '').trim(),
-                }))
-                .slice(0, 5);
-            return { rules, note: String(result.note || '').trim() };
+            const rules = [];
+            for (const p of patterns) {
+                if (!p || typeof p !== 'object') continue;
+                const label = String(p.label || '正文').trim();
+                const sample = String(p.sample || '').trim();
+                // HTML 标签规则：tag 为合法 HTML 标识符（容忍 <content> 写法）
+                const rawTag = String(p.tag || '').replace(/[<>/]/g, '').trim();
+                if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(rawTag)) {
+                    rules.push({ tag: rawTag, label, sample });
+                    continue;
+                }
+                // 字符对规则（兼容旧模型输出）
+                if (typeof p.open === 'string' && p.open && typeof p.close === 'string' && p.close) {
+                    rules.push({ open: String(p.open).trim(), close: String(p.close).trim(), label, sample });
+                }
+            }
+            return { rules: rules.slice(0, 5), note: String(result.note || '').trim() };
         } finally {
             running = false;
         }

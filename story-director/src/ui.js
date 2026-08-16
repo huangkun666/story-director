@@ -323,7 +323,6 @@ export function bindUI(ctx, adapter) {
         const el = document.getElementById(id);
         if (el) el.value = value ?? '';
     };
-    setLlmField('sd_llm_api', llm.api);
     setLlmField('sd_llm_base_url', llm.baseUrl);
     setLlmField('sd_llm_api_key', llm.apiKey);
     setLlmField('sd_llm_model', llm.model);
@@ -339,7 +338,6 @@ export function bindUI(ctx, adapter) {
             saveSettings();
         });
     };
-    bindLlmField('sd_llm_api', 'api');
     bindLlmField('sd_llm_base_url', 'baseUrl');
     bindLlmField('sd_llm_api_key', 'apiKey');
     bindLlmField('sd_llm_model', 'model');
@@ -822,19 +820,23 @@ export function bindUI(ctx, adapter) {
         renderFsFilter();
     });
 
-    // ---------- 对话正文提取规则 ----------
+    // ---------- 对话正文提取规则（HTML 标签优先 + 字符对兼容） ----------
     const extractRulesEl = document.getElementById('sd_extract_rules');
     const extractResultEl = document.getElementById('sd_extract_result');
+    const ruleLabel = (r) => {
+        if (r && typeof r.tag === 'string' && r.tag) return `<${escapeHtml(r.tag)}> … </${escapeHtml(r.tag)}>`;
+        return `${escapeHtml(r?.open || '')} … ${escapeHtml(r?.close || '')}`;
+    };
     const renderExtractRules = () => {
         if (!extractRulesEl) return;
         const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : [];
         if (!rules.length) {
-            extractRulesEl.innerHTML = '<small class="sd_hint">未设置提取规则：生成/修订/体检使用对话原文。</small>';
+            extractRulesEl.innerHTML = '<small class="sd_hint">未设置提取规则：生成/修订/体检使用对话全文（原文）。</small>';
             return;
         }
         extractRulesEl.innerHTML = `<div class="sd_extract_chips">${rules.map((r, i) => `
             <span class="sd_chip sd_extract_chip" title="${escapeHtml(r.sample ? `示例：${r.sample}` : (r.label || '正文'))}">
-                ${escapeHtml(r.open)} … ${escapeHtml(r.close)}（${escapeHtml(r.label || '正文')}）
+                ${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）
                 <i class="fa-solid fa-xmark sd_extract_remove" data-extract-remove="${i}" title="删除该规则"></i>
             </span>`).join('')}</div>`;
     };
@@ -851,15 +853,14 @@ export function bindUI(ctx, adapter) {
         }
     });
     document.getElementById('sd_extract_add_btn')?.addEventListener('click', () => {
-        const open = document.getElementById('sd_extract_open')?.value?.trim() || '';
+        const tag = document.getElementById('sd_extract_tag')?.value?.replace(/[<>/]/g, '').trim() || '';
         const close = document.getElementById('sd_extract_close')?.value?.trim() || '';
-        if (!open || !close) return;
+        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(tag)) return;
         const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
-        rules.push({ open, close, label: '正文', sample: '' });
+        rules.push({ tag, label: '正文', sample: '' });
         adapter.settings.dialogueExtractRules = rules;
         ctx.saveSettingsDebounced?.();
-        document.getElementById('sd_extract_open').value = '';
-        document.getElementById('sd_extract_close').value = '';
+        document.getElementById('sd_extract_tag').value = '';
         renderExtractRules();
     });
     document.getElementById('sd_extract_analyze')?.addEventListener('click', async (e) => {
@@ -873,12 +874,13 @@ export function bindUI(ctx, adapter) {
                 if (extractResultEl) extractResultEl.innerHTML = '<small class="sd_extract_msg">AI 未识别出明显的正文标签，可手动添加规则。</small>';
                 return;
             }
-            const current = (Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : []).map(r => `${r.open}|${r.close}`);
+            const keyOf = (r) => (typeof r.tag === 'string' && r.tag) ? `tag:${r.tag}` : `pair:${r.open}|${r.close}`;
+            const current = (Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : []).map(keyOf);
             if (extractResultEl) extractResultEl._suggestion = suggestion; // 供「采用」按钮取用
             const items = suggestion.rules.map((r, i) => {
-                const exists = current.includes(`${r.open}|${r.close}`);
+                const exists = current.includes(keyOf(r));
                 return `<div class="sd_extract_suggest">
-                    <span class="sd_chip">${escapeHtml(r.open)} … ${escapeHtml(r.close)}（${escapeHtml(r.label || '正文')}）</span>
+                    <span class="sd_chip">${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）</span>
                     ${r.sample ? `<small class="sd_extract_sample">示例：${escapeHtml(r.sample)}</small>` : ''}
                     ${exists ? '<small class="sd_extract_msg">已存在</small>'
                         : `<span class="sd_extract_adopt" data-extract-adopt="${i}" title="采用这条规则"><i class="fa-solid fa-check"></i>采用</span>`}

@@ -340,6 +340,28 @@ test('director.analyzeDialogueTags returns normalized rule suggestions', async (
     assert.equal(suggestion.note, '正文包裹在【】中');
 });
 
+test('director.analyzeDialogueTags normalizes html_tag rules and filters invalid tags', async () => {
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            patterns: [
+                { type: 'html_tag', tag: '<content>', label: '正文', sample: '我们进城吧' },
+                { type: 'html_tag', tag: 'bad tag', label: '坏标签' }, // 非法标签名被过滤
+                { type: 'html_tag', tag: '', label: '空标签' },        // 空标签被过滤
+                { open: '*', close: '*', label: '心声' },
+            ],
+            note: '正文在 content 标签里',
+        }),
+        getRecentDialogue: () => 'AI: <think>x</think>\n<content>我们进城吧</content>',
+    });
+    const d = createDirector(deps);
+    const suggestion = await d.analyzeDialogueTags();
+    assert.equal(suggestion.rules.length, 2); // content + 字符对
+    assert.equal(suggestion.rules[0].tag, 'content'); // <content> 写法被归一化为 content
+    assert.equal(suggestion.rules[0].sample, '我们进城吧');
+    assert.equal(suggestion.rules[1].open, '*');
+    assert.equal(suggestion.note, '正文在 content 标签里');
+});
+
 test('director.analyzeDialogueTags returns null on garbage output', async () => {
     const { deps } = makeDeps({ generateRaw: async () => 'garbage' });
     const d = createDirector(deps);

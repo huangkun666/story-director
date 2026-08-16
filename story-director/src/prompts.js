@@ -433,21 +433,29 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 // 用于节点编辑器的「AI 生成」入口（生成后填入表单，由用户确认再保存）。
 // 对话正文标签分析：让 AI 扫描最近对话，识别正文的包裹标签样式，
 // 返回规则建议供用户检查确认（不做自动生效）。
+// 支持两种正文包裹样式：
+//   HTML 标签（推荐）：如 <content>…</content>、<speech>…</speech>——输出 { type: 'html_tag', tag }
+//   字符对：如 【…】、*…*——输出 { type: 'pair', open, close }
+// 思考/推理过程（如 <think>、<reasoning>）不属于正文，不要识别为正文标签。
 export function buildDialogueAnalyzePrompt({ dialogue = '' } = {}) {
-    const system = '你是叙事导演。分析角色扮演对话中「正文」的标签样式，输出 JSON。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const system = '你是叙事导演。分析角色扮演对话中「正文」的包裹标签样式，输出 JSON。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `【最近对话】
 ${String(dialogue || '').slice(0, 8000)}
 
-请分析这段对话中正文（角色实际说出/做出的内容，区别于动作旁白、系统提示、括号内注释等）的包裹标签样式，按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
+请分析这段对话中正文（角色实际说出/做出的内容，区别于思考过程、动作旁白、系统提示、括号内注释等）的包裹标签样式，按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
 
 {
   "patterns": [
-    { "open": "标签开始符，如 【 或 *", "close": "标签结束符，如 】 或 *", "label": "该标签含义，如 正文", "sample": "从对话中摘一句真实提取结果示例" }
+    { "type": "html_tag", "tag": "content", "label": "正文", "sample": "从对话中摘一句真实提取结果示例" }
   ],
   "note": "一句话说明这些规则如何工作（可选）"
 }
 
-要求：只输出对话中真实出现的标签样式（1-3 条）；若对话中没有明显的标签包裹正文，patterns 输出空数组；不要臆造不存在的标签。`;
+要求：
+1. 若正文包裹在 HTML 标签中（如 <content>…</content>、<speech>…</speech> 等），输出 type 为 "html_tag"，tag 为标签名（不含尖括号，按对话中真实出现的标签）；
+2. 若正文用字符对包裹（如【…】、*…*），输出 type 为 "pair"，open/close 为真实开始/结束符；
+3. 思考/推理过程（如 <think>、<reasoning>、<thought>）不是正文，不要识别为正文标签；动作旁白与括号注释同样不算正文；
+4. 只输出对话中真实出现的样式（1-3 条）；若对话中没有明显的标签包裹正文，patterns 输出空数组；不要臆造不存在的标签。`;
     return { system, prompt };
 }
 
