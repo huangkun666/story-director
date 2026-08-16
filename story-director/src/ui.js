@@ -621,6 +621,57 @@ export function bindUI(ctx, adapter) {
     bindLlmField('sd_llm_api_key', 'apiKey');
     bindLlmField('sd_llm_model', 'model');
 
+    // 模型列表 / 连接测试：使用表单当前值（可能尚未触发保存）
+    const llmTestResultEl = document.getElementById('sd_llm_test_result');
+    const showLlmTest = (text, ok) => {
+        if (!llmTestResultEl) return;
+        llmTestResultEl.textContent = text || '';
+        llmTestResultEl.className = `sd_llm_test_result ${ok ? 'sd_llm_test_ok' : 'sd_llm_test_fail'}`;
+    };
+    const currentLlmForm = () => ({
+        baseUrl: document.getElementById('sd_llm_base_url')?.value?.trim() || '',
+        apiKey: document.getElementById('sd_llm_api_key')?.value?.trim() || '',
+    });
+    document.getElementById('sd_llm_fetch_models')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        if (btn.classList.contains('sd_loading')) return;
+        setButtonLoading(btn, true);
+        showLlmTest('', true);
+        try {
+            const models = await adapter.listModels(currentLlmForm());
+            const dl = document.getElementById('sd_llm_model_list');
+            if (dl) dl.innerHTML = models.map(m => `<option value="${escapeHtml(m)}"></option>`).join('');
+            if (models.length) {
+                showLlmTest(`已获取 ${models.length} 个模型，点击模型输入框可选`, true);
+            } else {
+                showLlmTest('获取失败：连接成功但未返回模型列表', false);
+            }
+        } catch (err) {
+            showLlmTest(`获取失败：${err?.message || err}`, false);
+        } finally {
+            setButtonLoading(btn, false);
+        }
+    });
+    document.getElementById('sd_llm_test')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        if (btn.classList.contains('sd_loading')) return;
+        setButtonLoading(btn, true);
+        showLlmTest('', true);
+        try {
+            const r = await adapter.testApiConnection(currentLlmForm());
+            if (r?.ok) {
+                const suffix = r.modelCount != null ? `（${r.modelCount} 个模型可用）` : '';
+                showLlmTest(`连接成功：${r.detail}${suffix}`, true);
+            } else {
+                showLlmTest(`连接失败：${r?.detail || '请检查 Base URL 与 API Key'}`, false);
+            }
+        } catch (err) {
+            showLlmTest(`连接失败：${err?.message || err}`, false);
+        } finally {
+            setButtonLoading(btn, false);
+        }
+    });
+
     // ---------- 节点编辑器 ----------
     let editingBeatId = null;
     const beatEditorEl = document.getElementById('sd_beat_editor');

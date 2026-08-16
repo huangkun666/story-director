@@ -317,8 +317,14 @@
                                 </label>
                                 <label class="sd_setting">
                                     <span class="sd_setting_label">模型</span>
-                                    <input id="sd_llm_model" type="text" placeholder="留空使用服务端默认模型" />
+                                    <input id="sd_llm_model" type="text" list="sd_llm_model_list" placeholder="留空使用服务端默认模型" />
+                                    <datalist id="sd_llm_model_list"></datalist>
                                 </label>
+                                <div class="sd_llm_actions">
+                                    <div id="sd_llm_fetch_models" class="menu_button sd_btn" title="从 Base URL 的 /v1/models 获取可用模型列表"><i class="fa-solid fa-list"></i><span>获取模型</span></div>
+                                    <div id="sd_llm_test" class="menu_button sd_btn" title="测试 Base URL 与 API Key 是否可用"><i class="fa-solid fa-plug-circle-check"></i><span>测试连接</span></div>
+                                    <span id="sd_llm_test_result" class="sd_llm_test_result"></span>
+                                </div>
                             </div>
                         </div>
                         <small class="sd_hint">custom 模式通过 /v1/chat/completions 直连；配置或网络出错时静默降级为沿用旧大纲，绝不中断 RP。</small>

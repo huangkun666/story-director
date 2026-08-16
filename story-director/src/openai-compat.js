@@ -11,6 +11,70 @@ export function buildChatCompletionsUrl(baseUrl) {
     return `${base}/v1/chat/completions`;
 }
 
+// /v1/models 端点：与 buildChatCompletionsUrl 同规则归一化
+export function buildModelsUrl(baseUrl) {
+    let base = String(baseUrl ?? '').trim().replace(/\/+$/, '');
+    if (!base) return '';
+    if (/\/models$/i.test(base)) return base;
+    if (/\/v1$/i.test(base)) return `${base}/models`;
+    return `${base}/v1/models`;
+}
+
+// 获取模型列表：兼容 OpenAI 标准 {data:[{id}]} 与 Ollama 风格 {models:[{name}]}。
+// 去重并按 id 升序。任何失败抛错（由调用方决定如何展示）。
+export async function listModels({ fetchImpl, baseUrl, apiKey } = {}) {
+    if (typeof fetchImpl !== 'function') {
+        throw new TypeError('[story-director] listModels: fetchImpl must be a function');
+    }
+    const url = buildModelsUrl(baseUrl);
+    if (!url) throw new Error('Base URL 未配置');
+
+    const headers = { 'Content-Type': 'application/json' };
+    const key = String(apiKey ?? '').trim();
+    if (key) headers.Authorization = `Bearer ${key}`;
+
+    const response = await fetchImpl(url, { method: 'GET', headers });
+    if (!response || !response.ok) {
+        throw new Error(`HTTP ${response?.status ?? 'unknown'}`);
+    }
+    const data = await response.json();
+    let list = [];
+    if (Array.isArray(data?.data)) {
+        list = data.data.map(m => m && typeof m === 'object' ? m.id : null);
+    } else if (Array.isArray(data?.models)) {
+        list = data.models.map(m => m && typeof m === 'object' ? (m.name || m.id) : null);
+    }
+    return [...new Set(list.filter(x => typeof x === 'string' && x.trim()))].sort();
+}
+
+// 测试连接：先 GET /v1/models（能拉到模型说明 URL/认证/网络全通）；
+// 若端点不支持（404/405 等），降级为一次最小 chat/completions 请求验证生成链路。
+export async function testConnection({ fetchImpl, baseUrl, apiKey } = {}) {
+    try {
+        const models = await listModels({ fetchImpl, baseUrl, apiKey });
+        return { ok: true, detail: 'GET /v1/models 成功', modelCount: models.length };
+    } catch {
+        try {
+            const url = buildChatCompletionsUrl(baseUrl);
+            if (!url) throw new Error('Base URL 未配置');
+            const headers = { 'Content-Type': 'application/json' };
+            const key = String(apiKey ?? '').trim();
+            if (key) headers.Authorization = `Bearer ${key}`;
+            const response = await fetchImpl(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+            });
+            if (!response || !response.ok) {
+                throw new Error(`HTTP ${response?.status ?? 'unknown'}`);
+            }
+            return { ok: true, detail: 'chat/completions 连通（/models 不可用）', modelCount: null };
+        } catch (err) {
+            return { ok: false, detail: String(err?.message || err) };
+        }
+    }
+}
+
 export function buildChatCompletionsPayload({ system = '', prompt = '', model = '' } = {}) {
     const messages = [];
     const systemText = String(system ?? '').trim();

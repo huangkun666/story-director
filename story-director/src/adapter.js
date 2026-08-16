@@ -2,7 +2,7 @@
 // 酒馆运行时适配层：把 SillyTavern.getContext() 的能力桥接给 director。
 import { createDirector } from './director.js';
 import { normalizeOutline, createEmptyOutline, deserializeOutline, serializeOutline } from './outline-store.js';
-import { createOpenAiCompatibleGenerator } from './openai-compat.js';
+import { createOpenAiCompatibleGenerator, listModels as listModelsApi, testConnection as testConnectionApi } from './openai-compat.js';
 
 const META_KEY = 'story_director';
 const INJECT_KEY = 'story_director';
@@ -340,6 +340,23 @@ export function createSillyTavernAdapter(ctx) {
         getConfig: () => getLlmSettings(),
     });
 
+    // 模型列表 / 连接测试：可用表单当前值覆盖已保存配置（未填则回落已保存值）
+    function llmConfigFor(opts) {
+        const llm = settings.llm || DEFAULT_LLM_SETTINGS;
+        return {
+            baseUrl: String(opts?.baseUrl ?? llm.baseUrl ?? '').trim(),
+            apiKey: String(opts?.apiKey ?? llm.apiKey ?? '').trim(),
+        };
+    }
+
+    function listModels(opts) {
+        return listModelsApi({ fetchImpl: (...args) => fetch(...args), ...llmConfigFor(opts) });
+    }
+
+    function testApiConnection(opts) {
+        return testConnectionApi({ fetchImpl: (...args) => fetch(...args), ...llmConfigFor(opts) });
+    }
+
     function generateRaw(opts) {
         const llm = getLlmSettings();
         if (llm.mode === 'custom') {
@@ -387,6 +404,8 @@ export function createSillyTavernAdapter(ctx) {
         getMemoryContext,
         getVectorMemoryContext,
         getVectorMemoryHits,
+        listModels,
+        testApiConnection,
         setRetrievalCallback,
         renderOutline,
         setRenderCallback,

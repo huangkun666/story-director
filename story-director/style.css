@@ -824,6 +824,28 @@
     margin: 8px 0;
 }
 
+/* API 工具行：获取模型 / 测试连接 */
+.sd_llm_actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sd_llm_test_result {
+    font-size: 0.8em;
+    line-height: 1.4;
+    word-break: break-all;
+}
+
+.sd_llm_test_ok {
+    color: #2e9e5b;
+}
+
+.sd_llm_test_fail {
+    color: #d64545;
+}
+
 /* ---------- 分栏工作台 ---------- */
 .sd_workspace {
     display: flex;

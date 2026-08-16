@@ -6,6 +6,9 @@ import {
     buildChatCompletionsPayload,
     extractChatCompletionsContent,
     createOpenAiCompatibleGenerator,
+    buildModelsUrl,
+    listModels,
+    testConnection,
 } from '../src/openai-compat.js';
 
 test('buildChatCompletionsUrl appends OpenAI-compatible path', () => {
@@ -100,4 +103,77 @@ test('createOpenAiCompatibleGenerator returns null when baseUrl missing', async 
     });
     assert.equal(await generator({ prompt: 'p' }), null);
     assert.equal(called, false);
+});
+
+test('buildModelsUrl appends OpenAI-compatible models path', () => {
+    assert.equal(buildModelsUrl('https://api.example.com'), 'https://api.example.com/v1/models');
+    assert.equal(buildModelsUrl('https://api.example.com/v1'), 'https://api.example.com/v1/models');
+    assert.equal(buildModelsUrl('https://api.example.com/v1/'), 'https://api.example.com/v1/models');
+    assert.equal(buildModelsUrl('https://api.example.com/v1/models'), 'https://api.example.com/v1/models');
+    assert.equal(buildModelsUrl(''), '');
+});
+
+test('listModels parses OpenAI standard data[].id format', async () => {
+    const models = await listModels({
+        fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: 'gpt-4' }, { id: 'gpt-3.5' }, { id: 'gpt-4' }] }) }),
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-x',
+    });
+    assert.deepEqual(models, ['gpt-3.5', 'gpt-4']); // 去重 + 排序
+});
+
+test('listModels parses Ollama-style models[].name format', async () => {
+    const models = await listModels({
+        fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ models: [{ name: 'llama3' }, { name: 'qwen2.5' }] }) }),
+        baseUrl: 'http://localhost:11434',
+    });
+    assert.deepEqual(models, ['llama3', 'qwen2.5']);
+});
+
+test('listModels throws on HTTP error and missing baseUrl', async () => {
+    await assert.rejects(
+        listModels({ fetchImpl: async () => ({ ok: false, status: 401 }), baseUrl: 'https://x/v1' }),
+        /401/,
+    );
+    await assert.rejects(
+        listModels({ fetchImpl: async () => ({ ok: true, json: async () => ({}) }), baseUrl: '' }),
+        /Base URL/,
+    );
+});
+
+test('testConnection succeeds via /models and reports model count', async () => {
+    const r = await testConnection({
+        fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: 'a' }, { id: 'b' }] }) }),
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-x',
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.modelCount, 2);
+});
+
+test('testConnection falls back to minimal chat completion when /models unsupported', async () => {
+    const calls = [];
+    const r = await testConnection({
+        fetchImpl: async (url, init) => {
+            calls.push({ url, init });
+            if (url.includes('/models')) return { ok: false, status: 404 };
+            return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'pong' } }] }) };
+        },
+        baseUrl: 'https://api.example.com/v1',
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.detail, 'chat/completions 连通（/models 不可用）');
+    assert.equal(calls.length, 2);
+    assert.ok(calls[1].url.endsWith('/chat/completions'));
+    const body = JSON.parse(calls[1].init.body);
+    assert.equal(body.max_tokens, 1); // 最小请求
+});
+
+test('testConnection reports failure when both endpoints fail', async () => {
+    const r = await testConnection({
+        fetchImpl: async () => { throw new Error('network down'); },
+        baseUrl: 'https://api.example.com/v1',
+    });
+    assert.equal(r.ok, false);
+    assert.ok(r.detail.includes('network down'));
 });
