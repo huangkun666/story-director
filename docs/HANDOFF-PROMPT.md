@@ -38,13 +38,15 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**210/210 通过**。
+当前测试数：**216/216 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+70ee612 feat: split must-read lore into top-level outline field, independent from timeline
+1969261 docs: mark release governance done in handoff prompt
 09993d7 docs: fill homepage with GitHub repo URL
 ff4a320 docs: refresh handoff prompt to current state (210 tests, memory pointer era)
 88b9b99 feat: derive recent dialogue window from yuzuki memory pointer
@@ -112,7 +114,7 @@ story-director/
 2. **双主题**：工具栏 🌙/☀️ 切换白天/夜晚；style.css 全部颜色走 CSS 变量（`--sd-*`），暗色是同一变量的黑灰覆盖；类型徽章有专门暗色反转；语义浅底用 color-mix 自动适配。**新增颜色必须加变量，禁止硬编码**。
 3. **五个页签**：大纲总览 / 故事设定（时间线+必读设定+节点节奏+保留前情+故事总览卡）/ 生成与记忆（生成参数+修订参数+记忆插件+对话正文提取）/ 角色与伏笔 / API 与工具。
 4. **完整大纲生成（两阶段检索）**：`advancedRetrieval`（默认开）——① 方向草案（模型先输出 direction + 2-4 条精准检索词）→ ② 用草案 queries + 保底三路（时间线/角色前5/焦点）定向检索 → ③ 正式生成（direction 块 + 资料）。草案失败自动降级单轮。题材通用，强制四线；新人物许可块。
-5. **时间线约束**：`timeline {start,end,note,mustRead}`，必读设定最高优先级；**节点节奏**（beatPacing 相对跨度三档）。
+5. **时间线约束**：`timeline {start,end,note}`，所有节点必须落在区间内；**必读设定**是顶层独立字段（`outline.mustRead`，世界观级硬约束，旧数据 `timeline.mustRead` 由 normalize 自动迁移），最高优先级；**节点节奏**（beatPacing 相对跨度三档）。
 6. **事实边界 + 前情保留**：`preserveHistory`（默认 true）——重新生成时旧 done/active 节点收进「前情·已完成」幕（默认折叠）；active 保持 active 并成为唯一焦点（新大纲第一个 active 降为 pending）；prompt 硬约束 start 早于进行中节点自动顺延。关掉 = 弃史重来；重玩 = 用户快照回滚。
 7. **近期对话上下文（记忆指针驱动）**：记忆插件每 N 轮（默认 20）更新一次并维护记忆指针。`adapter.getMemoryGap()` 只读调用 `YuzukiMemory.Storage.loadState()` 读 `settings.manualPointers.summary`，`getRecentDialogue` 的轮数 = **指针之后缺失楼层数（+1 轮余量，clamp 60 轮）**，无指针（记忆未启用/无状态/读取失败）回落 `recentTurns`。对话**始终携带**（生成/修订/体检）。
 8. **对话正文提取**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数按标签（如【】、* *）提取正文，无匹配行保留原文、全部无匹配/无规则回退原文；UI「AI 分析」让模型扫描最近对话给出规则建议（含真实提取示例），**用户逐条确认**后才生效，也可手动添加；作用于生成/修订/体检。
@@ -149,7 +151,7 @@ story-director/
 - ✅ **发布治理已完成**：仓库 https://github.com/huangkun666/story-director（public），homepage 已填，69 个提交 + `v0.11.1` tag 已推送，release 已发（https://github.com/huangkun666/story-director/releases/tag/v0.11.1 ，含 tgz 附件）。后续发新版：`npm pack` 或 tar 打包 → `gh release create` / REST API 传附件。
 - UI 层测试仍少（ui-render 部分函数有测，事件绑定靠手动验证）。
 - 记忆指针的 UI 展示（如「记忆缺口 N 层」状态显示）——可选。
-- 可选：把「必读设定」从 timeline 中拆出为独立字段。
+- ✅ **必读设定已拆为独立字段**：`outline.mustRead` 顶层字段（时间线只剩 start/end/note）；normalize 自动迁移旧 `timeline.mustRead`/`must_read`/`requiredLore`；UI 独立卡片 + 独立输入框 `sd_must_read`；prompts 顶层优先、兼容旧 timeline 传入；锁定合并保留 base.mustRead。
 - 可选：操作级撤销（增量变更日志，比整份快照更细）。
 - 可选：修订频率默认值（当前 every；可考虑 everyN=3 省 token）。
 - 用户可能继续提 UI 细节、token 优化、记忆插件工作流等需求。
