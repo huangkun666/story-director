@@ -1,7 +1,8 @@
 // story-director/src/ui.js
 // UI 层：事件绑定、节点编辑器、设置、窗口逻辑。渲染函数见 ui-render.js。
 import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from './outline-store.js';
-import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager } from './ui-render.js';
+import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermList } from './ui-render.js';
+import { logger } from './logger.js';
 
 function renderHistoryOptions() {
     const sel = document.getElementById('sd_history_select');
@@ -906,6 +907,72 @@ export function bindUI(ctx, adapter) {
         renderExtractRules();
         adopt.closest('.sd_extract_suggest')?.remove();
     });
+
+    // ---------- 调试终端 ----------
+    const termListEl = document.getElementById('sd_term_list');
+    let termLevel = 'all';      // 'all' | 'debug' | 'info' | 'warn' | 'error'
+    let termCategory = '';      // '' = 全部分类
+    let termKeyword = '';
+    let termPinned = false;     // 用户向上滚动后不强制跟随新日志
+    const TERM_SHOW_LIMIT = 200;
+    const termQuery = () => {
+        const level = termLevel === 'all' ? 'debug' : termLevel;
+        const cats = termCategory ? [termCategory] : null;
+        const kw = termKeyword.trim();
+        return logger.filter({ level, categories: cats, keyword: kw });
+    };
+    const renderTerminal = () => {
+        if (!termListEl) return;
+        const all = termQuery();
+        const shown = all.slice(-TERM_SHOW_LIMIT).reverse(); // 最新在前
+        termListEl.innerHTML = renderTermList(shown, all.length);
+        if (!termPinned) termListEl.scrollTop = 0;
+    };
+    // 新日志防抖刷新；倒序显示时顶部 = 最新，未钉住则跟随
+    let termRenderTimer = null;
+    logger.subscribe(() => {
+        clearTimeout(termRenderTimer);
+        termRenderTimer = setTimeout(renderTerminal, 120);
+    });
+    termListEl?.addEventListener('scroll', () => {
+        termPinned = termListEl.scrollTop > 8;
+    }, { passive: true });
+    // 过滤：级别按钮 / 分类下拉 / 关键字
+    document.querySelectorAll('[data-term-level]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            termLevel = btn.getAttribute('data-term-level') || 'all';
+            document.querySelectorAll('[data-term-level]').forEach(b => b.classList.toggle('sd_term_filter_active', b === btn));
+            renderTerminal();
+        });
+    });
+    document.getElementById('sd_term_category')?.addEventListener('change', (e) => {
+        termCategory = e.target.value || '';
+        renderTerminal();
+    });
+    document.getElementById('sd_term_keyword')?.addEventListener('input', (e) => {
+        termKeyword = e.target.value || '';
+        renderTerminal();
+    });
+    // 展开详情 / 清空 / 导出
+    termListEl?.addEventListener('click', (e) => {
+        const entry = e.target.closest('.sd_term_entry');
+        if (entry && entry.querySelector('.sd_term_detail')) {
+            entry.classList.toggle('sd_term_open');
+        }
+    });
+    document.getElementById('sd_term_clear')?.addEventListener('click', () => {
+        logger.clear();
+        renderTerminal();
+    });
+    document.getElementById('sd_term_export')?.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(logger.exportJson());
+            renderReport({ verdict: 'sync', changed: false, reason: `已复制 ${logger.count()} 条日志到剪贴板` }, '调试终端');
+        } catch (err) {
+            renderReport({ verdict: 'major-drift', changed: false, reason: `导出失败：${err?.message || err}` }, '调试终端');
+        }
+    });
+    renderTerminal();
 
     renderHistoryOptions();
 }

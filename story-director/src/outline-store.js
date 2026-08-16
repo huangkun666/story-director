@@ -234,6 +234,55 @@ export function deserializeOutline(json) {
     }
 }
 
+// 调试诊断：大纲健康度统计 + 可修复问题清单（只读，不修改大纲）。
+// normalizeOutline 保持纯函数不产生副作用/日志；且 normalize 会自愈悬空引用
+// （清空 beatId、重定向 focus），因此问题检测基于「原始输入」——证据在
+// normalize 之前才存在。诊断信息由调用方（adapter 在加载/保存时）记录到调试终端。
+export function diagnoseOutline(outline) {
+    const o = normalizeOutline(outline);
+    const raw = (outline && typeof outline === 'object') ? outline : {};
+    const rawBeats = Array.isArray(raw.beats) ? raw.beats : [];
+    const rawBeatIds = new Set(rawBeats.map(b => asString(b?.id, '')).filter(Boolean));
+    const rawForeshadows = Array.isArray(raw.foreshadowing) ? raw.foreshadowing : [];
+    const rawFocus = (raw.focus && typeof raw.focus === 'object') ? raw.focus : {};
+    const rawActs = Array.isArray(raw.acts) ? raw.acts : [];
+    const issues = [];
+
+    const orphanForeshadow = rawForeshadows.filter(f => {
+        const beatId = asString(f?.beatId, '') || asString(f?.payoffBeat, '');
+        return beatId && !rawBeatIds.has(beatId);
+    }).length;
+    if (orphanForeshadow) issues.push(`${orphanForeshadow} 条伏笔的回收节点悬空（normalize 已清空 beatId）`);
+    const focusDangling = !!asString(rawFocus.currentBeat, '') && !rawBeatIds.has(asString(rawFocus.currentBeat, ''));
+    if (focusDangling) issues.push('focus.currentBeat 原为悬空引用（normalize 已重定向）');
+    const rawFsIds = new Set(rawForeshadows.map(f => asString(f?.id, '')).filter(Boolean));
+    const activeForeshadowDangling = Array.isArray(rawFocus.activeForeshadow)
+        ? rawFocus.activeForeshadow.filter(id => !rawFsIds.has(asString(id, ''))).length
+        : 0;
+    if (activeForeshadowDangling) issues.push(`${activeForeshadowDangling} 条活跃伏笔引用悬空（normalize 已过滤）`);
+    const actBeatMismatch = rawActs.filter(a => Array.isArray(a?.beats) && a.beats.some(id => !rawBeatIds.has(asString(id, '')))).length;
+    if (actBeatMismatch) issues.push(`${actBeatMismatch} 幕含失效节点引用（normalize 已重建 beats 列表）`);
+    const multipleActive = o.beats.filter(b => b.status === 'active').length;
+    if (multipleActive > 1) issues.push(`${multipleActive} 个节点同时为 active（应为唯一焦点）`);
+    const rawTimeline = (raw.timeline && typeof raw.timeline === 'object') ? raw.timeline : {};
+    if (asString(rawTimeline.mustRead, '') || asString(rawTimeline.must_read, '') || asString(rawTimeline.requiredLore, '')) {
+        issues.push('旧版 timeline.mustRead 已迁移到顶层 mustRead');
+    }
+    return {
+        beats: o.beats.length,
+        acts: o.acts.length,
+        arcs: o.arcs.length,
+        foreshadowing: o.foreshadowing.length,
+        doneBeats: o.beats.filter(b => b.status === 'done').length,
+        activeBeats: o.beats.filter(b => b.status === 'active').length,
+        pendingBeats: o.beats.filter(b => b.status === 'pending').length,
+        hasTimeline: !!(o.timeline.start || o.timeline.end),
+        hasMustRead: !!o.mustRead,
+        focusBeat: o.focus.currentBeat || '（无）',
+        issues,
+    };
+}
+
 // 跳转到指定节点开始游玩：目标节点置为 active，其之前的节点全部视为已完成，
 // 目标之后若有 active 则重置为 pending（保证唯一 active），focus 指向目标。
 // 返回新大纲，不修改入参。手动操作，不递增 revisionCount（UI 层会留快照）。

@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, diagnoseOutline } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -590,4 +590,42 @@ test('updateAct edits act title and summary without mutating input', () => {
     // 不存在的幕 / 空 patch：内容不变（受控函数始终返回新对象，但无实质变更）
     assert.equal(updateAct(o, 'nope', { title: 'x' }).acts[0].title, '第一幕');
     assert.equal(updateAct(o, 'act_1', null).acts[0].title, '第一幕');
+});
+
+test('diagnoseOutline reports stats and self-healing issues without mutating', () => {
+    // 原始输入（未 normalize）：包含悬空引用，normalize 会自愈——诊断要能报出证据
+    const raw = {
+        mustRead: '设定',
+        timeline: { start: '200年', end: '208年' },
+        acts: [{ id: 'act_1', title: '第一幕', summary: '', beats: [] }],
+        beats: [
+            { id: 'b1', title: '已发生', summary: 's', status: 'done' },
+            { id: 'b2', title: '进行中', summary: 's', status: 'active' },
+        ],
+        arcs: [{ char: '主角', desire: '', flaw: '', growth: 'g', status: 'active' }],
+        foreshadowing: [
+            { id: 'f1', hint: 'h', status: 'pending', payoff: '', beatId: 'ghost_beat' }, // 悬空
+        ],
+    };
+    const before = JSON.stringify(raw);
+    const d = diagnoseOutline(raw);
+    assert.equal(d.beats, 2);
+    assert.equal(d.doneBeats, 1);
+    assert.equal(d.activeBeats, 1);
+    assert.equal(d.hasTimeline, true);
+    assert.equal(d.hasMustRead, true);
+    assert.equal(d.foreshadowing, 1);
+    // 悬空伏笔回收节点被报告（normalize 已自愈清空 beatId）
+    assert.ok(d.issues.some(s => s.includes('伏笔的回收节点悬空')));
+    // 只读：入参不变
+    assert.equal(JSON.stringify(raw), before);
+});
+
+test('diagnoseOutline flags legacy timeline.mustRead migration and empty outline', () => {
+    const legacy = diagnoseOutline({ timeline: { mustRead: '旧设定' } });
+    assert.ok(legacy.issues.some(s => s.includes('迁移到顶层 mustRead')));
+    const empty = diagnoseOutline({});
+    assert.equal(empty.beats, 0);
+    assert.equal(empty.focusBeat, '（无）');
+    assert.equal(empty.issues.length, 0);
 });

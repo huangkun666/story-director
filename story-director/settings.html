@@ -431,6 +431,41 @@
                         <small class="sd_hint">生成/修订/体检和手动编辑前都会自动留快照，最多 30 条。</small>
                     </div>
                 </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-terminal"></i></span>
+                        <div class="sd_card_titles">
+                            <b>调试终端</b>
+                            <small>LLM 调用 / 检索 / 记忆 / 引擎事件实时日志（环形 500 条，仅本会话）</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body">
+                        <div class="sd_term_toolbar">
+                            <div class="sd_term_filters">
+                                <button class="sd_term_filter sd_term_filter_active" data-term-level="all">全部</button>
+                                <button class="sd_term_filter" data-term-level="debug">调试</button>
+                                <button class="sd_term_filter" data-term-level="info">信息</button>
+                                <button class="sd_term_filter" data-term-level="warn">警告</button>
+                                <button class="sd_term_filter" data-term-level="error">错误</button>
+                            </div>
+                            <select id="sd_term_category" class="sd_term_category" title="按分类过滤">
+                                <option value="">全部分类</option>
+                                <option value="llm">LLM 调用</option>
+                                <option value="retrieval">检索</option>
+                                <option value="memory">记忆</option>
+                                <option value="engine">引擎</option>
+                                <option value="edit">编辑</option>
+                                <option value="lifecycle">生命周期</option>
+                            </select>
+                            <input id="sd_term_keyword" class="sd_term_keyword" type="text" placeholder="搜索关键字…" />
+                            <div id="sd_term_clear" class="menu_button sd_btn" title="清空日志"><i class="fa-solid fa-broom"></i><span>清空</span></div>
+                            <div id="sd_term_export" class="menu_button sd_btn" title="复制全部日志 JSON"><i class="fa-solid fa-copy"></i><span>导出</span></div>
+                        </div>
+                        <div id="sd_term_list" class="sd_term_list"></div>
+                        <small class="sd_hint">点击条目展开详情；日志仅存内存，刷新页面即清空。</small>
+                    </div>
+                </section>
             </section>
 
             <div id="sd_beat_editor" class="sd_modal">

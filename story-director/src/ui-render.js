@@ -431,4 +431,40 @@ function renderForeshadowManager(foreshadowing, beats, filter = '') {
 }
 
 
-export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager };
+const TERM_CAT_LABELS = {
+    llm: 'LLM',
+    retrieval: '检索',
+    memory: '记忆',
+    engine: '引擎',
+    edit: '编辑',
+    lifecycle: '生命周期',
+};
+
+// 调试终端：单条日志条目 HTML（展开详情由点击切换，默认折叠）
+function renderTermEntry(entry) {
+    const time = String(entry?.ts || '').slice(11, 23) || '';
+    const lv = entry?.level || 'info';
+    const cat = TERM_CAT_LABELS[entry?.category] || entry?.category || '';
+    const detail = entry?.detail ? `<pre class="sd_term_detail">${escapeHtml(entry.detail)}</pre>` : '';
+    return `<div class="sd_term_entry" data-term-id="${entry?.id ?? ''}">
+        <span class="sd_term_time">${escapeHtml(time)}</span>
+        <span class="sd_term_lv sd_term_lv_${escapeHtml(lv)}">${escapeHtml(lv)}</span>
+        <span class="sd_term_cat">${escapeHtml(cat)}</span>
+        <span class="sd_term_msg">${escapeHtml(entry?.message || '')}</span>
+        ${detail}
+    </div>`;
+}
+
+// 调试终端：条目列表（entries 已按显示顺序排好，最新在前）；total 是过滤后总数
+function renderTermList(entries, total = entries.length) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return `<div class="sd_term_empty">暂无日志${total ? `（共 ${total} 条被过滤）` : ''}。触发一次生成/修订即可看到 LLM 调用记录。</div>`;
+    }
+    const head = total > entries.length
+        ? `<div class="sd_term_more">仅显示最近 ${entries.length} 条，共 ${total} 条（调整过滤条件查看）</div>`
+        : '';
+    return `${head}${entries.map(renderTermEntry).join('')}`;
+}
+
+
+export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermEntry, renderTermList };

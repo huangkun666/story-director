@@ -1,6 +1,7 @@
 // story-director 入口：独立大界面（挂在魔法棒菜单里），注册事件与斜杠命令
 import { createSillyTavernAdapter, ensureSettings } from './src/adapter.js';
 import { mountUI, bindUI, clampWindowPos } from './src/ui.js';
+import { log } from './src/logger.js';
 
 (function () {
     'use strict';
@@ -171,6 +172,7 @@ import { mountUI, bindUI, clampWindowPos } from './src/ui.js';
                 reviseCounter = (reviseCounter + 1) % Math.max(1, s.reviseEveryN || 1);
                 if (reviseCounter !== 0) return;
             }
+            log('debug', 'lifecycle', `消息已发送 → 触发修订（频率 ${s.reviseFrequency}${s.reviseFrequency === 'everyN' ? ` / 每 ${s.reviseEveryN || 1} 轮` : ''}）`);
             adapter.director.revise().catch(() => {});
         });
 
@@ -181,10 +183,12 @@ import { mountUI, bindUI, clampWindowPos } from './src/ui.js';
             adapter.clearUndo?.();
             adapter.load();
             adapter.renderOutline();
+            log('info', 'lifecycle', '切换聊天：大纲重载，撤销栈已清空');
         });
 
         registerSlashCommands(ctx);
 
+        log('info', 'lifecycle', `插件就绪 v${VERSION}（独立窗口 + 魔法棒菜单）`);
         console.log(`[story-director] v${VERSION} ready (standalone window + wand menu).`);
     }
 

@@ -1,9 +1,10 @@
 // story-director/src/adapter.js
 // 酒馆运行时适配层：把 SillyTavern.getContext() 的能力桥接给 director。
 import { createDirector } from './director.js';
-import { normalizeOutline, createEmptyOutline, deserializeOutline, serializeOutline } from './outline-store.js';
+import { normalizeOutline, createEmptyOutline, deserializeOutline, serializeOutline, diagnoseOutline } from './outline-store.js';
 import { createOpenAiCompatibleGenerator, listModels as listModelsApi, testConnection as testConnectionApi } from './openai-compat.js';
 import { extractDialogueBodies } from './dialogue-extract.js';
+import { log } from './logger.js';
 
 const META_KEY = 'story_director';
 const INJECT_KEY = 'story_director';
@@ -97,6 +98,9 @@ export function createSillyTavernAdapter(ctx) {
         const c = freshCtx();
         c.updateChatMetadata({ [META_KEY]: serializeOutline(normalized) });
         c.saveMetadataDebounced?.();
+        const d = diagnoseOutline(normalized);
+        log('debug', 'engine', '大纲保存',
+            `${d.beats} 节点（done ${d.doneBeats}/active ${d.activeBeats}/pending ${d.pendingBeats}）、${d.acts} 幕、${d.arcs} 弧光、${d.foreshadowing} 伏笔${d.issues.length ? `；待修复：${d.issues.join('；')}` : ''}`);
     }
 
     function getHistory() {
@@ -214,7 +218,7 @@ export function createSillyTavernAdapter(ctx) {
             }
         } catch {}
 
-        return {
+        const result = {
             name: ch.name,
             cast,
             description,
@@ -226,6 +230,9 @@ export function createSillyTavernAdapter(ctx) {
             depth_prompt: depthPrompt,
             worldbook,
         };
+        log('debug', 'llm', '角色卡读取（预算内）',
+            `预算 ${limit} 字符：名录 ${cast.length} / 深度设定 ${depthPrompt.length} / 描述 ${description.length} / 人格 ${personality.length} / 场景 ${scenario.length} / 世界书 ${worldbook.length}`);
+        return result;
     }
 
     function getMemoryContext() {
@@ -244,7 +251,9 @@ export function createSillyTavernAdapter(ctx) {
             // yuzuki-Memory 无数据时只返回空态占位，不要灌进 prompt
             if (cleaned.includes('(历史存档，当前暂无总结)') && cleaned.length < 300) return '';
             const limit = Math.max(1000, Number(settings.memoryContextLimit) || 8000);
-            return cleaned.slice(0, limit);
+            const clipped = cleaned.slice(0, limit);
+            log('debug', 'memory', '记忆摘要读取', `字符 ${clipped.length}/${limit}${clipped.length >= limit ? '（触顶截断）' : ''}`);
+            return clipped;
         } catch (err) {
             console.warn('[story-director] failed to read yuzuki-Memory context:', err);
             return '';
@@ -287,7 +296,13 @@ export function createSillyTavernAdapter(ctx) {
             }
             if (!blocks.length) return { text: '', hits: [] };
             const limit = Math.max(1000, Number(settings.vectorMemoryLimit) || 6000);
-            return { text: blocks.join('\n').slice(0, limit), hits };
+            const merged = blocks.join('\n').slice(0, limit);
+            const perQuery = queries.map(q => {
+                const n = hits.filter(h => h.query === q).length;
+                return `${q.slice(0, 40)}${q.length > 40 ? '…' : ''}×${n}`;
+            }).join('；');
+            log('info', 'retrieval', '向量检索', `查询 ${queries.length} 路：${perQuery}；命中 ${hits.length} 条 / 文本 ${merged.length} 字符`);
+            return { text: merged, hits };
         } catch (err) {
             console.warn('[story-director] vector memory search failed:', err);
             return { text: '', hits: [] };
@@ -356,7 +371,10 @@ export function createSillyTavernAdapter(ctx) {
         // 相同预算覆盖更多轮次——记忆库落后期间，近期剧情靠对话
         const rules = settings.dialogueExtractRules;
         const finalText = (Array.isArray(rules) && rules.length) ? extractDialogueBodies(text, rules) : text;
-        return finalText.slice(0, limit);
+        const clipped = finalText.slice(0, limit);
+        log('debug', 'memory', '近期对话窗口',
+            `记忆缺口 ${gap == null ? '无指针（回落默认）' : `${gap} 层`} → 生效 ${effectiveTurns} 轮；字符 ${clipped.length}/${limit}${(Array.isArray(rules) && rules.length) ? '（正文提取规则生效）' : ''}`);
+        return clipped;
     }
 
     function getLlmSettings() {
@@ -468,6 +486,8 @@ export function createSillyTavernAdapter(ctx) {
         if (serializeOutline(next) === serializeOutline(prev)) return prev; // 无实质变更
         pushUndo(label);
         setOutline(next);
+        log('info', 'edit', `编辑：${String(label || '手动编辑')}`,
+            `撤销栈 ${undoStack.length}/${UNDO_LIMIT} 步`);
         return next;
     }
     function undo() {
@@ -475,6 +495,7 @@ export function createSillyTavernAdapter(ctx) {
         if (!entry) return null;
         setOutline(entry.outline);
         notifyUndoChanged();
+        log('info', 'edit', `撤销：${entry.label}`);
         return entry.label;
     }
     function canUndo() {

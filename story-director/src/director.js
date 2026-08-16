@@ -7,6 +7,7 @@ import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
 import { renderInstruction } from './injector.js';
 import { mergeHistoryIntoOutline } from './outline-store.js';
+import { log } from './logger.js';
 
 export function createDirector(deps) {
     let running = false;
@@ -38,8 +39,12 @@ export function createDirector(deps) {
     }
 
     async function generate({ userRequest = '', timeline, mustRead } = {}) {
-        if (running) return null;
+        if (running) {
+            log('debug', 'llm', '生成被跳过：已有任务运行（并发守卫）');
+            return null;
+        }
         running = true;
+        const t0 = Date.now();
         try {
             const settings = deps.getSettings();
             const card = deps.getCharacterCard();
@@ -75,6 +80,7 @@ export function createDirector(deps) {
             // 全部上下文但没看过资料）；第二步用这些检索词定向检索，而不是在还没
             // 想好写什么时就拿泛 query 去检索。草案失败时降级为保底查询（单轮行为）。
             const advancedRetrieval = String(settings.advancedRetrieval) !== 'false' && useVector;
+            log('info', 'llm', `生成大纲${advancedRetrieval ? '（两阶段检索）' : ''}`, `记忆模式 ${memoryMode}；保留前情 ${preserveHistory ? '开' : '关'}；用户要求：${String(userRequest || '（未指定）').slice(0, 120)}`);
             let direction = '';
             let modelQueries = [];
             if (advancedRetrieval) {
@@ -95,9 +101,13 @@ export function createDirector(deps) {
                         modelQueries = Array.isArray(dirResult.queries)
                             ? dirResult.queries.map(q => String(q || '').trim().slice(0, 2000)).filter(Boolean).slice(0, 3)
                             : [];
+                        log('debug', 'retrieval', '方向草案成功', `模型定向查询 ${modelQueries.length} 条：${modelQueries.join('；') || '（无）'}`);
+                    } else {
+                        log('warn', 'retrieval', '方向草案输出无效，使用保底查询', '模型未返回 direction/queries');
                     }
                 } catch (err) {
                     console.warn('[story-director] direction draft failed, falling back:', err);
+                    log('warn', 'retrieval', '方向草案失败，降级保底查询', String(err?.message || err));
                 }
             }
 
@@ -140,6 +150,7 @@ export function createDirector(deps) {
             const result = await gen(bundle);
             if (result) {
                 let next = normalizeOutline(result);
+                log('info', 'llm', '生成完成', `耗时 ${Date.now() - t0}ms；${next.beats.length} 节点 / ${next.acts.length} 幕 / ${next.arcs.length} 弧光`);
                 // 用户显式指定过时间线时，以用户输入为准（模型输出只补漏）
                 const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
                 if (hasRequestedTimeline) {
@@ -159,6 +170,8 @@ export function createDirector(deps) {
                 recordHistory('generate');
                 deps.setOutline(next);
                 deps.renderOutline();
+            } else {
+                log('warn', 'llm', '生成失败，沿用旧大纲', `耗时 ${Date.now() - t0}ms；LLM 未返回有效 JSON`);
             }
             refreshInjection();
             return result;
@@ -176,7 +189,10 @@ export function createDirector(deps) {
             const dialogue = deps.getRecentDialogue?.(turns) || '';
             const bundle = buildDialogueAnalyzePrompt({ dialogue });
             const result = await gen(bundle);
-            if (!result || typeof result !== 'object') return null;
+            if (!result || typeof result !== 'object') {
+                log('warn', 'llm', '对话标签分析失败', 'LLM 未返回有效 JSON');
+                return null;
+            }
             const patterns = Array.isArray(result.patterns) ? result.patterns : [];
             const rules = patterns
                 .filter(p => p && typeof p.open === 'string' && p.open && typeof p.close === 'string' && p.close)
@@ -201,7 +217,11 @@ export function createDirector(deps) {
         try {
             const bundle = buildBeatPrompt({ outline: deps.getOutline(), userHint });
             const result = await gen(bundle);
-            if (!result || typeof result !== 'object') return null;
+            if (!result || typeof result !== 'object') {
+                log('warn', 'llm', 'AI 节点生成失败', 'LLM 未返回有效 JSON');
+                return null;
+            }
+            log('debug', 'llm', 'AI 节点建议', `提示：${String(userHint || '（自动）').slice(0, 80)}`);
             return {
                 title: String(result.title || '').trim(),
                 summary: String(result.summary || '').trim(),
@@ -215,8 +235,12 @@ export function createDirector(deps) {
     }
 
     async function revise() {
-        if (running) return null;
+        if (running) {
+            log('debug', 'llm', '修订被跳过：已有任务运行（并发守卫）');
+            return null;
+        }
         running = true;
+        const t0 = Date.now();
         try {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
@@ -258,6 +282,9 @@ export function createDirector(deps) {
                 // 非锁定模式：全量输出后合并（含已完成节点细节恢复）。
                 deps.setOutline(locked ? applyPatch(outline, result) : applyRevision(outline, result));
                 deps.renderOutline();
+                log('info', 'llm', `修订完成${locked ? '（锁定·增量补丁）' : ''}`, `耗时 ${Date.now() - t0}ms`);
+            } else {
+                log('warn', 'llm', '修订失败，沿用旧大纲', `耗时 ${Date.now() - t0}ms；LLM 未返回有效结果`);
             }
             refreshInjection();
             return result;
@@ -267,8 +294,12 @@ export function createDirector(deps) {
     }
 
     async function check() {
-        if (running) return null;
+        if (running) {
+            log('debug', 'llm', '体检被跳过：已有任务运行（并发守卫）');
+            return null;
+        }
         running = true;
+        const t0 = Date.now();
         try {
             const settings = deps.getSettings();
             const dialogue = deps.getRecentDialogue(settings.recentTurns ?? 5);
@@ -294,6 +325,7 @@ export function createDirector(deps) {
             });
             const report = await genCheck(bundle);
             if (!report) {
+                log('warn', 'llm', '体检调用失败', `耗时 ${Date.now() - t0}ms；LLM 未返回有效报告`);
                 refreshInjection();
                 return null; // LLM 调用失败，信号与 generate/revise 一致
             }
@@ -308,6 +340,7 @@ export function createDirector(deps) {
             deps.setOutline(updated);
             deps.renderOutline();
             refreshInjection();
+            log('info', 'llm', '体检完成', `耗时 ${Date.now() - t0}ms；verdict=${normalizedReport.verdict}，issues ${normalizedReport.issues.length} 条${normalizedReport.changed ? '，已应用修正' : '，未修改大纲'}`);
             return normalizedReport;
         } finally {
             running = false;
