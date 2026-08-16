@@ -101,6 +101,26 @@ export function bindUI(ctx, adapter) {
         adapter.director.refreshInjection();
     });
 
+    // 主题切换：白天 / 黑灰夜晚（存 extension_settings，窗口级变量切换）
+    const themeToggleEl = document.getElementById('sd_theme_toggle');
+    const applyTheme = (theme) => {
+        const isDark = theme === 'dark';
+        windowEl?.classList.toggle('sd_theme_dark', isDark);
+        if (themeToggleEl) {
+            const icon = themeToggleEl.querySelector('i');
+            if (icon) icon.className = `fa-solid ${isDark ? 'fa-sun' : 'fa-moon'} sd_btn_icon`;
+            const span = themeToggleEl.querySelector('span');
+            if (span) span.textContent = isDark ? '白天' : '夜晚';
+        }
+    };
+    applyTheme(adapter.settings.theme || 'light');
+    themeToggleEl?.addEventListener('click', () => {
+        const next = (adapter.settings.theme || 'light') === 'dark' ? 'light' : 'dark';
+        adapter.settings.theme = next;
+        ctx.saveSettingsDebounced?.();
+        applyTheme(next);
+    });
+
     const lockEl = document.getElementById('sd_lock_outline');
     if (lockEl) lockEl.checked = !!adapter.settings.lockOutline;
     lockEl?.addEventListener('change', (e) => {

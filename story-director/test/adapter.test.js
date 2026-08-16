@@ -30,6 +30,7 @@ test('normalizeSettings adds missing defaults including llm block', () => {
     assert.equal(s.injectTokenLimit, DEFAULT_SETTINGS.injectTokenLimit);
     assert.equal(s.outlineDetail, 'medium');
     assert.equal(s.beatPacing, 'balanced');
+    assert.equal(s.theme, 'light'); // 默认白天主题
     assert.equal(s.lockOutline, false);
 });
 

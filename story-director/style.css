@@ -1,12 +1,62 @@
-/* story-director 独立大界面样式：白色底、深色文字，不跟随酒馆暗色主题 */
+/* story-director 独立大界面样式：白天/夜晚两套主题，默认白天。
+   全部颜色走变量；新增颜色必须定义在这里，禁止硬编码。 */
 
 #story_director_window.sd_window,
 #story_director_panel.sd_panel_content {
-    --sd-border: rgba(31, 41, 55, 0.16);
+    /* 背景层 */
     --sd-bg: #f5f6f8;
+    --sd-card: #ffffff;
+    --sd-card-soft: #f8f9fb;
+    --sd-amber-bg: #fff6e6;
+    --sd-blue-bg: #f3f6ff;
+    --sd-red-bg: #fdf1f2;
+    /* 文字层 */
     --sd-text: #1f2430;
+    --sd-text-2: #3b4350;
+    --sd-muted: #6b7484;
+    /* 边框层 */
+    --sd-border: rgba(31, 41, 55, 0.16);
+    --sd-border-soft: #e4e7ec;
+    --sd-border-input: #d5d8dd;
+    /* 强调（唯一暖色） */
     --sd-em: #b07a1a;
     --sd-quote: #8a5a00;
+    --sd-amber-border: #e2b05a;
+    --sd-amber-soft: #fff6e5;
+    --sd-amber-strong: #e8b34b;
+    /* 状态语义（伏笔/体检/检索等，使用克制） */
+    --sd-blue: #6b8cff;
+    --sd-green: #2e9e5b;
+    --sd-red: #d64545;
+    --sd-red-strong: #b3373f;
+    --sd-red-soft: #fdeceb;
+}
+
+/* 夜晚模式：黑灰底、浅色文字，同样走变量 */
+#story_director_window.sd_window.sd_theme_dark,
+#story_director_panel.sd_panel_content.sd_theme_dark {
+    --sd-bg: #17191e;
+    --sd-card: #1f2229;
+    --sd-card-soft: #262a33;
+    --sd-amber-bg: #2e2718;
+    --sd-blue-bg: #232b40;
+    --sd-red-bg: #3a2426;
+    --sd-text: #dde2ea;
+    --sd-text-2: #c3cad4;
+    --sd-muted: #9aa4b2;
+    --sd-border: rgba(255, 255, 255, 0.12);
+    --sd-border-soft: #2e333d;
+    --sd-border-input: #3a4150;
+    --sd-em: #d8a64a;
+    --sd-quote: #e0b25c;
+    --sd-amber-border: #7a5c24;
+    --sd-amber-soft: #2e2718;
+    --sd-amber-strong: #d8a64a;
+    --sd-blue: #7d9bff;
+    --sd-green: #57c27e;
+    --sd-red: #e06a6a;
+    --sd-red-strong: #ef7d7d;
+    --sd-red-soft: #3a2426;
 }
 
 /* ---------- 独立大窗口 ---------- */
@@ -22,7 +72,7 @@
     overflow: hidden;
     border: 1px solid var(--sd-border);
     border-radius: 14px;
-    background-color: #ffffff;
+    background-color: var(--sd-card);
     color: var(--sd-text);
     box-shadow: 0 18px 60px rgba(15, 23, 42, 0.28);
 }
@@ -38,7 +88,7 @@
     gap: 10px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--sd-border);
-    background: linear-gradient(90deg, #fff6e5, #ffffff 60%);
+    background: linear-gradient(90deg, var(--sd-amber-soft), var(--sd-card) 60%);
 }
 
 .sd_window_actions {
@@ -62,8 +112,8 @@
 
 .sd_window_close:hover {
     opacity: 1;
-    background: rgba(224, 108, 117, 0.15);
-    border-color: rgba(224, 108, 117, 0.45);
+    background: color-mix(in srgb, var(--sd-red) 15%, transparent);
+    border-color: color-mix(in srgb, var(--sd-red) 45%, transparent);
 }
 
 .sd_window_body {
@@ -96,10 +146,10 @@
 .sd_timeline_editor {
     margin-bottom: 10px;
     padding: 9px 10px;
-    border: 1px solid #e2b05a;
+    border: 1px solid var(--sd-amber-border);
     border-left-width: 3px;
     border-radius: 10px;
-    background: #fffdf7;
+    background: var(--sd-amber-soft);
 }
 
 .sd_timeline_head {
@@ -107,15 +157,15 @@
     align-items: center;
     gap: 7px;
     margin-bottom: 8px;
-    color: #8a5a00;
+    color: var(--sd-quote);
 }
 
 .sd_timeline_head i {
-    color: #b07a1a;
+    color: var(--sd-em);
 }
 
 .sd_timeline_head small {
-    color: #5c6470;
+    color: var(--sd-muted);
     opacity: 0.85;
 }
 
@@ -126,7 +176,7 @@
 }
 
 .sd_timeline_field {
-    background: #ffffff;
+    background: var(--sd-card);
 }
 
 /* ---------- 工具栏 ---------- */
@@ -146,20 +196,20 @@
     cursor: pointer;
     padding: 5px 10px;
     color: var(--sd-text);
-    background: #f3f4f6;
-    border: 1px solid #d5d8dd;
+    background: var(--sd-card-soft);
+    border: 1px solid var(--sd-border-input);
 }
 
 .sd_btn_primary {
-    background: #fff7e6;
-    border-color: #e2b05a;
-    color: #8a5a00;
+    background: var(--sd-amber-bg);
+    border-color: var(--sd-amber-border);
+    color: var(--sd-quote);
 }
 
 .sd_btn_danger {
-    background: #fdf1f2;
-    border-color: #eec2c6;
-    color: #b3373f;
+    background: var(--sd-red-bg);
+    border-color: var(--sd-red-soft);
+    color: var(--sd-red-strong);
 }
 
 /* 覆盖酒馆暗色主题的 menu_button 默认样式 */
@@ -170,15 +220,15 @@
 
 .sd_window .menu_button.sd_btn:hover {
     filter: brightness(0.97);
-    background-color: #e9ebef;
+    background-color: var(--sd-border-soft);
 }
 
 .sd_window .menu_button.sd_btn_primary:hover {
-    background-color: #ffefd0;
+    background-color: var(--sd-amber-soft);
 }
 
 .sd_window .menu_button.sd_btn_danger:hover {
-    background-color: #fbe4e6;
+    background-color: var(--sd-red-soft);
 }
 
 .sd_btn .sd_btn_icon {
@@ -360,18 +410,18 @@
 }
 
 .sd_badge_pending {
-    color: #9aa0a8;
+    color: var(--sd-muted);
     background: rgba(128, 128, 128, 0.12);
 }
 
 .sd_badge_active {
-    color: #e8b34b;
-    background: rgba(232, 179, 75, 0.14);
+    color: var(--sd-amber-strong);
+    background: color-mix(in srgb, var(--sd-amber-strong) 14%, transparent);
 }
 
 .sd_badge_done {
-    color: #67b878;
-    background: rgba(103, 184, 120, 0.14);
+    color: var(--sd-green);
+    background: color-mix(in srgb, var(--sd-green) 14%, transparent);
 }
 
 /* 分幕大纲 */
@@ -430,7 +480,7 @@
     margin-left: auto;
     opacity: 0;
     cursor: pointer;
-    color: #6b8cff;
+    color: var(--sd-blue);
     font-size: 0.85em;
     padding: 2px 7px;
     border-radius: 6px;
@@ -443,8 +493,8 @@
 }
 
 .sd_beat_jump:hover {
-    background: #eef2ff;
-    color: #4a6cf7;
+    background: var(--sd-blue-bg);
+    color: var(--sd-blue);
 }
 
 .sd_beat_rail {
@@ -470,8 +520,8 @@
 }
 
 .sd_beat_done .sd_beat_dot {
-    background: #67b878;
-    border-color: #67b878;
+    background: var(--sd-green);
+    border-color: var(--sd-green);
 }
 
 .sd_beat_rail::after {
@@ -661,30 +711,30 @@
 }
 
 .sd_verdict_sync {
-    color: #2e7d4f;
-    border-color: rgba(46, 125, 79, 0.4);
+    color: var(--sd-green);
+    border-color: color-mix(in srgb, var(--sd-green) 40%, transparent);
 }
 
 .sd_verdict_sync .sd_report_header {
-    background: rgba(46, 125, 79, 0.08);
+    background: color-mix(in srgb, var(--sd-green) 8%, transparent);
 }
 
 .sd_verdict_minor {
-    color: #a86f00;
-    border-color: rgba(168, 111, 0, 0.4);
+    color: var(--sd-em);
+    border-color: color-mix(in srgb, var(--sd-em) 40%, transparent);
 }
 
 .sd_verdict_minor .sd_report_header {
-    background: rgba(168, 111, 0, 0.08);
+    background: color-mix(in srgb, var(--sd-em) 8%, transparent);
 }
 
 .sd_verdict_major {
-    color: #b3373f;
-    border-color: rgba(179, 55, 63, 0.4);
+    color: var(--sd-red-strong);
+    border-color: color-mix(in srgb, var(--sd-red-strong) 40%, transparent);
 }
 
 .sd_verdict_major .sd_report_header {
-    background: rgba(179, 55, 63, 0.08);
+    background: color-mix(in srgb, var(--sd-red-strong) 8%, transparent);
 }
 
 .sd_report_body {
@@ -716,7 +766,7 @@
     border: 1px solid var(--sd-border);
     border-radius: 10px;
     overflow: hidden;
-    background: #ffffff;
+    background: var(--sd-card);
 }
 
 .sd_subdrawer_header {
@@ -724,7 +774,7 @@
     margin: 0 !important;
     border-radius: 0 !important;
     border: none !important;
-    background: #f3f4f6 !important;
+    background: var(--sd-card-soft) !important;
     color: var(--sd-text) !important;
 }
 
@@ -757,7 +807,7 @@
     padding: 7px 8px;
     border: 1px solid var(--sd-border);
     border-radius: 8px;
-    background: #f8f9fb;
+    background: var(--sd-card-soft);
 }
 
 .sd_setting_label {
@@ -774,9 +824,9 @@
 .sd_window input[type='number'] {
     width: 100%;
     box-sizing: border-box;
-    background: #ffffff;
+    background: var(--sd-card);
     color: var(--sd-text);
-    border: 1px solid #d5d8dd;
+    border: 1px solid var(--sd-border-input);
     border-radius: 6px;
     padding: 4px 7px;
 }
@@ -786,7 +836,7 @@
 .sd_window input[type='password']:focus,
 .sd_window input[type='number']:focus {
     outline: none;
-    border-color: #d9a441;
+    border-color: var(--sd-em);
     box-shadow: 0 0 0 2px rgba(217, 164, 65, 0.18);
 }
 
@@ -839,11 +889,11 @@
 }
 
 .sd_llm_test_ok {
-    color: #2e9e5b;
+    color: var(--sd-green);
 }
 
 .sd_llm_test_fail {
-    color: #d64545;
+    color: var(--sd-red);
 }
 
 /* 模型 chip 面板：全部候选常驻可见，点击选用 */
@@ -862,13 +912,13 @@
 }
 
 .sd_llm_model_chip:hover {
-    background: #e8edff;
+    background: var(--sd-blue-bg);
 }
 
 .sd_llm_model_chip_active {
-    background: #6b8cff;
-    color: #ffffff;
-    border-color: #6b8cff;
+    background: var(--sd-blue);
+    color: var(--sd-card);
+    border-color: var(--sd-blue);
 }
 
 /* ---------- 分栏工作台 ---------- */
@@ -907,8 +957,8 @@
     padding: 6px 10px;
     border: 1px solid var(--sd-border);
     border-radius: 10px;
-    background: #f8f9fb;
-    color: #3a4048;
+    background: var(--sd-card-soft);
+    color: var(--sd-text-2);
     font-size: 0.85em;
 }
 
@@ -926,7 +976,7 @@
     position: sticky;
     top: 0;
     z-index: 6;
-    background: #ffffff;
+    background: var(--sd-card);
 }
 
 /* 节点类型徽章 */
@@ -943,11 +993,18 @@
 }
 
 .sd_type_setup { color: #2e6b3d; background: #e8f5ec; }
-.sd_type_conflict { color: #a3342b; background: #fdeceb; }
+.sd_type_conflict { color: #a3342b; background: var(--sd-red-soft); }
 .sd_type_twist { color: #6b46a8; background: #f2edfb; }
-.sd_type_climax { color: #b3373f; background: #fde8e9; }
+.sd_type_climax { color: var(--sd-red-strong); background: var(--sd-red-soft); }
 .sd_type_resolution { color: #2a5d8f; background: #e8f2fb; }
-.sd_type_plain { color: #5c6470; background: #f0f1f3; }
+.sd_type_plain { color: var(--sd-muted); background: var(--sd-card-soft); }
+
+/* 夜晚模式：类型徽章反转配色（深底浅字），其余全部走变量 */
+#story_director_window.sd_window.sd_theme_dark .sd_type_setup { color: #7fd19a; background: #1c3325; }
+#story_director_window.sd_window.sd_theme_dark .sd_type_conflict { color: #f09797; background: #3a2323; }
+#story_director_window.sd_window.sd_theme_dark .sd_type_twist { color: #b39de0; background: #2b2440; }
+#story_director_window.sd_window.sd_theme_dark .sd_type_climax { color: #f2a06a; background: #3a2b1c; }
+#story_director_window.sd_window.sd_theme_dark .sd_type_resolution { color: #7db8e8; background: #1c2b3a; }
 
 .sd_fs_hint small.sd_fs_payoff {
     display: block;
@@ -962,15 +1019,15 @@
     justify-content: space-between;
     gap: 6px;
     font-size: 0.85em;
-    color: #3a4048;
+    color: var(--sd-text-2);
 }
 
 .sd_tool_row select {
     flex: 1;
     min-width: 0;
-    background: #ffffff;
+    background: var(--sd-card);
     color: var(--sd-text);
-    border: 1px solid #d5d8dd;
+    border: 1px solid var(--sd-border-input);
     border-radius: 6px;
     padding: 3px 5px;
 }
@@ -1002,7 +1059,7 @@
     width: min(560px, 100%);
     max-height: 92%;
     overflow: auto;
-    background: #ffffff;
+    background: var(--sd-card);
     color: var(--sd-text);
     border: 1px solid var(--sd-border);
     border-radius: 12px;
@@ -1015,8 +1072,8 @@
     gap: 8px;
     padding: 9px 12px;
     border-bottom: 1px solid var(--sd-border);
-    background: #fff7e6;
-    color: #8a5a00;
+    background: var(--sd-amber-bg);
+    color: var(--sd-quote);
 }
 
 .sd_modal_header .sd_window_close {
@@ -1051,9 +1108,9 @@
     width: 100%;
     box-sizing: border-box;
     resize: vertical;
-    background: #ffffff;
+    background: var(--sd-card);
     color: var(--sd-text);
-    border: 1px solid #d5d8dd;
+    border: 1px solid var(--sd-border-input);
     border-radius: 6px;
     padding: 6px 8px;
 }
@@ -1114,17 +1171,17 @@
     border-bottom: none;
     border-radius: 8px 8px 0 0;
     cursor: pointer;
-    color: #5c6470;
+    color: var(--sd-muted);
     font-size: 0.92em;
 }
 
 .sd_tab:hover {
-    background: #f3f4f6;
+    background: var(--sd-card-soft);
 }
 
 .sd_tab_active {
-    background: #ffffff;
-    color: #8a5a00;
+    background: var(--sd-card);
+    color: var(--sd-quote);
     border-color: var(--sd-border);
     font-weight: 600;
 }
@@ -1175,15 +1232,15 @@
     width: min(1000px, 95vw);
     height: min(88vh, 940px);
     border-radius: 16px;
-    border: 1px solid #dde2e8;
-    background: #ffffff;
+    border: 1px solid var(--sd-border-soft);
+    background: var(--sd-card);
     box-shadow: 0 24px 70px rgba(15, 23, 42, 0.32);
 }
 
 .sd_window_header {
     padding: 12px 16px;
-    border-bottom: 1px solid #e6e9ee;
-    background: linear-gradient(90deg, #fff7e8, #ffffff 65%);
+    border-bottom: 1px solid var(--sd-border-soft);
+    background: linear-gradient(90deg, var(--sd-amber-soft), var(--sd-card) 65%);
     cursor: move;
 }
 
@@ -1194,8 +1251,8 @@
     width: 34px;
     height: 34px;
     border-radius: 10px;
-    color: #8a5a00;
-    background: linear-gradient(135deg, #ffe9bd, #ffd58a);
+    color: var(--sd-quote);
+    background: linear-gradient(135deg, var(--sd-amber-soft), var(--sd-amber-strong));
     font-size: 15px;
 }
 
@@ -1207,18 +1264,18 @@
 
 .sd_title_texts b {
     font-size: 1.02em;
-    color: #1f2430;
+    color: var(--sd-text);
 }
 
 .sd_title_texts .sd_subtitle {
     margin-top: 2px;
-    color: #7b8494;
+    color: var(--sd-muted);
     font-size: 0.74em;
 }
 
 .sd_window_body {
     padding: 12px 14px 16px;
-    background: #f6f7f9;
+    background: var(--sd-card-soft);
 }
 
 .sd_panel_content {
@@ -1235,8 +1292,8 @@
     gap: 7px;
     margin: 0;
     padding: 8px 10px;
-    background: #ffffff;
-    border: 1px solid #e4e7ec;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border-soft);
     border-radius: 12px;
 }
 
@@ -1248,37 +1305,37 @@
     margin: 0;
     padding: 6px 11px;
     border-radius: 8px;
-    border: 1px solid #dde2e8;
-    background: #ffffff;
-    color: #39404d;
+    border: 1px solid var(--sd-border-soft);
+    background: var(--sd-card);
+    color: var(--sd-muted);
     font-size: 0.88em;
     box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
     filter: none;
 }
 
 .sd_window .menu_button.sd_btn:hover {
-    background: #f2f4f7;
+    background: var(--sd-card-soft);
     filter: none;
 }
 
 .sd_window .menu_button.sd_btn_primary {
-    background: #fff6e6;
-    border-color: #e5b45c;
-    color: #8a5a00;
+    background: var(--sd-amber-bg);
+    border-color: var(--sd-amber-strong);
+    color: var(--sd-quote);
 }
 
 .sd_window .menu_button.sd_btn_primary:hover {
-    background: #ffefce;
+    background: var(--sd-amber-soft);
 }
 
 .sd_window .menu_button.sd_btn_danger {
-    background: #fdf1f2;
-    border-color: #f0c4c8;
-    color: #b3373f;
+    background: var(--sd-red-bg);
+    border-color: var(--sd-red-soft);
+    color: var(--sd-red-strong);
 }
 
 .sd_window .menu_button.sd_btn_danger:hover {
-    background: #fbe6e8;
+    background: var(--sd-red-soft);
 }
 
 .sd_enable {
@@ -1287,10 +1344,10 @@
     gap: 6px;
     margin-left: 0;
     padding: 5px 9px;
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--sd-border-soft);
     border-radius: 999px;
-    background: #fafbfc;
-    color: #3b4350;
+    background: var(--sd-card-soft);
+    color: var(--sd-text-2);
     font-size: 0.85em;
     cursor: pointer;
 }
@@ -1303,7 +1360,7 @@
     padding: 4px;
     margin: 0;
     border: none;
-    background: #e9ecf1;
+    background: var(--sd-border-soft);
     border-radius: 11px;
 }
 
@@ -1313,7 +1370,7 @@
     border: none;
     border-radius: 8px;
     background: transparent;
-    color: #5b6472;
+    color: var(--sd-muted);
     font-size: 0.88em;
 }
 
@@ -1322,29 +1379,29 @@
 }
 
 .sd_tab_active {
-    background: #ffffff;
-    color: #8a5a00;
+    background: var(--sd-card);
+    color: var(--sd-quote);
     box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
 }
 
 /* 页头 */
 .sd_page_head h4 {
     margin: 2px 0 3px;
-    color: #1f2430;
+    color: var(--sd-text);
     font-size: 1.02em;
 }
 
 .sd_page_head p {
     margin: 0;
-    color: #7b8494;
+    color: var(--sd-muted);
     font-size: 0.82em;
 }
 
 /* 分区卡片 */
 .sd_card {
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--sd-border-soft);
     border-radius: 12px;
-    background: #ffffff;
+    background: var(--sd-card);
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
@@ -1353,8 +1410,8 @@
     align-items: center;
     gap: 9px;
     padding: 9px 12px;
-    border-bottom: 1px solid #edf0f4;
-    background: #fafbfc;
+    border-bottom: 1px solid var(--sd-border-soft);
+    background: var(--sd-card-soft);
 }
 
 .sd_card_icon {
@@ -1365,8 +1422,8 @@
     height: 30px;
     flex: 0 0 30px;
     border-radius: 9px;
-    background: #fff3dd;
-    color: #a86f00;
+    background: var(--sd-amber-soft);
+    color: var(--sd-em);
     font-size: 13px;
 }
 
@@ -1377,19 +1434,19 @@
 }
 
 .sd_card_titles b {
-    color: #1f2430;
+    color: var(--sd-text);
     font-size: 0.9em;
 }
 
 .sd_card_titles small {
-    color: #8a93a2;
+    color: var(--sd-muted);
     font-size: 0.76em;
 }
 
 .sd_card_body {
     gap: 8px;
     padding: 11px 12px;
-    color: #2d3542;
+    color: var(--sd-text-2);
     font-size: 0.87em;
 }
 
@@ -1402,17 +1459,17 @@
 .sd_setting {
     gap: 5px;
     padding: 8px 10px;
-    border: 1px solid #e6e9ee;
+    border: 1px solid var(--sd-border-soft);
     border-radius: 10px;
-    background: #ffffff;
+    background: var(--sd-card);
 }
 
 .sd_setting:hover {
-    border-color: #d9dee6;
+    border-color: var(--sd-border-soft);
 }
 
 .sd_setting_label {
-    color: #6b7484;
+    color: var(--sd-muted);
     font-size: 0.8em;
 }
 
@@ -1421,9 +1478,9 @@
 .sd_window input[type='password'],
 .sd_window input[type='number'],
 .sd_window textarea {
-    background: #ffffff;
-    color: #1f2430;
-    border: 1px solid #dbe0e7;
+    background: var(--sd-card);
+    color: var(--sd-text);
+    border: 1px solid var(--sd-border-input);
     border-radius: 7px;
     padding: 5px 8px;
     font-size: 0.88em;
@@ -1433,12 +1490,12 @@
 .sd_window input:focus,
 .sd_window textarea:focus {
     outline: none;
-    border-color: #d9a441;
+    border-color: var(--sd-em);
     box-shadow: 0 0 0 2px rgba(217, 164, 65, 0.16);
 }
 
 .sd_hint {
-    color: #8a93a2;
+    color: var(--sd-muted);
 }
 
 /* 故事设定页 */
@@ -1465,10 +1522,10 @@
 .sd_stats {
     gap: 6px 16px;
     padding: 8px 12px;
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--sd-border-soft);
     border-radius: 12px;
-    background: #ffffff;
-    color: #3b4350;
+    background: var(--sd-card);
+    color: var(--sd-text-2);
     font-size: 0.84em;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
@@ -1481,15 +1538,15 @@
 }
 
 .sd_focus_card {
-    border-left: 3px solid #e2b05a;
+    border-left: 3px solid var(--sd-amber-border);
 }
 
 .sd_focus_card .sd_card_header {
-    background: #fffaf0;
+    background: var(--sd-amber-bg);
 }
 
 .sd_card_outline .sd_card_header {
-    background: #fafbfc;
+    background: var(--sd-card-soft);
 }
 
 .sd_act + .sd_act {
@@ -1498,7 +1555,7 @@
 }
 
 .sd_act_title {
-    color: #8a5a00;
+    color: var(--sd-quote);
     font-size: 0.95em;
 }
 
@@ -1512,8 +1569,8 @@
     height: 20px;
     padding: 0 5px;
     border-radius: 999px;
-    background: #f0e3c8;
-    color: #8a5a00;
+    background: var(--sd-amber-soft);
+    color: var(--sd-quote);
     font-size: 0.75em;
     font-weight: 700;
     margin-right: 7px;
@@ -1521,7 +1578,7 @@
 
 /* 前情幕：默认折叠（details/summary） */
 .sd_act_history {
-    border-left: 3px solid #b9c2d4;
+    border-left: 3px solid var(--sd-muted);
 }
 
 .sd_act_history summary {
@@ -1536,7 +1593,7 @@
 
 .sd_act_toggle {
     margin-left: 8px;
-    color: #8a94a6;
+    color: var(--sd-muted);
     font-size: 0.8em;
     transition: transform 0.15s;
 }
@@ -1556,19 +1613,19 @@
 }
 
 .sd_retrieval_card {
-    border-left: 3px solid #6b8cff;
+    border-left: 3px solid var(--sd-blue);
 }
 
 .sd_retrieval_card .sd_card_header {
-    background: #f3f6ff;
+    background: var(--sd-blue-bg);
 }
 
 .sd_retrieval_count {
     margin-left: 6px;
     padding: 1px 8px;
     border-radius: 999px;
-    background: #6b8cff;
-    color: #ffffff;
+    background: var(--sd-blue);
+    color: var(--sd-card);
     font-size: 0.72em;
     font-weight: 600;
 }
@@ -1584,9 +1641,9 @@
     align-items: flex-start;
     gap: 8px;
     padding: 6px 8px;
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--sd-border-soft);
     border-radius: 8px;
-    background: #ffffff;
+    background: var(--sd-card);
 }
 
 .sd_retrieval_source {
@@ -1601,7 +1658,7 @@
 .sd_retrieval_text {
     flex: 1;
     min-width: 0;
-    color: #3b4350;
+    color: var(--sd-text-2);
     font-size: 0.84em;
     line-height: 1.45;
     display: -webkit-box;
@@ -1612,7 +1669,7 @@
 }
 
 .sd_retrieval_query {
-    color: #8a94a6;
+    color: var(--sd-muted);
     font-size: 0.72em;
     white-space: nowrap;
     overflow: hidden;
@@ -1629,15 +1686,15 @@
 }
 
 .sd_check_hist_sync {
-    color: #2e9e5b;
+    color: var(--sd-green);
 }
 
 .sd_check_hist_minor-drift {
-    color: #d9a13b;
+    color: var(--sd-amber-strong);
 }
 
 .sd_check_hist_major-drift {
-    color: #d64545;
+    color: var(--sd-red);
 }
 
 /* 伏笔回收点：节点上的伏笔标记 + 卡片跳转链接 */
@@ -1654,27 +1711,27 @@
     gap: 4px;
     padding: 1px 8px;
     border-radius: 999px;
-    background: #fdf3e3;
-    color: #a06a12;
+    background: var(--sd-amber-soft);
+    color: var(--sd-quote);
     font-size: 0.75em;
-    border: 1px dashed #e3c58a;
+    border: 1px dashed var(--sd-amber-border);
     cursor: help;
 }
 
 .sd_fs_payoff_link {
-    color: #4a6cf7;
+    color: var(--sd-blue);
     cursor: pointer;
     text-decoration: underline dotted;
 }
 
 .sd_fs_payoff_link:hover {
-    color: #2f4fd8;
+    color: var(--sd-blue);
 }
 
 /* 节点闪烁高亮（伏笔跳转定位） */
 @keyframes sdBeatFlash {
     0%, 100% { background: transparent; box-shadow: none; }
-    25%, 75% { background: #fff6d8; box-shadow: 0 0 0 2px #e2b05a; }
+    25%, 75% { background: var(--sd-amber-soft); box-shadow: 0 0 0 2px var(--sd-amber-border); }
 }
 
 .sd_beat_flash {
@@ -1684,13 +1741,13 @@
 
 /* 工具 */
 .sd_tool_row {
-    color: #2d3542;
+    color: var(--sd-text-2);
 }
 
 .sd_tool_row select {
-    background: #ffffff;
-    color: #1f2430;
-    border: 1px solid #dbe0e7;
+    background: var(--sd-card);
+    color: var(--sd-text);
+    border: 1px solid var(--sd-border-input);
     border-radius: 7px;
     padding: 5px 8px;
 }
@@ -1702,11 +1759,11 @@
 /* 弹层 */
 .sd_modal_card {
     border-radius: 14px;
-    border: 1px solid #e4e7ec;
+    border: 1px solid var(--sd-border-soft);
 }
 
 .sd_modal_header {
-    background: #fff6e6;
+    background: var(--sd-amber-bg);
 }
 
 /* 响应式 */

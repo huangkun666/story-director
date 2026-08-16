@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS = {
     vectorMemoryLimit: 6000,        // 向量检索结果的字符上限
     lockOutline: false,             // true = 自动修订只推进状态，不改写用户手动编辑的内容
     windowPos: null,                // {left, top}：独立窗口上次拖拽位置（打开时恢复）
+    theme: 'light',                 // 'light' 白天 / 'dark' 黑灰夜晚
     llm: { ...DEFAULT_LLM_SETTINGS },
 };
 
