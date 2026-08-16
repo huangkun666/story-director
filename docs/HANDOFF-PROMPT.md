@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**224/224 通过**。
+当前测试数：**236/236 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+050bb15 feat: debug terminal - ring-buffered event log with LLM budget, retrieval, memory pointer and self-healing visibility
 0b77da4 feat: operation-level undo stack for manual outline edits (Ctrl+Z + toolbar button)
 70ee612 feat: split must-read lore into top-level outline field, independent from timeline
 1969261 docs: mark release governance done in handoff prompt
@@ -94,11 +95,12 @@ story-director/
 ├── style.css              # 双主题（白天/夜晚），全部颜色走 CSS 变量，禁止硬编码
 ├── deploy.ps1             # 部署脚本（必须 ASCII-only！）
 ├── src/
-│   ├── outline-store.js   # 数据模型 + normalize（引用自愈）+ 全部受控编辑纯函数
+│   ├── outline-store.js   # 数据模型 + normalize（引用自愈）+ 全部受控编辑纯函数 + diagnoseOutline 诊断
 │   ├── prompts.js         # 提示词模板 + schema + 群像/时间线/节奏/前情/事实边界/方向草案块
 │   ├── llm-client.js      # extractJson/stripCodeFence/makeStructuredGenerator
 │   ├── openai-compat.js   # 独立 API 直连 + /v1/models 列表 + 连接测试
 │   ├── dialogue-extract.js# 对话正文提取纯函数（标签规则，无匹配回退原文）
+│   ├── logger.js          # 调试终端日志核心：环形缓冲 500 条 + 分级过滤 + 订阅（纯逻辑可单测）
 │   ├── injector.js        # focus → 导演指令 + 截断
 │   ├── tracker.js         # applyRevision/applyPatch/mergeLockedOutline（锁定保护）
 │   ├── checker.js         # 体检报告归一化 + 应用结果（支持锁定保护）
@@ -130,7 +132,8 @@ story-director/
 17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；API 类型下拉。
 18. **体检**：verdict/issues/changed/reason + 时间线漂移 + 节点节奏检查点；**体检历史留痕**（meta.checkHistory 10 条，统计行图标序列）；锁定模式下只吸收状态类变更。
 19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
-20. **并发友好**：director.isRunning() + UI 忙碌提示。
+20. **调试终端**：「API 与工具」页签内嵌面板（`sd_term_*`）——**五类日志**：llm（每次生成/修订/体检/方向草案的模型/耗时/结果、角色卡预算占用）、retrieval（方向草案 queries、每路命中数）、memory（记忆指针缺口、生效轮数、正文提取）、engine（大纲保存诊断 diagnoseOutline：节点统计 + normalize 自愈清单）、edit（撤销栈编辑流）、lifecycle（就绪/消息触发修订/切换聊天）；分级过滤（debug/info/warn/error + 分类 + 关键字）、点击展开详情、清空、导出 JSON；**环形 500 条仅存内存**，warn/error 同时透传 console。
+21. **并发友好**：director.isRunning() + UI 忙碌提示。
 
 ### 关键实现细节与坑
 
@@ -145,6 +148,7 @@ story-director/
 - **样式规范**：颜色只走 `--sd-*` 变量（白天/夜晚双值），语义浅底用 color-mix；类型徽章等特殊色在暗色块单独覆盖。
 - **锁定大纲**：tracker.applyRevision/applyPatch/checker.applyCheckResult 均支持 lockOutline——只推进状态/focus/伏笔，不改写手动编辑内容。
 - **操作级撤销的实现前提**：受控函数「写时复制」——normalizeOutline 深拷贝后只改副本，变更前引用永不被修改，撤销栈才能只存 prev 引用；editOutline 用 serializeOutline 字符串比较判「无实质变更」（受控函数永远返回新对象，不能靠引用比较）；连续同类编辑靠「栈顶同 label 跳过 push」合并；Ctrl+Z 在 input/textarea/contentEditable 内不拦截（交给浏览器原生文本撤销）。
+- **调试终端打点约定**：normalizeOutline 保持无副作用——自愈证据在 normalize 之前，diagnoseOutline 基于**原始输入**检测问题（normalize 后证据已销毁）；warn/error 由 logger 透传 console，旧 console.warn 调用可保留不迁移；日志仅内存（刷新即失），跨会话排障仍靠浏览器 console/导出。
 - **数据模型约定**：acts[].beats 是派生的（不要手工维护）；引用完整性交给 normalize；编辑一律走 outline-store 的受控纯函数，不要直接在 UI mutate。
 - **生成上下文构成**（按序）：角色卡（预算内，含名录/世界书）→ 用户要求 → 时间线/必读设定 → 节点节奏 → 事实边界（进行中节点）→ 近期对话（指针驱动窗口 + 可提取正文）→ 前情块（done/active 摘要）→ 方向草案 → 记忆摘要 → 向量资料 → 固定指令（四线/新人物许可/JSON 模板）。
 
