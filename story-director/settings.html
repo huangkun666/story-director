@@ -515,6 +515,28 @@
                 </div>
             </div>
 
+            <div id="sd_replan_editor" class="sd_modal">
+                <div class="sd_modal_card">
+                    <header class="sd_modal_header">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <b>重新设计这一幕</b>
+                        <div id="sd_replan_editor_close" class="sd_window_close" title="关闭"><i class="fa-solid fa-xmark"></i></div>
+                    </header>
+                    <div class="sd_modal_body">
+                        <div id="sd_replan_scope" class="sd_replan_scope"></div>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">修改要求（可留空）</span>
+                            <textarea id="sd_replan_hint" rows="3" placeholder="例如：让这里的剧情更紧凑 / 加入一场战斗 / 主角在这里做出关键抉择"></textarea>
+                        </label>
+                        <small class="sd_hint">AI 将重新设计这一幕的节点与概要；前后幕作为衔接约束传入，其他幕不会被改动。</small>
+                    </div>
+                    <footer class="sd_modal_footer">
+                        <div id="sd_replan_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
+                        <div id="sd_replan_confirm" class="menu_button sd_btn sd_btn_primary" title="开始重新设计这一幕"><i class="fa-solid fa-wand-magic-sparkles"></i><span>开始重设计</span></div>
+                    </footer>
+                </div>
+            </div>
+
             <div id="sd_arc_editor" class="sd_modal">
                 <div class="sd_modal_card">
                     <header class="sd_modal_header">

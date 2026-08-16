@@ -529,23 +529,54 @@ export function bindUI(ctx, adapter) {
         renderReport({ verdict: 'sync', changed: false, reason: `已跳转到「${beat.title || beat.id}」，从此处开始游玩` }, '跳转');
     }
 
-    // 幕级重规划：点击「修改这一幕」→ 只重新设计该幕（其他幕代码级不动）
-    document.getElementById('sd_overview')?.addEventListener('click', async (e) => {
+    // 幕级重规划：模态小窗口输入要求 → 只重新设计该幕（其他幕代码级不动）
+    const replanEditorEl = document.getElementById('sd_replan_editor');
+    const replanScopeEl = document.getElementById('sd_replan_scope');
+    const replanHintEl = document.getElementById('sd_replan_hint');
+    let replanActId = null;
+    const openReplanEditor = (actId) => {
+        const outline = adapter.getOutline();
+        const actIndex = outline.acts.findIndex(a => a.id === actId);
+        const act = outline.acts[actIndex];
+        if (!act) return;
+        replanActId = actId;
+        const beatCount = outline.beats.filter(b => b.actId === actId).length;
+        if (replanScopeEl) {
+            replanScopeEl.innerHTML = `<b>第 ${actIndex + 1} 幕「${escapeHtml(act.title || act.id)}」</b>
+                <span>现有 ${beatCount} 个节点，将重新设计为 3-6 个新节点；前后幕作为衔接约束。</span>`;
+        }
+        if (replanHintEl) replanHintEl.value = '';
+        replanEditorEl?.classList.add('sd_open');
+        replanHintEl?.focus?.();
+    };
+    const closeReplanEditor = () => {
+        replanEditorEl?.classList.remove('sd_open');
+        replanActId = null;
+    };
+    document.getElementById('sd_overview')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-act-replan]');
         if (!btn) return;
-        const actId = btn.getAttribute('data-act-replan');
-        const outline = adapter.getOutline();
-        const act = outline.acts.find(a => a.id === actId);
-        if (!act) return;
-        const hint = prompt(`重新设计「${act.title || act.id}」这一幕？\n\n可输入修改要求（留空 = AI 自由重设计），例如：\n- 让这里的剧情更紧凑\n- 加入一场战斗\n\n其他幕不会被改动。`);
-        if (hint === null) return;
-        const result = await adapter.director.replanAct(actId, { userHint: hint || '' });
-        adapter.renderOutline();
-        adapter.director.refreshInjection();
-        if (result) {
-            renderReport({ verdict: 'sync', changed: false, reason: `「${act.title || act.id}」已重新设计为 ${result.count} 个新节点，其他幕未动` }, '重规划幕');
-        } else {
-            renderReport({ verdict: 'major-drift', changed: false, reason: '幕重规划失败，大纲未变' }, '重规划幕');
+        openReplanEditor(btn.getAttribute('data-act-replan'));
+    });
+    document.getElementById('sd_replan_cancel')?.addEventListener('click', closeReplanEditor);
+    document.getElementById('sd_replan_editor_close')?.addEventListener('click', closeReplanEditor);
+    document.getElementById('sd_replan_confirm')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        if (!replanActId || btn.classList.contains('sd_loading')) return;
+        setButtonLoading(btn, true);
+        try {
+            const actTitle = adapter.getOutline().acts.find(a => a.id === replanActId)?.title || replanActId;
+            const result = await adapter.director.replanAct(replanActId, { userHint: replanHintEl?.value?.trim() || '' });
+            adapter.renderOutline();
+            adapter.director.refreshInjection();
+            if (result) {
+                renderReport({ verdict: 'sync', changed: false, reason: `「${actTitle}」已重新设计为 ${result.count} 个新节点，其他幕未动` }, '重规划幕');
+            } else {
+                renderReport({ verdict: 'major-drift', changed: false, reason: '幕重规划失败，大纲未变' }, '重规划幕');
+            }
+        } finally {
+            setButtonLoading(btn, false);
+            closeReplanEditor();
         }
     });
 
