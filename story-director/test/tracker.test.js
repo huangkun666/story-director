@@ -140,3 +140,33 @@ test('applyPatch returns prev normalized when patch is null', () => {
     assert.equal(out.theme, 'X');
     assert.equal(out.meta.revisionCount, 0);
 });
+
+test('mergeLockedOutline keeps beats the patch forgot to include', () => {
+    const prev = createEmptyOutline();
+    prev.beats = [
+        { id: 'b1', title: '节点一', summary: 's1', type: 'setup', status: 'active' },
+        { id: 'b2', title: '节点二', summary: 's2', type: 'conflict', status: 'pending' },
+    ];
+    const patch = createEmptyOutline();
+    patch.beats = [{ id: 'b1', title: '模型改', summary: 's', type: 'twist', status: 'done' }]; // b2 漏输出
+    const out = applyRevision(prev, patch, { lockOutline: true });
+    assert.ok(out.beats.some(b => b.id === 'b2')); // 漏输出的节点保留
+    assert.equal(out.beats.find(b => b.id === 'b2').title, '节点二');
+    assert.equal(out.beats.find(b => b.id === 'b1').status, 'done'); // 状态吸收
+    assert.equal(out.beats.find(b => b.id === 'b1').title, '节点一'); // 内容不动
+});
+
+test('applyPatch honors allowNewBeats=false and skips newBeats', () => {
+    const prev = createEmptyOutline();
+    prev.beats = [{ id: 'b1', title: '现有', summary: 's', status: 'active' }];
+    const patch = {
+        statusChanges: [{ beatId: 'b1', status: 'done' }],
+        newBeats: [{ title: '追加', summary: 's', type: 'twist' }],
+        newBeatActId: '',
+    };
+    const out = applyPatch(prev, patch, { allowNewBeats: false });
+    assert.equal(out.beats.length, 1); // 不追加
+    assert.equal(out.beats[0].status, 'done'); // 状态仍推进
+    const out2 = applyPatch(prev, patch, { allowNewBeats: true });
+    assert.equal(out2.beats.length, 2); // 默认允许追加
+});

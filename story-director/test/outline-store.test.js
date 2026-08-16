@@ -721,3 +721,51 @@ test('replaceActBeats keeps input unchanged and no-ops for missing act', () => {
     assert.equal(next.beats.length, 1);
     assert.equal(next.beats[0].title, 'x');
 });
+
+test('mergePlannedOutline restores status too - active/done are facts', () => {
+    const oldOutline = normalizeOutline({
+        beats: [
+            { id: 'b1', title: '进行中', summary: 's', type: 'conflict', status: 'active', cast: ['主角'] },
+        ],
+    });
+    // 模型输出把 b1 的 status 改成 pending（试图洗掉进行中状态）
+    const modelOut = normalizeOutline({
+        beats: [{ id: 'b1', title: '进行中', summary: 's', type: 'conflict', status: 'pending', cast: ['主角'] }],
+    });
+    const merged = mergePlannedOutline(modelOut, oldOutline);
+    assert.equal(merged.beats[0].status, 'active'); // 状态是事实，恢复
+});
+
+test('mergeHistoryIntoOutline excludeIds prevents duplicate preserved beats', () => {
+    const oldOutline = normalizeOutline({
+        beats: [{ id: 'b1', title: '已发生', summary: 's', type: 'setup', status: 'done' }],
+    });
+    // 模型输出保留了 b1（范围外保留）→ 不再收进前情幕（防双份）
+    const modelOut = normalizeOutline({
+        beats: [{ id: 'b1', title: '已发生', summary: 's', type: 'setup', status: 'done' }],
+    });
+    const merged = mergeHistoryIntoOutline(modelOut, oldOutline, { excludeIds: ['b1'] });
+    const histBeats = merged.beats.filter(b => String(b.id).startsWith('hist_'));
+    assert.equal(histBeats.length, 0); // 不重复
+    assert.equal(merged.beats.filter(b => b.id === 'b1').length, 1);
+    // 未排除的仍正常收进前情幕
+    const merged2 = mergeHistoryIntoOutline(modelOut, oldOutline);
+    assert.equal(merged2.beats.filter(b => String(b.id).startsWith('hist_')).length, 1);
+});
+
+test('replaceActBeats lets new first beat inherit active when replanned act is ongoing', () => {
+    const o = normalizeOutline({
+        acts: [{ id: 'act_1', title: '进行中的幕', summary: '', beats: [] }],
+        beats: [{ id: 'b1', actId: 'act_1', title: '旧进行中', summary: 's', type: 'conflict', status: 'active', cast: ['主角'] }],
+    });
+    const next = replaceActBeats(o, 'act_1', [
+        { title: '新节点一', summary: 's1', type: 'setup' },
+        { title: '新节点二', summary: 's2', type: 'conflict' },
+    ]);
+    const newBeats = next.beats.filter(b => b.actId === 'act_1');
+    assert.equal(newBeats[0].status, 'active'); // 承接进行中
+    assert.equal(newBeats[1].status, 'pending');
+    assert.equal(next.focus.currentBeat, newBeats[0].id); // 焦点指向
+    // 全大纲唯一 active
+    assert.equal(next.beats.filter(b => b.status === 'active').length, 1);
+});

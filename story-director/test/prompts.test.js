@@ -215,8 +215,17 @@ test('buildRevisePatchPrompt asks for minimal patch, not full outline', () => {
     assert.ok(prompt.includes('statusChanges'));
     assert.ok(prompt.includes('newBeats'));
     assert.ok(prompt.includes('变更补丁'));
-    assert.ok(prompt.includes('锁定'));
+    assert.ok(prompt.includes('禁止改动任何现有内容'));
     assert.ok(!prompt.includes('更新后的完整大纲'));
+});
+
+test('buildRevisePatchPrompt forbids new beats when allowNewBeats is false', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: '开端', status: 'active' }];
+    const { prompt } = buildRevisePatchPrompt({ recentDialogue: '', outline: o, allowNewBeats: false });
+    assert.ok(prompt.includes('禁止追加任何新节点'));
+    const { prompt: p2 } = buildRevisePatchPrompt({ recentDialogue: '', outline: o, allowNewBeats: true });
+    assert.ok(!p2.includes('禁止追加任何新节点'));
 });
 
 test('buildGeneratePrompt includes relative pacing instruction with balanced default', () => {

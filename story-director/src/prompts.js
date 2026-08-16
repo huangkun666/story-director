@@ -418,8 +418,10 @@ ${serializeOutline(compactOutlineForRevision(outline))}
 
 // 锁定模式的增量补丁修订：模型只输出「变化的部分」而不是完整大纲。
 // 输出 token 从全量大纲（数百上千）降到几十；tracker.applyPatch 负责字段级合并。
-export function buildRevisePatchPrompt({ recentDialogue = '', outline, driftTolerance = 'loose', memoryContext = '', vectorContext = '' }) {
-    const system = '你是叙事导演。大纲已锁定（用户手动编辑），只能推进状态与焦点。根据最近对话输出最小变更补丁（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+// 现在所有修订（含非锁定）都走此路径——全量重写只留给「生成大纲」入口。
+// allowNewBeats=false（锁定）时指令禁止追加新节点（纯状态推进）。
+export function buildRevisePatchPrompt({ recentDialogue = '', outline, driftTolerance = 'loose', memoryContext = '', vectorContext = '', allowNewBeats = true }) {
+    const system = '你是叙事导演。只能推进状态与焦点，禁止改写任何现有内容。根据最近对话输出最小变更补丁（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
     const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
     const vectorText = String(vectorContext || '').trim();
@@ -427,10 +429,13 @@ export function buildRevisePatchPrompt({ recentDialogue = '', outline, driftTole
     const driftInstruction = driftTolerance === 'strict'
         ? '若剧情偏离当前方向，请严格拉回：不新增节点，只把 focus.currentBeat / focus.nextStep 调整回既定方向；仅当偏离已成不可逆事实时才最小化吸收。'
         : '若剧情偏离当前方向，请宽松吸收：把新走向写进 focus.nextStep；确有必要时用 newBeats 追加一个节点。';
+    const newBeatsInstruction = allowNewBeats
+        ? '4) newBeats：仅在剧情确实需要新节点时使用（真正的里程碑/新情节线），数量越少越好，并给出 newBeatActId 归属幕（必须是现有 act id）；'
+        : '4) 大纲已锁定：禁止追加任何新节点（newBeats 不要使用）；';
     const prompt = `【最近对话】
 ${recentDialogue}
 
-${memoryBlock}${vectorBlock}【当前大纲（已锁定，禁止改动任何现有内容）】
+${memoryBlock}${vectorBlock}【当前大纲（禁止改动任何现有内容，只能推进状态与焦点）】
 ${serializeOutline(compactOutlineForRevision(outline))}
 
 （注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题，无需处理它们。）
@@ -452,7 +457,7 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 1) statusChanges：仅当节点真正到达终点（目标达成/冲突收场/场景明确结束）才置 "done" 并推进下一个为 "active"；大纲不是剧情日志，常规对话轮次不要推进节点、不要新增节点，只更新 focus 即可；没有状态变化就省略；
 2) focus 建议总是输出（这是导演指令的核心）；
 3) foreshadowing/arcs：只列出状态发生变化的条目；
-4) newBeats：仅在剧情确实需要新节点时使用（真正的里程碑/新情节线），数量越少越好，并给出 newBeatActId 归属幕（必须是现有 act id）；
+${newBeatsInstruction}
 5) 禁止任何字段修改现有 beat/act/timeline 的标题、概要、类型与时间线。`;
     return { system, prompt };
 }
@@ -515,7 +520,7 @@ ${userHint || '（未指定，请根据大纲当前焦点与未完成节点，�
 // 幕级重规划：用户指定「只重新设计这一幕」——幕是结构化边界，
 // 合并层（replaceActBeats）只替换目标幕的节点，其他幕代码级不动，
 // 不依赖模型对时间范围的理解（比时间线部分重规划可靠）。
-export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, userHint = '', mustRead = '', timeline = {} } = {}) {
+export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, currentBeat = null, nextStep = '', userHint = '', mustRead = '', timeline = {} } = {}) {
     const system = '你是叙事导演。只重新设计指定的一幕，其他幕一律不动（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const beats = Array.isArray(act?.beats) ? act.beats : [];
     const beatLines = beats.length
@@ -525,8 +530,18 @@ export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, u
     const nextLine = nextBeat ? `- ${nextBeat.title || nextBeat.id}：${nextBeat.summary || '（无概要）'}` : '（没有后一幕，这是大纲结尾）';
     const mustReadText = String(mustRead || '').trim();
     const timelineText = [timeline?.start, timeline?.end].filter(Boolean).join(' → ');
+    // 当前剧情位置：剧情进行到哪个节点（含时间点）——新设计必须与之对齐，不能时间错乱
+    const currentLine = currentBeat
+        ? `- 正在进行：「${currentBeat.title || currentBeat.id}」：${currentBeat.summary || '（无概要）'}${nextStep ? `\n- 下一步（focus.nextStep）：${nextStep}` : ''}`
+        : '（没有进行中的节点）';
     const prompt = `【角色卡】
 ${cardToText(characterCard)}
+
+【当前剧情位置（必须对齐）】
+剧情现在进行到这里：
+${currentLine}
+时间线：${timelineText || '（未设置）'}
+新设计的节点必须与当前剧情位置的时间自然衔接：不能倒退到已经发生的时间点，也不能跳过正在进行的事件。
 
 【目标幕（只允许修改这一幕）】
 - 幕 id：${act?.id || ''}
@@ -542,7 +557,7 @@ ${prevLine}
 ${nextLine}
 新节点要与前后幕自然衔接、时间不冲突、不回退。
 
-${mustReadText ? `【必读设定（最高优先级）】\n${mustReadText}\n` : ''}${timelineText ? `【时间线】${timelineText}\n` : ''}【用户要求】
+${mustReadText ? `【必读设定（最高优先级）】\n${mustReadText}\n` : ''}【用户要求】
 ${userHint || '（未指定，请基于当前幕的定位重新设计这一幕）'}
 
 请重新设计这一幕：可以调整幕标题与概要；重新设计节点（数量 3-6 个为宜，类型与时间分布遵循大纲的节点节奏）。
@@ -552,7 +567,7 @@ ${userHint || '（未指定，请基于当前幕的定位重新设计这一幕�
   "title": "新幕标题",
   "summary": "新幕概要",
   "beats": [
-    { "title": "节点标题", "summary": "该节点发生什么（写明大致时间点）", "type": "setup 或 conflict 或 twist 或 climax 或 resolution", "status": "pending", "cast": ["参与角色1"] }
+    { "title": "节点标题", "summary": "该节点发生什么（写明大致时间点，与当前剧情位置自然衔接）", "type": "setup 或 conflict 或 twist 或 climax 或 resolution", "status": "pending", "cast": ["参与角色1"] }
   ]
 }
 

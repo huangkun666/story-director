@@ -187,10 +187,15 @@ export function createDirector(deps) {
                     next.mustRead = requestedMustRead;
                 }
                 if (preserveHistory) {
-                    next = mergeHistoryIntoOutline(next, currentOutline);
-                    // 部分重规划：范围外既有节点按 id 强制恢复原细节（不可重规划）
                     if (hasRequestedTimeline) {
+                        // 部分重规划：模型输出中保留了旧 id 的节点 = 范围外保留——
+                        // 不再重复收进前情幕（防双份），随后按 id 强制恢复原细节（含 status）
+                        const keptIds = next.beats.map(b => b.id);
+                        next = mergeHistoryIntoOutline(next, currentOutline, { excludeIds: keptIds });
                         next = mergePlannedOutline(next, currentOutline);
+                    } else {
+                        // 完整重新生成：旧 done/active 全部收进前情幕
+                        next = mergeHistoryIntoOutline(next, currentOutline);
                     }
                 }
                 recordHistory('generate');
@@ -299,12 +304,16 @@ export function createDirector(deps) {
             const prevBeat = prevBeats.filter(b => b.status !== 'done').pop() || prevBeats[prevBeats.length - 1] || null;
             const nextBeat = nextAct ? outline.beats.find(b => b.actId === nextAct.id) || null : null;
             const actBeats = outline.beats.filter(b => b.actId === actId);
+            // 当前剧情位置：进行中节点（含时间点）+ 下一步——新设计必须与之对齐
+            const currentBeat = outline.beats.find(b => b.status === 'active') || null;
 
             const bundle = buildReplanActPrompt({
                 characterCard: card,
                 act: { id: act.id, title: act.title, summary: act.summary, beats: actBeats },
                 prevBeat,
                 nextBeat,
+                currentBeat,
+                nextStep: outline.focus?.nextStep || '',
                 userHint,
                 mustRead: outline.mustRead || '',
                 timeline: outline.timeline || {},
@@ -354,31 +363,23 @@ export function createDirector(deps) {
             const vectorContext = retrieval ? (retrieval.text || '') : (await deps.getVectorMemoryContext?.(vectorQueries) || '');
             deps.setRetrievalHits?.(retrieval ? (Array.isArray(retrieval.hits) ? retrieval.hits : []) : []);
             const locked = settings.lockOutline === true;
-            const bundle = locked
-                ? buildRevisePatchPrompt({
-                    recentDialogue: dialogue,
-                    outline,
-                    driftTolerance: settings.driftTolerance || 'loose',
-                    memoryContext: deps.getMemoryContext?.(),
-                    vectorContext,
-                })
-                : buildRevisePrompt({
-                    recentDialogue: dialogue,
-                    outline,
-                    driftTolerance: settings.driftTolerance || 'loose',
-                    locked: false,
-                    pacing: settings.beatPacing || 'balanced',
-                    memoryContext: deps.getMemoryContext?.(),
-                    vectorContext,
-                });
+            // 统一增量补丁修订：只推进状态/焦点/伏笔/弧光，不改写任何现有内容
+            // （手动编辑永远安全）；全量重写只留给「生成大纲」入口。
+            // 锁定 = 连追加节点都禁止（纯状态推进）。
+            const bundle = buildRevisePatchPrompt({
+                recentDialogue: dialogue,
+                outline,
+                driftTolerance: settings.driftTolerance || 'loose',
+                memoryContext: deps.getMemoryContext?.(),
+                vectorContext,
+                allowNewBeats: !locked,
+            });
             const result = await gen(bundle);
             if (result) {
                 recordHistory('revise');
-                // 锁定模式：模型只输出变更补丁，字段级合并，省掉全量大纲往返；
-                // 非锁定模式：全量输出后合并（含已完成节点细节恢复）。
-                deps.setOutline(locked ? applyPatch(outline, result) : applyRevision(outline, result));
+                deps.setOutline(applyPatch(outline, result, { allowNewBeats: !locked }));
                 deps.renderOutline();
-                log('info', 'llm', `修订完成${locked ? '（锁定·增量补丁）' : ''}`, `耗时 ${Date.now() - t0}ms`);
+                log('info', 'llm', `修订完成${locked ? '（锁定·不追加节点）' : ''}`, `耗时 ${Date.now() - t0}ms`);
             } else {
                 log('warn', 'llm', '修订失败，沿用旧大纲', `耗时 ${Date.now() - t0}ms；LLM 未返回有效结果`);
             }

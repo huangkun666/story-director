@@ -412,11 +412,14 @@ const HISTORY_ACT_ID = 'act_history';
 // active 节点降为 pending，focus.currentBeat 指向它——「保留现在，重规划未来」。
 // 旧节点 id 加 hist_ 前缀防冲突（已是 hist_ 的保持原名，幂等）。
 // 旧伏笔/弧光/焦点/时间线一律以新大纲为准（生成 prompt 已把旧剧情作为前情参考传入）。
-export function mergeHistoryIntoOutline(newOutline, oldOutline) {
+// excludeIds：部分重规划时模型已在输出中保留了这些旧 id 节点（范围外保留），
+// 不再重复收进前情幕（否则同一节点出现两份）。
+export function mergeHistoryIntoOutline(newOutline, oldOutline, { excludeIds = [] } = {}) {
     const o = normalizeOutline(newOutline);
     if (!oldOutline || typeof oldOutline !== 'object') return o;
     const old = normalizeOutline(oldOutline);
-    const keptBeats = old.beats.filter(b => b.status === 'done' || b.status === 'active');
+    const excluded = new Set(Array.isArray(excludeIds) ? excludeIds : []);
+    const keptBeats = old.beats.filter(b => (b.status === 'done' || b.status === 'active') && !excluded.has(b.id));
     if (!keptBeats.length) return o;
 
     let ongoingId = '';
@@ -453,7 +456,8 @@ export function mergeHistoryIntoOutline(newOutline, oldOutline) {
 
 // 部分重规划合并（用户显式指定时间线时的代码层事实边界）：
 // 模型输出中 id 与旧大纲相同的节点 = 「时间线范围外」的既有规划，强制恢复旧细节
-// （title/summary/type/cast/actId）——模型就算偷偷改了也改不回去，不依赖模型纪律。
+// （title/summary/type/cast/actId/status）——模型就算偷偷改了也改不回去，不依赖模型纪律；
+// status 一并恢复：进行中/已完成状态是剧情事实，规划类操作不得改写。
 // 模型新增/重新设计的节点（新 id）保持原样；旧大纲中未保留在输出里的节点视为
 // 范围内被重规划，丢弃。恢复 actId 时若对应幕不在输出中，用旧幕标题补幕。
 export function mergePlannedOutline(newOutline, oldOutline) {
@@ -474,6 +478,7 @@ export function mergePlannedOutline(newOutline, oldOutline) {
             type: prev.type,
             cast: [...prev.cast],
             actId: prev.actId || beat.actId,
+            status: prev.status, // 状态是剧情事实，一并恢复（active/done 不被规划操作改写）
         };
     });
 
@@ -494,7 +499,9 @@ export function mergePlannedOutline(newOutline, oldOutline) {
 
 // 幕级重规划合并：只替换目标幕的节点（其他幕代码级不动）。
 // 旧节点删除（伏笔回收点 / focus 等悬空引用由 normalize 自愈）；
-// 新节点生成新 id；若被删节点是当前焦点，焦点指向新幕第一个节点。
+// 新节点生成新 id；若被删节点是当前焦点，焦点指向新幕第一个节点；
+// **若被删节点含「进行中」（active），新幕第一个节点自动承接 active**
+// （唯一进行中不变量：剧情不因重规划而中断）。
 // 幕不存在时返回原大纲（normalize 后的新对象，内容不变）。
 export function replaceActBeats(outline, actId, newBeats, { title = '', summary = '' } = {}) {
     const o = normalizeOutline(outline);
@@ -502,7 +509,9 @@ export function replaceActBeats(outline, actId, newBeats, { title = '', summary 
     if (!act) return o;
     if (typeof title === 'string' && title.trim()) act.title = title.trim();
     if (typeof summary === 'string') act.summary = summary;
-    const removedIds = new Set(o.beats.filter(b => b.actId === actId).map(b => b.id));
+    const removed = o.beats.filter(b => b.actId === actId);
+    const removedIds = new Set(removed.map(b => b.id));
+    const hadActive = removed.some(b => b.status === 'active');
     const focusWasHere = removedIds.has(o.focus.currentBeat);
     o.beats = o.beats.filter(b => b.actId !== actId);
     const list = (Array.isArray(newBeats) ? newBeats : [])
@@ -514,7 +523,13 @@ export function replaceActBeats(outline, actId, newBeats, { title = '', summary 
         }, o.beats.length + i))
         .filter(Boolean);
     o.beats = [...o.beats, ...list];
-    if (focusWasHere && list.length) o.focus.currentBeat = list[0].id;
+    if (hadActive && list.length) {
+        // 剧情进行中：新幕第一个节点承接 active，焦点指向它（唯一进行中）
+        list[0].status = 'active';
+        o.focus.currentBeat = list[0].id;
+    } else if (focusWasHere && list.length) {
+        o.focus.currentBeat = list[0].id;
+    }
     return normalizeOutline(o);
 }
 

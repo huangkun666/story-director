@@ -5,6 +5,8 @@ import { normalizeOutline, normalizeBeat } from './outline-store.js';
 // 锁定合并核心：以 prev 为基底，只从 patch 吸收「状态类」变更
 // （status/focus/伏笔/弧光状态），用户手动编辑的内容（幕、节点、时间线）保持不变。
 // 不触碰 meta（调用方决定是否递增修订计数）。
+// beats 防漏删：patch 中缺失的既有节点一律保留（模型漏输出不丢节点），
+// patch 新增的节点追加——「只增不删、内容不动、状态可吸收」。
 export function mergeLockedOutline(prevOutline, patch) {
     const base = normalizeOutline(prevOutline);
     if (!patch) return base;
@@ -20,12 +22,17 @@ export function mergeLockedOutline(prevOutline, patch) {
     });
     // 允许模型追加全新幕（例如新增过渡节点时）
     merged.acts = [...merged.acts, ...extraActs];
-    merged.beats = merged.beats.map(patchedBeat => {
-        const baseBeat = base.beats.find(b => b.id === patchedBeat.id);
-        return baseBeat
-            ? { ...patchedBeat, title: baseBeat.title, summary: baseBeat.summary, type: baseBeat.type, actId: baseBeat.actId }
-            : patchedBeat;
+    const patchBeatById = new Map(merged.beats.map(b => [b.id, b]));
+    // base 的节点全部保留：有 patch 的按 patch 吸收状态、恢复手动编辑内容；无 patch 的原样保留
+    const kept = base.beats.map(baseBeat => {
+        const patched = patchBeatById.get(baseBeat.id);
+        return patched
+            ? { ...patched, title: baseBeat.title, summary: baseBeat.summary, type: baseBeat.type, actId: baseBeat.actId }
+            : baseBeat;
     });
+    // patch 新增的节点追加（保持其内容与状态）
+    const added = merged.beats.filter(b => !base.beats.some(x => x.id === b.id));
+    merged.beats = [...kept, ...added];
     return merged;
 }
 
@@ -60,7 +67,8 @@ const VALID_STATUS = new Set(['pending', 'active', 'done']);
 
 // 锁定模式的增量补丁合并（见 prompts.buildRevisePatchPrompt）。
 // 只应用状态类变更与追加节点，不改写任何现有内容。
-export function applyPatch(prevOutline, patch) {
+// allowNewBeats=false 时忽略 patch.newBeats（纯状态推进，不追加节点）。
+export function applyPatch(prevOutline, patch, { allowNewBeats = true } = {}) {
     const base = normalizeOutline(prevOutline);
     if (!patch || typeof patch !== 'object') return base;
 
@@ -94,7 +102,7 @@ export function applyPatch(prevOutline, patch) {
         if (arc && VALID_STATUS.has(a.status)) arc.status = a.status;
     }
 
-    const newBeats = Array.isArray(patch.newBeats) ? patch.newBeats : [];
+    const newBeats = allowNewBeats ? (Array.isArray(patch.newBeats) ? patch.newBeats : []) : [];
     if (newBeats.length) {
         let actId = typeof patch.newBeatActId === 'string' ? patch.newBeatActId : '';
         if (!base.acts.some(a => a.id === actId)) actId = '';
@@ -103,10 +111,12 @@ export function applyPatch(prevOutline, patch) {
             const focusBeat = base.beats.find(b => b.id === base.focus.currentBeat);
             actId = focusBeat?.actId || base.acts[base.acts.length - 1]?.id || '';
         }
+        const ts = Date.now();
         for (let i = 0; i < newBeats.length; i++) {
             const raw = newBeats[i];
             if (!raw || typeof raw !== 'object') continue;
-            const beat = normalizeBeat({ ...raw, id: `beat_patch_${i + 1}` }, base.beats.length + i);
+            // id 唯一化（时间戳后缀）：多次修订追加的节点不会撞 id
+            const beat = normalizeBeat({ ...raw, id: `beat_patch_${ts}_${i + 1}` }, base.beats.length + i);
             beat.actId = actId;
             if (!beat.status) beat.status = 'pending';
             base.beats.push(beat);

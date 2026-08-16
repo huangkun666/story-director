@@ -224,19 +224,28 @@ test('director.revise uses patch merge when outline is locked', async () => {
     assert.equal(stored.focus.nextStep, '推进');
 });
 
-test('director.revise uses full merge when outline is not locked', async () => {
+test('director.revise uses incremental patch even when outline is not locked', async () => {
     let receivedPrompt = '';
+    let stored = createEmptyOutline();
+    stored.beats = [{ id: 'b1', title: '手动标题', summary: '手动概要', status: 'active' }];
     const { deps } = makeDeps({
         generateRaw: async (opts) => {
             receivedPrompt = opts.prompt;
-            return JSON.stringify(createEmptyOutline());
+            return JSON.stringify({
+                statusChanges: [{ beatId: 'b1', status: 'done' }],
+                focus: { nextStep: '推进' },
+            });
         },
         getSettings: () => ({ enabled: true, recentTurns: 5, lockOutline: false, driftTolerance: 'loose' }),
     });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
     const d = createDirector(deps);
     await d.revise();
-    assert.ok(receivedPrompt.includes('更新后的完整大纲')); // 全量修订路径
-    assert.ok(!receivedPrompt.includes('statusChanges'));
+    assert.ok(receivedPrompt.includes('statusChanges')); // 增量补丁路径
+    assert.ok(!receivedPrompt.includes('更新后的完整大纲')); // 全量只留给生成
+    assert.equal(stored.beats[0].status, 'done'); // 状态推进
+    assert.equal(stored.beats[0].title, '手动标题'); // 内容不被覆盖（非锁定也安全）
 });
 
 test('director.check records verdict into meta.checkHistory even when unchanged', async () => {
