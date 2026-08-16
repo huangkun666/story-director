@@ -341,3 +341,81 @@ test('director.generate passes the ongoing beat as fact boundary to the prompt',
     assert.ok(receivedPrompt.includes('追查阴谋'));
     assert.ok(receivedPrompt.includes('主角潜入都城'));
 });
+
+test('director.generate includes recent dialogue when timeline unchanged (continue from present)', async () => {
+    let receivedPrompt = '';
+    const prev = createEmptyOutline();
+    prev.timeline = { start: '建安五年', end: '建安十三年', note: '', mustRead: '' };
+    prev.beats = [{ id: 'b1', title: '当前', summary: 's', status: 'active' }];
+    let stored = prev;
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify({ theme: '新' });
+        },
+        getRecentDialogue: () => '主角: 我们进城吧',
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试', timeline: { start: '建安五年', end: '建安十三年', note: '', mustRead: '' } });
+    assert.ok(receivedPrompt.includes('近期对话'));
+    assert.ok(receivedPrompt.includes('我们进城吧'));
+});
+
+test('director.generate omits recent dialogue when timeline was edited (jump to future)', async () => {
+    let receivedPrompt = '';
+    const prev = createEmptyOutline();
+    prev.timeline = { start: '建安五年', end: '建安十三年', note: '', mustRead: '' };
+    prev.beats = [{ id: 'b1', title: '当前', summary: 's', status: 'active' }];
+    let stored = prev;
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify({ theme: '新' });
+        },
+        getRecentDialogue: () => '主角: 我们进城吧',
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试', timeline: { start: '建安十年', end: '建安十三年', note: '', mustRead: '' } });
+    assert.ok(!receivedPrompt.includes('近期对话'));
+    assert.ok(!receivedPrompt.includes('我们进城吧'));
+});
+
+test('director.generate includes recent dialogue on first generation (empty outline)', async () => {
+    let receivedPrompt = '';
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify({ theme: '新' });
+        },
+        getRecentDialogue: () => '主角: 出发',
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    assert.ok(receivedPrompt.includes('近期对话'));
+    assert.ok(receivedPrompt.includes('出发'));
+});
+
+test('director.generate trims cast query to the first five characters', async () => {
+    const receivedQueries = [];
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({ theme: '新' }),
+        getVectorMemory: async (queries) => { receivedQueries.push(...queries); return { text: '', hits: [] }; },
+        getCharacterCard: () => ({
+            name: 'Alice',
+            cast: Array.from({ length: 8 }, (_, i) => `角色${i}（身份${i}）`).join('；'),
+        }),
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    const castQuery = receivedQueries.find(q => q.startsWith('角色与关系'));
+    assert.ok(castQuery.includes('角色4')); // 前 5 个在内
+    assert.ok(!castQuery.includes('角色5')); // 第 6 个被截掉
+});

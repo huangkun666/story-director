@@ -291,6 +291,18 @@ test('buildHistoryContext returns empty when nothing happened yet', () => {
     assert.equal(buildHistoryContext(o), '');
 });
 
+test('buildGeneratePrompt includes recent dialogue block with continuity rule', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        recentDialogue: '主角: 我们进城吧',
+    });
+    assert.ok(prompt.includes('近期对话（当前剧情位置的最新事实，必须衔接）'));
+    assert.ok(prompt.includes('我们进城吧'));
+    assert.ok(prompt.includes('不得矛盾、不得重复已发生的事'));
+    const without = buildGeneratePrompt({ characterCard: {} });
+    assert.ok(!without.prompt.includes('近期对话'));
+});
+
 test('buildGeneratePrompt includes history block with continuation rules', () => {
     const { prompt } = buildGeneratePrompt({
         characterCard: {},

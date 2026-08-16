@@ -196,6 +196,30 @@ test('getVectorMemoryHits returns empty when vector memory disabled', async () =
     assert.deepEqual(hits, []);
 });
 
+test('getVectorMemoryHits caps each query at top 3 results', async () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            VectorStore: {
+                search: async (query) => Array.from({ length: 6 }, (_, i) => ({ text: `${query}-资料${i}`, source: '库' })),
+            },
+        },
+    };
+    try {
+        const ctx = makeCtx();
+        ctx.extensionSettings.story_director = { useVectorMemory: true, vectorMemoryLimit: 6000 };
+        const adapter = createSillyTavernAdapter(ctx);
+        const hits = await adapter.getVectorMemoryHits(['时间线', '角色']);
+        assert.equal(hits.length, 6); // 两路 × 每路 3 条
+        const texts = hits.map(h => h.text);
+        assert.ok(texts.some(t => t === '时间线-资料2')); // 每路第 3 条在内
+        assert.ok(!texts.some(t => t === '时间线-资料3')); // 每路第 4 条被丢弃
+        assert.ok(!texts.some(t => t === '角色-资料5'));
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
 test('director retrieval hits reach setRetrievalCallback end to end', async () => {
     const originalWindow = globalThis.window;
     globalThis.window = {

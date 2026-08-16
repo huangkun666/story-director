@@ -53,7 +53,8 @@ export function createDirector(deps) {
 
             const vectorQueries = [
                 [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedTimeline?.mustRead].filter(Boolean).join(' '),
-                card.cast ? `角色与关系：${card.cast}` : '',
+                // 角色查询词精简：全量名录会让 query 过长过泛，只取前 5 个主要角色
+                card.cast ? `角色与关系：${String(card.cast).split('；').slice(0, 5).join('；')}` : '',
                 currentOutline.focus?.nextStep || currentOutline.theme || '',
             ].filter(q => String(q || '').trim());
             let vectorContext = '';
@@ -80,6 +81,21 @@ export function createDirector(deps) {
                 ? `${ongoingBeat.title || ongoingBeat.id}（${ongoingBeat.summary || '进行中'}）`
                 : '';
 
+            // 近期对话携带规则：首次生成（无旧大纲）或时间线未被用户修改（从当前位置继续）
+            // 时携带近期对话，消除「新大纲与当前剧情脱节」；时间线被修改（跳到未来重规划）
+            // 时不带——事实边界 + 前情块已足够，且正如用户洞察：起点太远时近期对话无意义。
+            const stored = currentOutline.timeline || {};
+            const req = requestedTimeline || {};
+            const timelineEdited = !!(req.start || req.end || req.note || req.mustRead) && (
+                req.start !== stored.start
+                || req.end !== stored.end
+                || req.note !== stored.note
+                || req.mustRead !== stored.mustRead
+            );
+            const hasOutlineContent = !!(currentOutline.beats?.length || currentOutline.acts?.length);
+            const needsRecentDialogue = !hasOutlineContent || !timelineEdited;
+            const recentDialogue = needsRecentDialogue ? (deps.getRecentDialogue?.(settings.recentTurns ?? 5) || '') : '';
+
             const bundle = buildGeneratePrompt({
                 characterCard: card,
                 userRequest,
@@ -88,6 +104,7 @@ export function createDirector(deps) {
                 pacing: settings.beatPacing || 'balanced',
                 historyContext,
                 ongoingBeatText,
+                recentDialogue,
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
             });

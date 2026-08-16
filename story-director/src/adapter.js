@@ -273,7 +273,8 @@ export function createSillyTavernAdapter(ctx) {
                     continue;
                 }
                 if (!Array.isArray(results)) continue;
-                for (const r of results) {
+                // 每路只取前 3 条：多路合并时防止某一路的低相关结果占满预算
+                for (const r of results.slice(0, 3)) {
                     const text = String(r?.text || '').trim();
                     if (!text || seen.has(text)) continue;
                     seen.add(text);

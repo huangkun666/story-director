@@ -164,7 +164,7 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', memoryContext = '', vectorContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -182,6 +182,13 @@ export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 
 - 若用户指定的时间线开始时间早于该节点所处时间，请自动把 timeline.start 顺延到该节点结束之后，并相应调整整个时间线跨度；
 - 新 beats 全部落在顺延后的时间线内，不得与已发生或正在进行的剧情在时间上重叠；
 - 第一个新 beat 应衔接该节点的收尾。\n` : '';
+    // 近期对话：仅在「从当前位置继续」时携带（首次生成或时间线未修改），
+    // 作为当前剧情位置的最新事实，消除新大纲与剧情脱节
+    const dialogueText = String(recentDialogue || '').trim();
+    const dialogueBlock = dialogueText ? `【近期对话（当前剧情位置的最新事实，必须衔接）】
+${dialogueText}
+
+注意：以上对话发生在当前剧情位置，新大纲的开头必须与这些对话自然衔接，不得矛盾、不得重复已发生的事。\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note || t.mustRead);
     const mustReadBlock = t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
     const timelineBlock = (t.start || t.end || t.note)
@@ -216,7 +223,7 @@ ${mustReadBlock}${timelineBlock}
 
 ${pacingBlock}
 
-${ongoingBlock}${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
+${ongoingBlock}${dialogueBlock}${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【新人物许可（允许但须交代）】
