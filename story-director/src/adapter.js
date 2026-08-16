@@ -415,10 +415,32 @@ export function createSillyTavernAdapter(ctx) {
 
     function generateRaw(opts) {
         const llm = getLlmSettings();
+        const t0 = Date.now();
+        const promptChars = String(opts?.prompt || '').length;
+        const systemChars = String(opts?.systemPrompt || '').length;
+        // 所有 LLM 调用（方向草案/生成/修订/体检/AI 节点/标签分析）统一打点，
+        // 终端可看到每次调用的模式/模型/上下文体积/耗时/返回
+        const logCall = (result, err) => {
+            const ms = Date.now() - t0;
+            const resultChars = result != null ? String(typeof result === 'string' ? result : JSON.stringify(result) || '').length : 0;
+            log('info', 'llm', 'LLM 调用',
+                `${llm.mode === 'custom' ? `独立模式${llm.model ? ` / ${llm.model}` : ''}` : '主 API'}；上下文 ${(systemChars + promptChars).toLocaleString()} 字符（system ${systemChars.toLocaleString()} + prompt ${promptChars.toLocaleString()}）；耗时 ${ms}ms；返回 ${resultChars.toLocaleString()} 字符${err ? `；失败：${String(err?.message || err)}` : ''}`);
+            return result;
+        };
         if (llm.mode === 'custom') {
-            return customGenerate({ system: opts?.systemPrompt, prompt: opts?.prompt });
+            return customGenerate({ system: opts?.systemPrompt, prompt: opts?.prompt }).then(
+                (r) => logCall(r, null),
+                (err) => { logCall(null, err); throw err; },
+            );
         }
-        return freshCtx().generateRaw(opts);
+        const p = freshCtx().generateRaw(opts);
+        if (p && typeof p.then === 'function') {
+            return p.then(
+                (r) => logCall(r, null),
+                (err) => { logCall(null, err); throw err; },
+            );
+        }
+        return logCall(p, null);
     }
 
     const director = createDirector({

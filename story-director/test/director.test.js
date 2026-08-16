@@ -596,3 +596,24 @@ test('director.generate skips direction draft when advancedRetrieval is off', as
     assert.equal(calls.length, 1); // 单轮
     assert.ok(!calls[0].includes('大纲方向（先行草案'));
 });
+
+test('director.generate runs vector retrieval in two batches (model queries then fallback)', async () => {
+    const batchCalls = [];
+    let llmCalls = 0;
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            llmCalls++;
+            if (llmCalls === 1) return JSON.stringify({ direction: '追查皮甲', queries: ['皮甲'] });
+            return JSON.stringify({ theme: '新' });
+        },
+        getVectorMemory: async (queries) => { batchCalls.push([...queries]); return { text: '资料', hits: [] }; },
+        getCharacterCard: () => ({ name: 'Alice', cast: '黄坤（主角）；司马朗（配角）' }),
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试' });
+    // 两次独立检索：模型定向一批 + 保底一批（终端可见两次搜索）
+    assert.equal(batchCalls.length, 2);
+    assert.deepEqual(batchCalls[0], ['皮甲']); // 第一批 = 模型定向查询
+    assert.ok(batchCalls[1].some(q => q.startsWith('角色与关系'))); // 第二批 = 保底查询
+});

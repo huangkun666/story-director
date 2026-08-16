@@ -2129,7 +2129,8 @@
     min-width: 120px;
 }
 .sd_term_list {
-    max-height: 320px;
+    max-height: 55vh;
+    min-height: 240px;
     overflow-y: auto;
     border: 1px solid var(--sd-border);
     border-radius: 6px;

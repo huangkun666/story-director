@@ -111,25 +111,41 @@ export function createDirector(deps) {
                 }
             }
 
-            // 向量检索：模型定向查询优先 + 保底查询（时间线/角色/焦点）
+            // 向量检索：模型定向查询 + 保底查询（时间线/角色/焦点）**分两批调用**——
+            // 各自打点（终端可见「模型定向」「保底」两次搜索），批次间按文本去重。
             const baseQueries = [
                 [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedMustRead].filter(Boolean).join(' '),
                 // 角色查询词精简：全量名录会让 query 过长过泛，只取前 5 个主要角色
                 card.cast ? `角色与关系：${String(card.cast).split('；').slice(0, 5).join('；')}` : '',
                 currentOutline.focus?.nextStep || currentOutline.theme || '',
             ].filter(q => String(q || '').trim());
-            const vectorQueries = [...modelQueries, ...baseQueries];
             let vectorContext = '';
             let vectorHits = [];
             if (useVector) {
-                const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
-                if (retrieval) {
-                    vectorContext = retrieval.text || '';
-                    vectorHits = Array.isArray(retrieval.hits) ? retrieval.hits : [];
-                } else {
-                    // 兼容旧 deps：只有 getVectorMemoryContext 的宿主
-                    vectorContext = await deps.getVectorMemoryContext?.(vectorQueries) || '';
+                const groups = [];
+                if (modelQueries.length) groups.push(['模型定向', modelQueries]);
+                if (baseQueries.length) groups.push(['保底', baseQueries]);
+                const textLimit = Math.max(1000, Number(settings.vectorMemoryLimit) || 6000);
+                const mergedTexts = [];
+                const seenHit = new Set();
+                for (const [label, queries] of groups) {
+                    const retrieval = await deps.getVectorMemory?.(queries) || null;
+                    if (retrieval && (retrieval.text || (Array.isArray(retrieval.hits) && retrieval.hits.length))) {
+                        if (retrieval.text) mergedTexts.push(retrieval.text);
+                        for (const hit of (Array.isArray(retrieval.hits) ? retrieval.hits : [])) {
+                            const key = String(hit?.text || '');
+                            if (key && !seenHit.has(key)) {
+                                seenHit.add(key);
+                                vectorHits.push(hit);
+                            }
+                        }
+                    } else {
+                        // 兼容旧 deps：只有 getVectorMemoryContext 的宿主
+                        const t = await deps.getVectorMemoryContext?.(queries) || '';
+                        if (t) mergedTexts.push(t);
+                    }
                 }
+                vectorContext = mergedTexts.join('\n').slice(0, textLimit);
             }
             deps.setRetrievalHits?.(vectorHits);
 
