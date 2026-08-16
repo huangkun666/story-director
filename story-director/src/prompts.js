@@ -219,6 +219,12 @@ ${pacingBlock}
 ${ongoingBlock}${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
+【新人物许可（允许但须交代）】
+剧情需要时允许引入新人物（新对手、新势力、关键配角等），但：
+- 不得与角色名录中的既有角色重名或冲突，也不得凭空改写既有角色的身份；
+- 新人物的身份、动机与作用必须在 arcs 或 beats 中交代清楚；
+- 新人物应服务于故事需要，而非凑数。
+
 【用户要求】
 ${userRequest || '（未指定，请自行设计一个有深度的完整故事方向）'}
 
@@ -292,7 +298,7 @@ ${serializeOutline(compactOutlineForRevision(outline))}
 
 （注：大纲中标记为 "done" 的已完成节点已省略细节，仅保留标题。输出时请原样保留这些节点及其全部字段——它们已经发生，不要改写或补写它们的 summary/cast/type。）
 
-请执行：1) 判断当前情节节点是否真正到达终点（目标达成、冲突收场或场景明确结束）。大纲不是剧情日志：常规对话轮次不要推进节点状态、不要新建节点，只需微调 focus；只有里程碑式的完成才把该 beat 的 status 改为 "done" 并推进下一个为 "active"；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。7) 新增节点的时间点遵循当前节点节奏档位（${pacingInfo(pacing).label}）：间隔相对总跨度合理分布，不要与既有节点全部扎堆在同一时刻。${lockInstruction ? `\n\n${lockInstruction}` : ''}
+请执行：1) 判断当前情节节点是否真正到达终点（目标达成、冲突收场或场景明确结束）。大纲不是剧情日志：常规对话轮次不要推进节点状态、不要新建节点，只需微调 focus；只有里程碑式的完成才把该 beat 的 status 改为 "done" 并推进下一个为 "active"；2) ${driftInstruction}；3) 更新伏笔状态（status/beatId）；4) 根据节点完成情况更新 arcs[].status；5) 若插入或删除 beat，同步维护 acts 里的 beats 列表；6) 检查对话中的时间推进是否仍在 timeline.start 与 timeline.end 之间：若仍在区间内，正常更新；若已不可逆地越过 timeline.end，把 timeline.end 顺延并补一个过渡 beat，不要删除原有大纲。7) 新增节点的时间点遵循当前节点节奏档位（${pacingInfo(pacing).label}）：间隔相对总跨度合理分布，不要与既有节点全部扎堆在同一时刻。8) 对话中出现的名录外新角色（新对手/新势力等）：允许将其纳入 arcs 或后续节点，但须简要交代其身份与动机；不得与既有角色重名冲突。${lockInstruction ? `\n\n${lockInstruction}` : ''}
 
 严格保持【当前大纲】的 JSON 结构不变（字段名完全一致，不要 markdown 代码块），输出更新后的完整大纲。`;
     return { system, prompt };
@@ -360,7 +366,7 @@ ${userHint || '（未指定，请根据大纲当前焦点与未完成节点，�
   "actId": "建议归属的幕 id（必须是当前大纲中真实存在的 act id；不确定时用当前焦点所在幕）"
 }
 
-要求：不要与大纲中已有的节点重复；情节符合大纲的时间线、必读设定与当前焦点；参与角色从大纲已有角色中选择；summary 的时间与既有节点自然衔接、不回退。`;
+要求：不要与大纲中已有的节点重复；情节符合大纲的时间线、必读设定与当前焦点；参与角色优先从大纲已有角色中选择，确有必要引入新角色时须简要交代其身份；summary 的时间与既有节点自然衔接、不回退。`;
     return { system, prompt };
 }
 

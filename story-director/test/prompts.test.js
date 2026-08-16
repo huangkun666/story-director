@@ -302,6 +302,29 @@ test('buildGeneratePrompt includes history block with continuation rules', () =>
     assert.ok(prompt.includes('发生在新时间线内或之后的旧规划一律作废'));
 });
 
+test('buildGeneratePrompt explicitly permits new characters with obligations', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: { cast: '黄坤（主角）' } });
+    assert.ok(prompt.includes('新人物许可'));
+    assert.ok(prompt.includes('允许引入新人物')); // 显式许可
+    assert.ok(prompt.includes('不得与角色名录中的既有角色重名或冲突')); // 防冲突仍在
+    assert.ok(prompt.includes('身份、动机与作用必须在 arcs 或 beats 中交代清楚'));
+    assert.ok(prompt.includes('角色名录')); // 名录块保留
+});
+
+test('buildBeatPrompt allows new characters when necessary with identity note', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildBeatPrompt({ outline: o });
+    assert.ok(prompt.includes('优先从大纲已有角色中选择'));
+    assert.ok(prompt.includes('确有必要引入新角色时须简要交代其身份'));
+});
+
+test('buildRevisePrompt absorbs new characters from dialogue with identity', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildRevisePrompt({ recentDialogue: '', outline: o });
+    assert.ok(prompt.includes('名录外新角色'));
+    assert.ok(prompt.includes('允许将其纳入 arcs 或后续节点'));
+});
+
 test('buildGeneratePrompt adds fact-boundary block when an ongoing beat exists', () => {
     const { prompt } = buildGeneratePrompt({
         characterCard: {},
