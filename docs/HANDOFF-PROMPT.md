@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**264/264 通过**。
+当前测试数：**270/270 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+3ecbac4 feat: world mode - outline plans world events and NPC plans only, never protagonist actions; separate generate/revise/inject templates
 ca17446 refactor: drop overview retrieval-hits card (terminal covers it) - remove callback chain
 fb955ff refactor: timeline is constraint-only (drop partial replan), replan protects done beats, single-active enforced everywhere, replan carries dialogue+pacing, generate warns on full rewrite
 72e68fe fix: consistency model - active status preserved across all entry points, unified incremental merge (full rewrite only for generate), replan carries current story position
@@ -104,7 +105,7 @@ story-director/
 ├── style.css              # 双主题（白天/夜晚），全部颜色走 CSS 变量，禁止硬编码
 ├── deploy.ps1             # 部署脚本（必须 ASCII-only！）
 ├── src/
-│   ├── outline-store.js   # 数据模型 + normalize（引用自愈）+ 全部受控编辑纯函数 + diagnoseOutline 诊断
+│   ├── outline-store.js   # 数据模型（含 worldEvents 世界事件）+ normalize（引用自愈）+ 全部受控编辑纯函数 + diagnoseOutline 诊断
 │   ├── prompts.js         # 提示词模板 + schema + 群像/时间线/节奏/前情/事实边界/方向草案块
 │   ├── llm-client.js      # extractJson/stripCodeFence/makeStructuredGenerator
 │   ├── openai-compat.js   # 独立 API 直连 + /v1/models 列表 + 连接测试
@@ -143,6 +144,12 @@ story-director/
 17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；**API 卡已压缩**：连接模式与「获取模型/测试连接」同行（sd_llm_mode_row），字段只剩 Base URL / API Key / 模型——API 类型下拉已移除（custom 直连实际只用到这三项，旧设置 `llm.api` 字段仍兼容保留）。
 18. **体检**：verdict/issues/changed/reason + 时间线漂移 + 节点节奏检查点；**体检历史留痕**（meta.checkHistory 10 条，统计行图标序列）；锁定模式下只吸收状态类变更。
 19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
+22. **世界模式（World Mode）**：`settings.outlineMode`（'director' 导演 / 'world' 世界，故事设定页下拉切换）。**核心原则：大纲永不规划主角行动**（主角由用户扮演，完全自由），只规划世界状态、NPC 计划与世界事件表——把「模拟角色+世界+主角」三合一从对话模型拆成「大纲显式维护世界状态机 + 模型读表执行」。
+    - **数据**：`outline.worldEvents[]`（id/time/title/description/actors/trigger 触发时机/impact direct相遇|ambient背景/status pending→active→paid/outcome 结果），状态机复用伏笔三态；normalize 兼容字符串形式"197年冬：事件标题"；受控函数 createWorldEvent/updateWorldEvent/removeWorldEvent。
+    - **生成**：buildWorldGeneratePrompt——「最高准则：严禁规划主角的任何行动」，只输出世界现状+arcs（NPC 独立计划）+ 3-6 条事件表（必含 trigger/impact）+ 环境线索 beats（不得含主角行动）；focus.nextStep = 世界动态描述而非主角指令。
+    - **修订**：buildWorldRevisePatchPrompt + applyPatch 新增 eventChanges（只推进事件状态/结果）；「主角的行动永远不写入大纲」。
+    - **注入**：renderInstruction(mode='world')——【世界动态】⚡进行中/⏳待触发/🌫背景 + 📌世界动态，明确标注「环境，非主角指令」。
+    - **UI**：总览页顶部世界动态时间轴卡；角色与伏笔页新增「世界事件管理」卡（状态筛选+编辑 modal+标记发生+删除）。
 20. **调试终端**：**独立页签**（sd_view_terminal，第 6 个页签）——**LLM 调用逐次打点**（adapter.generateRaw 统一记录：模式/模型/上下文 system+prompt 字符/耗时/返回字符/失败原因，方向草案、正式生成、修订、体检、AI 节点、标签分析全部可见）；**检索分两批独立调用**（模型定向 + 保底，各一次打点，终端可见两次搜索，批次间按文本去重）；另有 memory（指针缺口/生效轮数/正文提取）、engine（大纲保存诊断 diagnoseOutline 自愈清单）、edit（撤销栈编辑流）、lifecycle（就绪/消息触发修订/切换聊天）；分级过滤（debug/info/warn/error + 分类 + 关键字）、点击展开详情、清空、导出 JSON；**环形 500 条仅存内存**，warn/error 同时透传 console。
 21. **并发友好**：director.isRunning() + UI 忙碌提示。
 
