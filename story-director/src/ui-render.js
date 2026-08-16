@@ -179,15 +179,17 @@ function outlineSectionHtml(o) {
         beats.forEach(b => usedBeatIds.add(b.id));
         // 幕序号由数组顺序派生：删插/移动幕都不会跳号
         const numBadge = `<span class="sd_act_badge" title="第 ${index + 1} 幕（按当前顺序）">${index + 1}</span>`;
+        const isHistory = String(act.id).startsWith('act_history');
+        const replanBtn = isHistory ? '' : `<span class="sd_act_replan" data-act-replan="${escapeHtml(act.id)}" title="只重新设计这一幕（其他幕不动）"><i class="fa-solid fa-wand-magic-sparkles"></i>修改这一幕</span>`;
         const head = `<div class="sd_act_head" title="双击编辑幕">
                 ${numBadge}
                 <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
                 ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
+                ${replanBtn}
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
             </div>`;
         const body = beats.length ? `<div class="sd_timeline">${beats.map(b => renderBeatItem(b, o.foreshadowing)).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>';
         // 前情幕默认折叠（原生 details/summary，零 JS）
-        const isHistory = String(act.id).startsWith('act_history');
         if (isHistory) {
             return `<details class="sd_act sd_act_history" data-act-id="${escapeHtml(act.id)}">
                 <summary class="sd_act_head" title="点击展开/折叠前情">${numBadge}

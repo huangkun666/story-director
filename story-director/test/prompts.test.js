@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
     OUTLINE_SCHEMA, CHECK_SCHEMA,
     buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, buildDirectorInstruction,
-    buildBeatPrompt, buildHistoryContext,
+    buildBeatPrompt, buildReplanActPrompt, buildHistoryContext,
     compactOutlineForRevision,
 } from '../src/prompts.js';
 import { createEmptyOutline } from '../src/outline-store.js';
@@ -376,4 +376,24 @@ test('buildGeneratePrompt adds fact-boundary block when an ongoing beat exists',
 test('buildGeneratePrompt omits fact-boundary block without an ongoing beat', () => {
     const { prompt } = buildGeneratePrompt({ characterCard: {} });
     assert.ok(!prompt.includes('事实边界'));
+});
+
+test('buildReplanActPrompt scopes to target act with衔接 anchors', () => {
+    const { prompt } = buildReplanActPrompt({
+        characterCard: { name: 'Alice', description: '主角' },
+        act: { id: 'act_2', title: '第二幕', summary: '发展中', beats: [{ id: 'b2', title: '旧节点', summary: 's', status: 'pending', cast: ['主角'] }] },
+        prevBeat: { title: '结尾一', summary: '衔接起点' },
+        nextBeat: { title: '开头三', summary: '衔接终点' },
+        userHint: '更紧凑',
+        mustRead: '魔法会消耗寿命',
+        timeline: { start: '197年', end: '199年' },
+    });
+    assert.ok(prompt.includes('只允许修改这一幕'));
+    assert.ok(prompt.includes('第二幕'));
+    assert.ok(prompt.includes('结尾一'));
+    assert.ok(prompt.includes('开头三'));
+    assert.ok(prompt.includes('更紧凑'));
+    assert.ok(prompt.includes('魔法会消耗寿命'));
+    assert.ok(prompt.includes('197年'));
+    assert.ok(prompt.includes('不要输出其他幕'));
 });

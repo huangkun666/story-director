@@ -492,6 +492,32 @@ export function mergePlannedOutline(newOutline, oldOutline) {
     return normalizeOutline(o);
 }
 
+// 幕级重规划合并：只替换目标幕的节点（其他幕代码级不动）。
+// 旧节点删除（伏笔回收点 / focus 等悬空引用由 normalize 自愈）；
+// 新节点生成新 id；若被删节点是当前焦点，焦点指向新幕第一个节点。
+// 幕不存在时返回原大纲（normalize 后的新对象，内容不变）。
+export function replaceActBeats(outline, actId, newBeats, { title = '', summary = '' } = {}) {
+    const o = normalizeOutline(outline);
+    const act = o.acts.find(a => a.id === actId);
+    if (!act) return o;
+    if (typeof title === 'string' && title.trim()) act.title = title.trim();
+    if (typeof summary === 'string') act.summary = summary;
+    const removedIds = new Set(o.beats.filter(b => b.actId === actId).map(b => b.id));
+    const focusWasHere = removedIds.has(o.focus.currentBeat);
+    o.beats = o.beats.filter(b => b.actId !== actId);
+    const list = (Array.isArray(newBeats) ? newBeats : [])
+        .map((raw, i) => normalizeBeat({
+            ...(raw && typeof raw === 'object' ? raw : {}),
+            id: `beat_${Date.now()}_${i + 1}`,
+            status: raw?.status || 'pending',
+            actId,
+        }, o.beats.length + i))
+        .filter(Boolean);
+    o.beats = [...o.beats, ...list];
+    if (focusWasHere && list.length) o.focus.currentBeat = list[0].id;
+    return normalizeOutline(o);
+}
+
 // ---------- 角色（arcs）与伏笔的受控编辑 ----------
 // 与节点编辑同一约定：不可变返回、char 名/id 定位、引用自愈交给 normalize。
 

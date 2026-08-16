@@ -2219,3 +2219,26 @@
     background: var(--sd-red-bg);
     color: var(--sd-text-2);
 }
+
+/* 幕级重规划按钮（总览页每幕头部） */
+.sd_act_replan {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 2px 10px;
+    border: 1px solid var(--sd-border);
+    border-radius: 12px;
+    background: var(--sd-card);
+    color: var(--sd-text-2);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sd_act_replan:hover {
+    background: var(--sd-amber-soft);
+    border-color: var(--sd-amber-border);
+    color: var(--sd-quote);
+}
+.sd_act_replan .fa-solid {
+    margin-right: 3px;
+    font-size: 10px;
+}

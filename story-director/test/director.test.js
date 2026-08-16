@@ -678,3 +678,63 @@ test('director.generate without timeline does not include planned-outline block'
     await d.generate({ userRequest: '' });
     assert.ok(!receivedPrompt.includes('原样保留')); // 未指定时间线 = 完整重生成，不走部分重规划
 });
+
+test('director.replanAct rebuilds only the target act, other acts untouched', async () => {
+    let receivedPrompt = '';
+    let stored = createEmptyOutline();
+    stored.acts = [
+        { id: 'act_1', title: '第一幕', summary: 's1', beats: ['b1'] },
+        { id: 'act_2', title: '第二幕', summary: 's2', beats: ['b2', 'b3'] },
+        { id: 'act_3', title: '第三幕', summary: 's3', beats: ['b4'] },
+    ];
+    stored.beats = [
+        { id: 'b1', actId: 'act_1', title: '结尾一', summary: '衔接起点', type: 'climax', status: 'done', cast: ['主角'] },
+        { id: 'b2', actId: 'act_2', title: '旧节点一', summary: 's', type: 'setup', status: 'pending', cast: ['主角'] },
+        { id: 'b3', actId: 'act_2', title: '旧节点二', summary: 's', type: 'conflict', status: 'pending', cast: ['配角'] },
+        { id: 'b4', actId: 'act_3', title: '开头三', summary: '衔接终点', type: 'setup', status: 'pending', cast: ['主角'] },
+    ];
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify({
+                title: '第二幕（重做）',
+                summary: '新概要',
+                beats: [
+                    { title: '新节点A', summary: 'sA', type: 'conflict', cast: ['主角'] },
+                    { title: '新节点B', summary: 'sB', type: 'twist' },
+                ],
+            });
+        },
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    const result = await d.replanAct('act_2', { userHint: '更紧凑' });
+    assert.ok(result);
+    assert.equal(result.count, 2);
+    // prompt 含目标幕、前后幕衔接锚点、用户要求
+    assert.ok(receivedPrompt.includes('第二幕'));
+    assert.ok(receivedPrompt.includes('衔接起点'));   // 前一幕结尾
+    assert.ok(receivedPrompt.includes('开头三'));      // 后一幕开头
+    assert.ok(receivedPrompt.includes('更紧凑'));
+    const o = deps.getOutline();
+    // 第一幕 / 第三幕节点原样保留
+    assert.ok(o.beats.some(b => b.id === 'b1' && b.title === '结尾一'));
+    assert.ok(o.beats.some(b => b.id === 'b4' && b.title === '开头三'));
+    // 目标幕旧节点全删、新节点替换
+    assert.ok(!o.beats.some(b => b.id === 'b2' || b.id === 'b3'));
+    const act2 = o.beats.filter(b => b.actId === 'act_2');
+    assert.equal(act2.length, 2);
+    assert.equal(act2[0].title, '新节点A');
+    assert.equal(o.acts.find(a => a.id === 'act_2').title, '第二幕（重做）');
+});
+
+test('director.replanAct returns null for missing act or garbage output', async () => {
+    const { deps } = makeDeps();
+    const d = createDirector(deps);
+    assert.equal(await d.replanAct('nope'), null);
+    const { deps: deps2 } = makeDeps({ generateRaw: async () => 'garbage' });
+    const d2 = createDirector(deps2);
+    assert.equal(await d2.replanAct('act_1'), null);
+});

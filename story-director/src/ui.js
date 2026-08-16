@@ -529,6 +529,26 @@ export function bindUI(ctx, adapter) {
         renderReport({ verdict: 'sync', changed: false, reason: `已跳转到「${beat.title || beat.id}」，从此处开始游玩` }, '跳转');
     }
 
+    // 幕级重规划：点击「修改这一幕」→ 只重新设计该幕（其他幕代码级不动）
+    document.getElementById('sd_overview')?.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-act-replan]');
+        if (!btn) return;
+        const actId = btn.getAttribute('data-act-replan');
+        const outline = adapter.getOutline();
+        const act = outline.acts.find(a => a.id === actId);
+        if (!act) return;
+        const hint = prompt(`重新设计「${act.title || act.id}」这一幕？\n\n可输入修改要求（留空 = AI 自由重设计），例如：\n- 让这里的剧情更紧凑\n- 加入一场战斗\n\n其他幕不会被改动。`);
+        if (hint === null) return;
+        const result = await adapter.director.replanAct(actId, { userHint: hint || '' });
+        adapter.renderOutline();
+        adapter.director.refreshInjection();
+        if (result) {
+            renderReport({ verdict: 'sync', changed: false, reason: `「${act.title || act.id}」已重新设计为 ${result.count} 个新节点，其他幕未动` }, '重规划幕');
+        } else {
+            renderReport({ verdict: 'major-drift', changed: false, reason: '幕重规划失败，大纲未变' }, '重规划幕');
+        }
+    });
+
     // 伏笔回收点跳转：点击「回收于 X」→ 切到大纲总览并闪烁高亮该节点
     document.getElementById('sd_sidebar_foreshadow')?.addEventListener('click', (e) => {
         const payoff = e.target.closest('[data-payoff-beat]');

@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, mergePlannedOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, diagnoseOutline } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, mergePlannedOutline, replaceActBeats, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, diagnoseOutline } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -675,4 +675,49 @@ test('mergePlannedOutline returns new outline unchanged when old has no beats', 
     const merged = mergePlannedOutline(modelOut, oldOutline);
     assert.equal(merged.beats.length, 1);
     assert.equal(merged.beats[0].title, 'x');
+});
+
+test('replaceActBeats replaces only the target act beats and heals references', () => {
+    const o = normalizeOutline({
+        acts: [
+            { id: 'act_1', title: '第一幕', summary: '旧概要', beats: [] },
+            { id: 'act_2', title: '第二幕', summary: 's2', beats: [] },
+        ],
+        beats: [
+            { id: 'b1', actId: 'act_1', title: '旧一', summary: 's', status: 'done', cast: ['主角'] },
+            { id: 'b2', actId: 'act_2', title: '被替换', summary: 's', status: 'pending', cast: ['主角'] },
+            { id: 'b3', actId: 'act_2', title: '也被替换', summary: 's', status: 'pending', cast: ['配角'] },
+        ],
+        foreshadowing: [{ id: 'f1', hint: 'h', status: 'pending', payoff: '', beatId: 'b2' }],
+        focus: { currentBeat: 'b2', nextStep: '', activeForeshadow: [] },
+    });
+    const next = replaceActBeats(o, 'act_2', [
+        { title: '新节点一', summary: '新概要一', type: 'conflict', cast: ['主角'] },
+        { title: '新节点二', summary: '新概要二', type: 'twist' },
+    ], { title: '第二幕（新版）', summary: '新幕概要' });
+    // 其他幕节点不动
+    assert.ok(next.beats.some(b => b.id === 'b1' && b.title === '旧一'));
+    // 目标幕旧节点全删、新节点带新 id 加入
+    assert.ok(!next.beats.some(b => b.id === 'b2' || b.id === 'b3'));
+    const newBeats = next.beats.filter(b => b.actId === 'act_2');
+    assert.equal(newBeats.length, 2);
+    assert.ok(newBeats.every(b => String(b.id).startsWith('beat_')));
+    assert.equal(newBeats[0].title, '新节点一');
+    // 幕标题/概要更新
+    const act = next.acts.find(a => a.id === 'act_2');
+    assert.equal(act.title, '第二幕（新版）');
+    assert.equal(act.summary, '新幕概要');
+    // 悬空引用自愈：伏笔 beatId 清空、焦点重定向到新节点
+    assert.equal(next.foreshadowing[0].beatId, '');
+    assert.equal(next.focus.currentBeat, newBeats[0].id);
+});
+
+test('replaceActBeats keeps input unchanged and no-ops for missing act', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: 'x', summary: 's', status: 'pending' }];
+    const before = JSON.stringify(o);
+    const next = replaceActBeats(o, 'nope', [{ title: 'y' }]);
+    assert.equal(JSON.stringify(o), before);
+    assert.equal(next.beats.length, 1);
+    assert.equal(next.beats[0].title, 'x');
 });

@@ -1,7 +1,7 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
-import { normalizeOutline, createEmptyOutline, mergeHistoryIntoOutline, mergePlannedOutline } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, buildHistoryContext, buildPlannedOutlineContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
+import { normalizeOutline, createEmptyOutline, mergeHistoryIntoOutline, mergePlannedOutline, replaceActBeats } from './outline-store.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildReplanActPrompt, buildCheckPrompt, buildHistoryContext, buildPlannedOutlineContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
@@ -274,6 +274,62 @@ export function createDirector(deps) {
         }
     }
 
+    // 幕级重规划：只重新设计指定的一幕（用户从总览页「修改这一幕」进入）。
+    // 幕是结构化边界——prompt 给目标幕 + 前后幕衔接约束，合并层 replaceActBeats
+    // 只替换该幕节点、生成新 id，其他幕代码级不动；旧节点删除后的悬空引用
+    // （伏笔回收点 / focus）由 normalize 自愈。入撤销栈 + 留快照。
+    async function replanAct(actId, { userHint = '' } = {}) {
+        if (running) {
+            log('debug', 'llm', '幕重规划被跳过：已有任务运行（并发守卫）');
+            return null;
+        }
+        running = true;
+        const t0 = Date.now();
+        try {
+            const settings = deps.getSettings();
+            const card = deps.getCharacterCard();
+            const outline = deps.getOutline();
+            const actIndex = outline.acts.findIndex(a => a.id === actId);
+            if (actIndex < 0) return null;
+            const act = outline.acts[actIndex];
+            const prevAct = outline.acts[actIndex - 1];
+            const nextAct = outline.acts[actIndex + 1];
+            // 衔接锚点：前一幕最后一个非 done 节点（否则最后一个节点）；后一幕第一个节点
+            const prevBeats = prevAct ? outline.beats.filter(b => b.actId === prevAct.id) : [];
+            const prevBeat = prevBeats.filter(b => b.status !== 'done').pop() || prevBeats[prevBeats.length - 1] || null;
+            const nextBeat = nextAct ? outline.beats.find(b => b.actId === nextAct.id) || null : null;
+            const actBeats = outline.beats.filter(b => b.actId === actId);
+
+            const bundle = buildReplanActPrompt({
+                characterCard: card,
+                act: { id: act.id, title: act.title, summary: act.summary, beats: actBeats },
+                prevBeat,
+                nextBeat,
+                userHint,
+                mustRead: outline.mustRead || '',
+                timeline: outline.timeline || {},
+            });
+            const result = await gen(bundle);
+            if (!result || typeof result !== 'object') {
+                log('warn', 'llm', '幕重规划失败', `「${act.title || act.id}」；耗时 ${Date.now() - t0}ms；LLM 未返回有效 JSON`);
+                return null;
+            }
+            const next = replaceActBeats(outline, actId, Array.isArray(result.beats) ? result.beats : [], {
+                title: String(result.title || '').trim(),
+                summary: String(result.summary || '').trim(),
+            });
+            deps.pushUndo?.(`重规划幕：${act.title || act.id}`);
+            recordHistory('replan-act');
+            deps.setOutline(next);
+            deps.renderOutline();
+            log('info', 'llm', '幕重规划完成',
+                `「${act.title || act.id}」→ ${(Array.isArray(result.beats) ? result.beats.length : 0)} 个新节点；耗时 ${Date.now() - t0}ms`);
+            return { actId, count: Array.isArray(result.beats) ? result.beats.length : 0 };
+        } finally {
+            running = false;
+        }
+    }
+
     async function revise() {
         if (running) {
             log('debug', 'llm', '修订被跳过：已有任务运行（并发守卫）');
@@ -387,5 +443,5 @@ export function createDirector(deps) {
         }
     }
 
-    return { generate, revise, check, suggestBeat, analyzeDialogueTags, refreshInjection, isRunning: () => running };
+    return { generate, revise, check, suggestBeat, replanAct, analyzeDialogueTags, refreshInjection, isRunning: () => running };
 }

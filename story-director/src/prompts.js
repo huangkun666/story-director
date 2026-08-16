@@ -512,6 +512,54 @@ ${userHint || '（未指定，请根据大纲当前焦点与未完成节点，�
     return { system, prompt };
 }
 
+// 幕级重规划：用户指定「只重新设计这一幕」——幕是结构化边界，
+// 合并层（replaceActBeats）只替换目标幕的节点，其他幕代码级不动，
+// 不依赖模型对时间范围的理解（比时间线部分重规划可靠）。
+export function buildReplanActPrompt({ characterCard, act, prevBeat, nextBeat, userHint = '', mustRead = '', timeline = {} } = {}) {
+    const system = '你是叙事导演。只重新设计指定的一幕，其他幕一律不动（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const beats = Array.isArray(act?.beats) ? act.beats : [];
+    const beatLines = beats.length
+        ? beats.map(b => `- ${b.id || ''}｜${b.status || 'pending'}｜${b.title || '（无标题）'}：${b.summary || '（无概要）'}${b.cast?.length ? `（参与：${b.cast.join('、')}）` : ''}`).join('\n')
+        : '- （本幕暂无节点）';
+    const prevLine = prevBeat ? `- ${prevBeat.title || prevBeat.id}：${prevBeat.summary || '（无概要）'}` : '（没有前一幕，这是大纲开头）';
+    const nextLine = nextBeat ? `- ${nextBeat.title || nextBeat.id}：${nextBeat.summary || '（无概要）'}` : '（没有后一幕，这是大纲结尾）';
+    const mustReadText = String(mustRead || '').trim();
+    const timelineText = [timeline?.start, timeline?.end].filter(Boolean).join(' → ');
+    const prompt = `【角色卡】
+${cardToText(characterCard)}
+
+【目标幕（只允许修改这一幕）】
+- 幕 id：${act?.id || ''}
+- 标题：${act?.title || ''}
+- 概要：${act?.summary || ''}
+现有节点：
+${beatLines}
+
+【衔接约束（必须遵守）】
+前一幕结尾（新规划从这里自然接续）：
+${prevLine}
+后一幕开头（新规划必须能接上它）：
+${nextLine}
+新节点要与前后幕自然衔接、时间不冲突、不回退。
+
+${mustReadText ? `【必读设定（最高优先级）】\n${mustReadText}\n` : ''}${timelineText ? `【时间线】${timelineText}\n` : ''}【用户要求】
+${userHint || '（未指定，请基于当前幕的定位重新设计这一幕）'}
+
+请重新设计这一幕：可以调整幕标题与概要；重新设计节点（数量 3-6 个为宜，类型与时间分布遵循大纲的节点节奏）。
+
+严格按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块；只输出这一幕的数据，不要输出其他幕）：
+{
+  "title": "新幕标题",
+  "summary": "新幕概要",
+  "beats": [
+    { "title": "节点标题", "summary": "该节点发生什么（写明大致时间点）", "type": "setup 或 conflict 或 twist 或 climax 或 resolution", "status": "pending", "cast": ["参与角色1"] }
+  ]
+}
+
+要求：不要改动其他幕的任何内容；新节点不要与前后幕节点重复；遵循必读设定与时间线；确有必要引入新角色时须简要交代其身份。`;
+    return { system, prompt };
+}
+
 export function buildCheckPrompt({ recentDialogue = '', outline, pacing = 'balanced', memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。对比最近对话与当前大纲（含时间线约束），输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();
