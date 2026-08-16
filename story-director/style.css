@@ -983,6 +983,23 @@
     padding: 12px;
 }
 
+/* AI 生成节点行 */
+.sd_beat_ai_row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.sd_beat_ai_row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.sd_beat_ai_row .sd_btn {
+    white-space: nowrap;
+}
+
 .sd_modal_body textarea {
     width: 100%;
     box-sizing: border-box;

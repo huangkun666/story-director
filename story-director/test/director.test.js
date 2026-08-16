@@ -244,3 +244,45 @@ test('director.isRunning is true while a call is in flight', async () => {
     await p;
     assert.equal(d.isRunning(), false); // 结束后复位
 });
+
+test('director.suggestBeat returns a normalized beat suggestion', async () => {
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            title: '发现阴谋',
+            summary: '主角在宴会上发现对手的密信',
+            type: 'twist',
+            cast: ['主角', '对手'],
+            actId: 'act_2',
+        }),
+    });
+    const d = createDirector(deps);
+    const beat = await d.suggestBeat({ userHint: '发现阴谋' });
+    assert.equal(beat.title, '发现阴谋');
+    assert.equal(beat.summary, '主角在宴会上发现对手的密信');
+    assert.equal(beat.type, 'twist');
+    assert.deepEqual(beat.cast, ['主角', '对手']);
+    assert.equal(beat.actId, 'act_2');
+});
+
+test('director.suggestBeat normalizes invalid fields', async () => {
+    const { deps } = makeDeps({
+        generateRaw: async () => JSON.stringify({
+            title: '  X  ',
+            type: 'bogus',
+            cast: ['A', '', 'B'],
+            actId: 42,
+        }),
+    });
+    const d = createDirector(deps);
+    const beat = await d.suggestBeat({});
+    assert.equal(beat.title, 'X'); // trim
+    assert.equal(beat.type, 'setup'); // 非法类型回落
+    assert.deepEqual(beat.cast, ['A', 'B']); // 空串过滤
+    assert.equal(beat.actId, '42'); // 转字符串
+});
+
+test('director.suggestBeat returns null on garbage output', async () => {
+    const { deps } = makeDeps({ generateRaw: async () => 'garbage' });
+    const d = createDirector(deps);
+    assert.equal(await d.suggestBeat({ userHint: 'x' }), null);
+});

@@ -294,7 +294,18 @@
                             <div id="sd_llm_fields" class="sd_llm_fields">
                                 <label class="sd_setting">
                                     <span class="sd_setting_label">API 类型</span>
-                                    <input id="sd_llm_api" type="text" placeholder="openai / textgenerationwebui" />
+                                    <select id="sd_llm_api">
+                                        <option value="">（默认）</option>
+                                        <option value="openai">OpenAI 兼容</option>
+                                        <option value="textgenerationwebui">textgenerationwebui</option>
+                                        <option value="koboldhorde">Kobold Horde</option>
+                                        <option value="novel">NovelAI</option>
+                                        <option value="claude">Claude</option>
+                                        <option value="mistral">Mistral</option>
+                                        <option value="ollama">Ollama</option>
+                                        <option value="openrouter">OpenRouter</option>
+                                    </select>
+                                    <small>custom 直连模式实际只使用 Base URL / API Key / 模型；此项仅为兼容记录，主 API 模式由酒馆全局配置接管</small>
                                 </label>
                                 <label class="sd_setting">
                                     <span class="sd_setting_label">Base URL</span>
@@ -345,6 +356,10 @@
                         <div id="sd_beat_editor_close" class="sd_window_close" title="关闭"><i class="fa-solid fa-xmark"></i></div>
                     </header>
                     <div class="sd_modal_body">
+                        <div class="sd_beat_ai_row">
+                            <input id="sd_beat_ai_hint" type="text" placeholder="一句话描述新节点，例如：主角发现对手的阴谋（留空则由 AI 按当前焦点设计）" />
+                            <div id="sd_beat_ai" class="menu_button sd_btn" title="让 AI 根据当前大纲生成节点内容（生成后填入表单，可修改再保存）"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI 生成</span></div>
+                        </div>
                         <label class="sd_setting">
                             <span class="sd_setting_label">节点标题</span>
                             <input id="sd_beat_title" type="text" placeholder="例如：初入都城" />

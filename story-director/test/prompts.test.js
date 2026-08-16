@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
     OUTLINE_SCHEMA, CHECK_SCHEMA,
     buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, buildDirectorInstruction,
+    buildBeatPrompt,
     compactOutlineForRevision,
 } from '../src/prompts.js';
 import { createEmptyOutline } from '../src/outline-store.js';
@@ -226,4 +227,20 @@ test('buildCheckPrompt checks pacing distribution across the span', () => {
     const { prompt } = buildCheckPrompt({ recentDialogue: '', outline: o });
     assert.ok(prompt.includes('节点时间分布'));
     assert.ok(prompt.includes('异常大的时间跳跃'));
+});
+
+test('buildBeatPrompt includes current outline and user hint', () => {
+    const o = createEmptyOutline();
+    o.theme = '复仇';
+    const { system, prompt } = buildBeatPrompt({ outline: o, userHint: '主角发现对手的阴谋' });
+    assert.ok(prompt.includes('复仇'));
+    assert.ok(prompt.includes('主角发现对手的阴谋'));
+    assert.ok(prompt.includes('"actId"')); // 建议归属幕
+    assert.ok(system.includes('新情节节点'));
+});
+
+test('buildBeatPrompt handles empty hint with a default instruction', () => {
+    const o = createEmptyOutline();
+    const { prompt } = buildBeatPrompt({ outline: o });
+    assert.ok(prompt.includes('（未指定，请根据大纲当前焦点')); // 默认引导文案
 });

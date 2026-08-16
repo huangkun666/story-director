@@ -315,6 +315,31 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
     return { system, prompt };
 }
 
+// 单个节点的 AI 生成：基于当前大纲 + 用户一句话提示，输出一个新 beat 的 JSON。
+// 用于节点编辑器的「AI 生成」入口（生成后填入表单，由用户确认再保存）。
+export function buildBeatPrompt({ outline, userHint = '' } = {}) {
+    const system = '你是叙事导演。根据当前大纲与用户提示，设计一个新情节节点（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const prompt = `【当前大纲】
+${serializeOutline(compactOutlineForRevision(outline))}
+
+【用户提示】
+${userHint || '（未指定，请根据大纲当前焦点与未完成节点，设计一个自然的推进节点）'}
+
+请设计一个新情节节点，严格按以下 JSON 结构输出（字段名完全一致，不要 markdown 代码块）：
+
+{
+  "title": "节点标题",
+  "summary": "该节点发生什么（写明大致时间点，与既有节点时间线自然衔接，遵循大纲的节点节奏）",
+  "type": "setup 或 conflict 或 twist 或 climax 或 resolution",
+  "status": "pending",
+  "cast": ["参与角色1", "参与角色2"],
+  "actId": "建议归属的幕 id（必须是当前大纲中真实存在的 act id；不确定时用当前焦点所在幕）"
+}
+
+要求：不要与大纲中已有的节点重复；情节符合大纲的时间线、必读设定与当前焦点；参与角色从大纲已有角色中选择；summary 的时间与既有节点自然衔接、不回退。`;
+    return { system, prompt };
+}
+
 export function buildCheckPrompt({ recentDialogue = '', outline, pacing = 'balanced', memoryContext = '', vectorContext = '' }) {
     const system = '你是叙事导演。对比最近对话与当前大纲（含时间线约束），输出同步性诊断报告（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const memoryText = String(memoryContext || '').trim();

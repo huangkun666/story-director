@@ -717,6 +717,33 @@ export function bindUI(ctx, adapter) {
     }
 
     document.getElementById('sd_add_beat')?.addEventListener('click', () => openBeatEditor(null));
+    document.getElementById('sd_beat_ai')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        if (btn.classList.contains('sd_loading')) return;
+        setButtonLoading(btn, true);
+        try {
+            const hint = document.getElementById('sd_beat_ai_hint')?.value?.trim() || '';
+            const beat = await adapter.director.suggestBeat({ userHint: hint });
+            if (!beat) {
+                renderReport({ verdict: 'major-drift', changed: false, reason: 'AI 生成节点失败，请手动填写或稍后再试' }, 'AI 生成');
+                return;
+            }
+            if (beatTitleEl) beatTitleEl.value = beat.title;
+            if (beatSummaryEl) beatSummaryEl.value = beat.summary;
+            if (beatTypeEl) beatTypeEl.value = beat.type;
+            if (beatCastEl) beatCastEl.value = beat.cast.join('，');
+            if (beatActEl && beat.actId) {
+                const outline = adapter.getOutline();
+                fillActOptions(outline);
+                if (outline.acts.some(a => a.id === beat.actId)) beatActEl.value = beat.actId;
+            }
+            renderReport({ verdict: 'sync', changed: false, reason: 'AI 已生成节点内容，请确认后保存' }, 'AI 生成');
+        } catch (err) {
+            renderReport({ verdict: 'major-drift', changed: false, reason: `AI 生成节点失败：${err?.message || err}` }, 'AI 生成');
+        } finally {
+            setButtonLoading(btn, false);
+        }
+    });
     document.getElementById('sd_beat_save')?.addEventListener('click', saveBeatFromEditor);
     document.getElementById('sd_beat_cancel')?.addEventListener('click', closeBeatEditor);
     document.getElementById('sd_beat_editor_close')?.addEventListener('click', closeBeatEditor);

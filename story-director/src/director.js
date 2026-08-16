@@ -1,7 +1,7 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
 import { normalizeOutline, createEmptyOutline } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
+import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildCheckPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
@@ -96,6 +96,27 @@ export function createDirector(deps) {
             }
             refreshInjection();
             return result;
+        } finally {
+            running = false;
+        }
+    }
+
+    // AI 生成单个节点：基于当前大纲 + 用户一句话提示，返回建议 beat（不写入大纲）。
+    // 供节点编辑器「AI 生成」入口使用，生成后填入表单由用户确认再保存。
+    async function suggestBeat({ userHint = '' } = {}) {
+        if (running) return null;
+        running = true;
+        try {
+            const bundle = buildBeatPrompt({ outline: deps.getOutline(), userHint });
+            const result = await gen(bundle);
+            if (!result || typeof result !== 'object') return null;
+            return {
+                title: String(result.title || '').trim(),
+                summary: String(result.summary || '').trim(),
+                type: ['setup', 'conflict', 'twist', 'climax', 'resolution'].includes(result.type) ? result.type : 'setup',
+                cast: Array.isArray(result.cast) ? result.cast.map(x => String(x).trim()).filter(Boolean) : [],
+                actId: String(result.actId || '').trim(),
+            };
         } finally {
             running = false;
         }
@@ -201,5 +222,5 @@ export function createDirector(deps) {
         }
     }
 
-    return { generate, revise, check, refreshInjection, isRunning: () => running };
+    return { generate, revise, check, suggestBeat, refreshInjection, isRunning: () => running };
 }
