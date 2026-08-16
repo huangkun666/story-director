@@ -107,6 +107,116 @@ test('getRecentDialogue respects dialogueContextLimit budget', () => {
     assert.ok(dialogue.length <= 2000);
 });
 
+test('getMemoryGap reads yuzuki summary pointer and computes missing floors', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            Storage: {
+                loadState: () => ({ settings: { manualPointers: { summary: 42 } } }),
+            },
+        },
+    };
+    try {
+        const ctx = makeCtx({ chat: Array.from({ length: 50 }, (_, i) => ({ mes: `m${i}`, is_user: i % 2 === 0 })) });
+        const adapter = createSillyTavernAdapter(ctx);
+        assert.equal(adapter.getMemoryGap(), 8); // 50 - 42
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('getMemoryGap returns null when memory has no pointer state', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            Storage: {
+                loadState: () => ({ settings: {} }),
+            },
+        },
+    };
+    try {
+        const ctx = makeCtx();
+        const adapter = createSillyTavernAdapter(ctx);
+        assert.equal(adapter.getMemoryGap(), null);
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('getMemoryGap returns null when yuzuki storage is absent', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = { YuzukiMemory: {} };
+    try {
+        const ctx = makeCtx();
+        const adapter = createSillyTavernAdapter(ctx);
+        assert.equal(adapter.getMemoryGap(), null);
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('getRecentDialogue covers the memory gap when pointer exists', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            Storage: {
+                loadState: () => ({ settings: { manualPointers: { summary: 90 } } }),
+            },
+        },
+    };
+    try {
+        // 100 条消息，指针 90 → 缺口 10 条 → 动态轮数 = ceil(10/2)+1 = 6 轮（12 条）
+        const ctx = makeCtx({
+            chat: Array.from({ length: 100 }, (_, i) => ({ mes: `消息${i}`, is_user: i % 2 === 0 })),
+        });
+        const adapter = createSillyTavernAdapter(ctx);
+        const dialogue = adapter.getRecentDialogue(5); // 用户配置 5 轮
+        assert.ok(dialogue.includes('消息90')); // 缺口内最早的消息也在
+        assert.ok(!dialogue.includes('消息87')); // 缺口之外不带
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('getRecentDialogue falls back to configured turns without a pointer', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = { YuzukiMemory: {} };
+    try {
+        const ctx = makeCtx({
+            chat: Array.from({ length: 40 }, (_, i) => ({ mes: `消息${i}`, is_user: i % 2 === 0 })),
+        });
+        const adapter = createSillyTavernAdapter(ctx);
+        const dialogue = adapter.getRecentDialogue(3); // 3 轮 = 6 条 → 覆盖 34..39
+        assert.ok(dialogue.includes('消息34'));
+        assert.ok(!dialogue.includes('消息33'));
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
+test('getRecentDialogue caps dynamic turns at 60', () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = {
+        YuzukiMemory: {
+            Storage: {
+                loadState: () => ({ settings: { manualPointers: { summary: 0 } } }),
+            },
+        },
+    };
+    try {
+        // 指针 0、聊天 300 条 → 缺口 300 → 动态轮数被 clamp 到 60（120 条）
+        const ctx = makeCtx({
+            chat: Array.from({ length: 300 }, (_, i) => ({ mes: `消息${i}`, is_user: i % 2 === 0 })),
+        });
+        const adapter = createSillyTavernAdapter(ctx);
+        const dialogue = adapter.getRecentDialogue(5);
+        assert.ok(dialogue.includes('消息180')); // 60 轮 = 120 条 → 覆盖 180..299
+        assert.ok(!dialogue.includes('消息179'));
+    } finally {
+        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
+    }
+});
+
 test('getRecentDialogue extracts bodies per rules and falls back to raw', () => {
     const ctx = makeCtx({
         chat: [

@@ -315,17 +315,45 @@ export function createSillyTavernAdapter(ctx) {
         }
     }
 
+    // 记忆缺口：yuzuki-Memory 每 N 轮（默认 20）才更新一次记忆，期间维护一个
+    // 「记忆指针」（manualPointers.summary = 已存储楼层）。缺失楼层数 = 聊天楼层数 - 指针，
+    // 这是聊天历史需要精确覆盖的范围。只读调用公开 API（Storage.loadState），
+    // 记忆未启用/无指针时返回 null（由调用方回落默认轮数）。
+    function getMemoryGap() {
+        try {
+            const api = (typeof window !== 'undefined') ? window.YuzukiMemory?.Storage : null;
+            if (!api || typeof api.loadState !== 'function') return null;
+            const state = api.loadState({});
+            const pointers = state?.settings?.manualPointers;
+            if (!pointers || typeof pointers !== 'object') return null; // 无记忆状态
+            const pointer = Math.max(0, Number(pointers.summary) || 0);
+            const chatLength = Array.isArray(freshCtx().chat) ? freshCtx().chat.length : 0;
+            if (!chatLength) return 0;
+            return Math.max(0, chatLength - pointer);
+        } catch (err) {
+            console.warn('[story-director] failed to read yuzuki memory pointer:', err);
+            return null;
+        }
+    }
+
     function getRecentDialogue(turns = 5) {
         const c = freshCtx();
         const chat = Array.isArray(c.chat) ? c.chat : [];
-        const recent = chat.slice(-(turns * 2)); // 每轮 = 用户 + 角色两条
         const limit = Math.max(1000, Number(settings.dialogueContextLimit) || 8000);
+        // 动态轮数：以记忆缺口为准（覆盖指针之后的全部楼层 + 1 轮余量），
+        // 无指针信息（记忆未启用/读取失败）时回落用户配置的默认轮数。
+        const preferred = Math.max(1, Math.round(Number(turns) || 5));
+        const gap = getMemoryGap();
+        const effectiveTurns = gap != null
+            ? Math.min(60, Math.max(1, Math.ceil(gap / 2) + 1))
+            : preferred;
+        const recent = chat.slice(-(effectiveTurns * 2)); // 每轮 = 用户 + 角色两条
         const text = recent
             .filter(m => m && typeof m.mes === 'string')
             .map(m => `${m.is_user ? (c.name1 || '用户') : (m.name || c.name2 || '角色')}: ${String(m.mes).slice(0, 1200)}`)
             .join('\n');
         // 有提取规则时按标签提取正文（无匹配自动回退原文），
-        // 相同预算覆盖更多轮次——记忆库落后约 20 轮，近期剧情靠对话
+        // 相同预算覆盖更多轮次——记忆库落后期间，近期剧情靠对话
         const rules = settings.dialogueExtractRules;
         const finalText = (Array.isArray(rules) && rules.length) ? extractDialogueBodies(text, rules) : text;
         return finalText.slice(0, limit);
@@ -411,6 +439,7 @@ export function createSillyTavernAdapter(ctx) {
         save: () => { director.refreshInjection(); },
         getCharacterCard,
         getRecentDialogue,
+        getMemoryGap,
         getMemoryContext,
         getVectorMemoryContext,
         getVectorMemoryHits,
