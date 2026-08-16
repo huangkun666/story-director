@@ -59,8 +59,41 @@ test('director.generate keeps user-specified timeline after LLM returns outline'
         start: '建安五年',
         end: '建安十三年',
         note: '含赤壁',
-        mustRead: '',
     });
+});
+
+test('director.generate keeps user-specified mustRead as top-level field', async () => {
+    const patch = createEmptyOutline();
+    patch.theme = 'X';
+    const { deps } = makeDeps({ generateRaw: async () => JSON.stringify(patch) });
+    const d = createDirector(deps);
+    await d.generate({
+        userRequest: '',
+        mustRead: '这个世界魔法会消耗寿命',
+    });
+    assert.equal(deps.getOutline().mustRead, '这个世界魔法会消耗寿命');
+    assert.equal(deps.getOutline().timeline.mustRead, undefined); // 不再落进 timeline
+});
+
+test('director.generate inherits stored mustRead when not explicitly passed', async () => {
+    const patch = createEmptyOutline();
+    patch.theme = 'X';
+    const { deps } = makeDeps({ generateRaw: async () => JSON.stringify(patch) });
+    deps.getOutline().mustRead = '已有必读设定';
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '' });
+    assert.equal(deps.getOutline().mustRead, '已有必读设定');
+});
+
+test('director.generate migrates model timeline.mustRead output to top-level', async () => {
+    const patch = createEmptyOutline();
+    patch.timeline = { start: '200年', end: '208年', note: '', mustRead: '模型给的设定' };
+    const { deps } = makeDeps({ generateRaw: async () => JSON.stringify(patch) });
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '' });
+    const o = deps.getOutline();
+    assert.equal(o.mustRead, '模型给的设定'); // normalize 迁移到顶层
+    assert.equal(o.timeline.mustRead, undefined);
 });
 
 test('director.revise skips when already running (concurrency guard)', async () => {

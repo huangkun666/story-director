@@ -311,6 +311,16 @@ export function removeBeat(outline, beatId) {
     return normalizeOutline(o);
 }
 
+// 编辑幕标题/概要（受控路径：幕编辑不再直接 mutate，便于撤销栈统一记录）
+export function updateAct(outline, actId, patch) {
+    const o = normalizeOutline(outline);
+    const act = o.acts.find(a => a.id === actId);
+    if (!act || !patch || typeof patch !== 'object') return o;
+    if (typeof patch.title === 'string') act.title = patch.title;
+    if (typeof patch.summary === 'string') act.summary = patch.summary;
+    return normalizeOutline(o);
+}
+
 // 同幕内上移/下移（delta = -1 / +1），数组顺序即时间线顺序
 export function moveBeatOrder(outline, beatId, delta) {
     const o = normalizeOutline(outline);

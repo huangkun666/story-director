@@ -96,6 +96,7 @@ import { mountUI, bindUI, clampWindowPos } from './src/ui.js';
                             <div id="sd_check" class="menu_button sd_btn"><i class="fa-solid fa-stethoscope sd_btn_icon"></i><span>大纲体检</span></div>
                             <div id="sd_clear" class="menu_button sd_btn sd_btn_danger"><i class="fa-solid fa-trash-can sd_btn_icon"></i><span>清空</span></div>
                             <div id="sd_add_beat" class="menu_button sd_btn"><i class="fa-solid fa-plus sd_btn_icon"></i><span>加节点</span></div>
+                            <div id="sd_undo" class="menu_button sd_btn"><i class="fa-solid fa-rotate-left sd_btn_icon"></i><span>撤销</span></div>
                             <label class="sd_enable"><input id="sd_enabled" type="checkbox" /><span>启用</span></label>
                             <label class="sd_enable"><input id="sd_lock_outline" type="checkbox" /><span>锁定大纲</span></label>
                         </div>
@@ -173,9 +174,11 @@ import { mountUI, bindUI, clampWindowPos } from './src/ui.js';
             adapter.director.revise().catch(() => {});
         });
 
-        // 切换聊天时重载大纲，并重置 everyN 计数器（节奏不跨聊天延续）
+        // 切换聊天时重载大纲，并重置 everyN 计数器（节奏不跨聊天延续）；
+        // 操作级撤销栈是内存态，切换聊天后旧大纲的撤销上下文失效，一并清空
         es?.on(et.CHAT_CHANGED, () => {
             reviseCounter = 0;
+            adapter.clearUndo?.();
             adapter.load();
             adapter.renderOutline();
         });

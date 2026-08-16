@@ -244,6 +244,13 @@
     opacity: 0.65;
 }
 
+/* 撤销按钮无历史时禁用（所有颜色走变量） */
+.sd_btn.sd_btn_disabled {
+    pointer-events: none;
+    opacity: 0.4;
+    filter: grayscale(0.6);
+}
+
 .sd_btn.sd_loading .sd_btn_icon {
     visibility: hidden;
 }

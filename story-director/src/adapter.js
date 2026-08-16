@@ -427,6 +427,65 @@ export function createSillyTavernAdapter(ctx) {
         renderCallback = fn;
     }
 
+    // ---------- 操作级撤销（内存撤销栈） ----------
+    // 原理：受控编辑函数是写时复制（normalizeOutline 深拷贝 + 只改副本），
+    // 变更前的大纲引用永远不会被后续操作修改，因此撤销栈只需保存
+    // 「变更前大纲引用 + 操作名」，undo = 把该引用写回存储。
+    // 内存栈（不落 chatMetadata，避免序列化膨胀 + 失去结构共享）；
+    // 切换聊天时由调用方 clearUndo()。
+    // 大操作（生成/修订/体检）走 30 条持久快照，不入本栈；
+    // 手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈。
+    let undoStack = [];
+    const UNDO_LIMIT = 20;
+    let undoChangeCallback = null;
+    function setUndoChangeCallback(fn) {
+        undoChangeCallback = typeof fn === 'function' ? fn : null;
+    }
+    function notifyUndoChanged() {
+        try {
+            undoChangeCallback?.({ canUndo: undoStack.length > 0, count: undoStack.length });
+        } catch (err) {
+            console.warn('[story-director] undo change callback failed:', err);
+        }
+    }
+    function pushUndo(label) {
+        const name = String(label || '编辑');
+        // 合并连续同类编辑为一步：如时间线输入框的逐次 input 只记最早状态
+        const top = undoStack[undoStack.length - 1];
+        if (top && top.label === name) return;
+        undoStack.push({ outline: getOutline(), label: name });
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+        notifyUndoChanged();
+    }
+    // 统一的手动编辑入口：先记录变更前状态，再应用受控纯函数，最后写回。
+    // fn 接收当前大纲（深拷贝）返回新大纲；受控函数永远返回新对象，
+    // 因此用序列化比较判断「无实质变更」（如移动已在边界），此时不入栈。
+    function editOutline(label, fn) {
+        if (typeof fn !== 'function') return null;
+        const prev = getOutline();
+        const next = fn(prev);
+        if (!next || next === prev) return prev;
+        if (serializeOutline(next) === serializeOutline(prev)) return prev; // 无实质变更
+        pushUndo(label);
+        setOutline(next);
+        return next;
+    }
+    function undo() {
+        const entry = undoStack.pop();
+        if (!entry) return null;
+        setOutline(entry.outline);
+        notifyUndoChanged();
+        return entry.label;
+    }
+    function canUndo() {
+        return undoStack.length > 0;
+    }
+    function clearUndo() {
+        if (!undoStack.length) return;
+        undoStack = [];
+        notifyUndoChanged();
+    }
+
     return {
         director,
         settings,
@@ -448,5 +507,11 @@ export function createSillyTavernAdapter(ctx) {
         setRetrievalCallback,
         renderOutline,
         setRenderCallback,
+        pushUndo,
+        editOutline,
+        undo,
+        canUndo,
+        clearUndo,
+        setUndoChangeCallback,
     };
 }

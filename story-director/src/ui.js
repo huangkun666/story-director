@@ -1,6 +1,6 @@
 // story-director/src/ui.js
 // UI 层：事件绑定、节点编辑器、设置、窗口逻辑。渲染函数见 ui-render.js。
-import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from './outline-store.js';
+import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from './outline-store.js';
 import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager } from './ui-render.js';
 
 function renderHistoryOptions() {
@@ -87,6 +87,35 @@ export function bindUI(ctx, adapter) {
         if (e.key === 'Escape' && windowEl?.classList.contains('sd_open')) closeWindow();
     });
 
+    // ---------- 操作级撤销：按钮 + Ctrl+Z + 按钮状态 ----------
+    const undoBtn = document.getElementById('sd_undo');
+    const syncUndoButton = ({ canUndo, count } = {}) => {
+        if (!undoBtn) return;
+        undoBtn.classList.toggle('sd_btn_disabled', !canUndo);
+        undoBtn.title = canUndo
+            ? `撤销上一步手动编辑（Ctrl+Z），可撤销 ${count} 步`
+            : '撤销上一步手动编辑（Ctrl+Z），暂无历史';
+    };
+    const runUndo = () => {
+        const label = adapter.undo?.();
+        if (label == null) return;
+        adapter.renderOutline();
+        adapter.director.refreshInjection();
+        renderReport({ verdict: 'sync', changed: false, reason: `已撤销：${label}` }, '撤销');
+    };
+    undoBtn?.addEventListener('click', runUndo);
+    document.addEventListener('keydown', (e) => {
+        if (!(e.ctrlKey || e.metaKey) || (e.key !== 'z' && e.key !== 'Z')) return;
+        if (!windowEl?.classList.contains('sd_open')) return;
+        // 输入框内撤销文本由浏览器处理，不拦截
+        const tag = (e.target?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
+        e.preventDefault();
+        runUndo();
+    });
+    adapter.setUndoChangeCallback?.(syncUndoButton);
+    syncUndoButton({ canUndo: !!adapter.canUndo?.(), count: adapter.canUndo?.() ? 1 : 0 });
+
     // 功能页签：主界面只放大纲总览，其余收进「设置与工具」
     const tabs = [...(document.querySelectorAll?.('.sd_tab') || [])];
     const switchView = (viewId) => {
@@ -143,11 +172,19 @@ export function bindUI(ctx, adapter) {
     });
     const readMustRead = () => timelineField('sd_must_read')?.value?.trim() || '';
     const persistTimeline = () => {
-        const outline = adapter.getOutline();
-        outline.timeline = readTimeline();
-        outline.mustRead = readMustRead();
-        adapter.setOutline(outline);
-        return outline.timeline;
+        const timeline = readTimeline();
+        const mustRead = readMustRead();
+        // 走受控入口并记录撤销点；连续输入合并为一步（栈顶同 label 不重复入栈）
+        adapter.editOutline?.('编辑时间线', (o) => {
+            if (o.timeline.start === timeline.start
+                && o.timeline.end === timeline.end
+                && o.timeline.note === timeline.note
+                && o.mustRead === mustRead) {
+                return o; // 无实际变更，不入栈
+            }
+            return { ...o, timeline, mustRead };
+        });
+        return timeline;
     };
     const bindTimelineField = (id) => {
         timelineField(id)?.addEventListener('input', () => persistTimeline());
@@ -184,6 +221,7 @@ export function bindUI(ctx, adapter) {
         setButtonLoading(btn, true);
         try {
             adapter.recordHistory?.(adapter.getOutline(), 'manual');
+            adapter.pushUndo?.('清空');
             adapter.setOutline(createEmptyOutline());
             adapter.director.refreshInjection();
             renderReport(null);
@@ -410,21 +448,16 @@ export function bindUI(ctx, adapter) {
     }
 
     function saveBeatFromEditor() {
-        const outline = adapter.getOutline();
         const title = beatTitleEl?.value?.trim() || '未命名节点';
         const summary = beatSummaryEl?.value?.trim() || '';
         const type = beatTypeEl?.value || 'setup';
         const actId = beatActEl?.value || '';
         const cast = String(beatCastEl?.value || '').split(/[,，、;；]/).map(x => x.trim()).filter(Boolean);
 
-        adapter.recordHistory?.(outline, 'manual');
-
-        // 受控纯函数：actId 是唯一事实，acts.beats 派生；自动补幕
-        const updated = editingBeatId
-            ? updateBeat(outline, editingBeatId, { title, summary, type, actId, cast })
-            : createBeat(outline, { title, summary, type, actId, cast });
-
-        adapter.setOutline(updated);
+        // 受控纯函数 + 撤销栈：actId 是唯一事实，acts.beats 派生；自动补幕
+        adapter.editOutline?.(editingBeatId ? '编辑节点' : '新增节点', (o) => editingBeatId
+            ? updateBeat(o, editingBeatId, { title, summary, type, actId, cast })
+            : createBeat(o, { title, summary, type, actId, cast }));
         adapter.renderOutline();
         adapter.director.refreshInjection();
         closeBeatEditor();
@@ -432,12 +465,8 @@ export function bindUI(ctx, adapter) {
 
     function moveEditingBeat(delta) {
         if (!editingBeatId) return;
-        const outline = adapter.getOutline();
-        const updated = moveBeatOrder(outline, editingBeatId, delta);
-        // 已在边界时顺序不变，不产生无效快照
-        if (updated.beats.map(b => b.id).join() === outline.beats.map(b => b.id).join()) return;
-        adapter.recordHistory?.(outline, 'manual');
-        adapter.setOutline(updated);
+        // 已在边界时 moveBeatOrder 原样返回，editOutline 自动跳过入栈
+        adapter.editOutline?.('移动节点', (o) => moveBeatOrder(o, editingBeatId, delta));
         adapter.renderOutline();
     }
 
@@ -481,11 +510,8 @@ export function bindUI(ctx, adapter) {
     });
     document.getElementById('sd_beat_delete')?.addEventListener('click', () => {
         if (!editingBeatId) return closeBeatEditor();
-        const outline = adapter.getOutline();
-        adapter.recordHistory?.(outline, 'manual');
-        // 受控删除：伏笔回收点 / 焦点节点等悬空引用由 normalize 自愈
-        const updated = removeBeat(outline, editingBeatId);
-        adapter.setOutline(updated);
+        // 受控删除：伏笔回收点 / 焦点节点等悬空引用由 normalize 自愈；入撤销栈
+        adapter.editOutline?.('删除节点', (o) => removeBeat(o, editingBeatId));
         adapter.renderOutline();
         adapter.director.refreshInjection();
         closeBeatEditor();
@@ -498,8 +524,7 @@ export function bindUI(ctx, adapter) {
         if (!beat) return;
         if (!confirm(`从「${beat.title || beat.id}」开始游玩？\n该节点之前的节点将标记为已完成，随时可从快照回滚。`)) return;
         adapter.recordHistory?.(outline, 'manual');
-        const updated = jumpToBeat(outline, beatId);
-        adapter.setOutline(updated);
+        adapter.editOutline?.('跳转游玩', (o) => jumpToBeat(o, beatId));
         adapter.renderOutline();
         adapter.director.refreshInjection();
         renderReport({ verdict: 'sync', changed: false, reason: `已跳转到「${beat.title || beat.id}」，从此处开始游玩` }, '跳转');
@@ -545,10 +570,7 @@ export function bindUI(ctx, adapter) {
         if (title === null) return;
         const summary = prompt('编辑幕概要：', act.summary || '');
         if (summary === null) return;
-        adapter.recordHistory?.(outline, 'manual');
-        act.title = title;
-        act.summary = summary;
-        adapter.setOutline(outline);
+        adapter.editOutline?.('编辑幕', (o) => updateAct(o, act.id, { title, summary }));
         adapter.renderOutline();
     });
 
@@ -569,9 +591,7 @@ export function bindUI(ctx, adapter) {
         if (btn.classList.contains('sd_loading')) return;
         setButtonLoading(btn, true);
         try {
-            const outline = adapter.getOutline();
-            adapter.recordHistory?.(outline, 'manual');
-            adapter.setOutline(renumberActTitles(outline));
+            adapter.editOutline?.('重编幕号', (o) => renumberActTitles(o));
             adapter.renderOutline();
             renderReport({ verdict: 'sync', changed: false, reason: '幕标题编号已按当前顺序重编（不含编号的标题未动）' }, '重编幕号');
         } finally {
@@ -595,6 +615,7 @@ export function bindUI(ctx, adapter) {
         try {
             const parsed = JSON.parse(raw);
             adapter.recordHistory?.(adapter.getOutline(), 'import');
+            adapter.pushUndo?.('导入');
             adapter.setOutline(parsed);
             adapter.renderOutline();
             adapter.director.refreshInjection();
@@ -676,23 +697,20 @@ export function bindUI(ctx, adapter) {
     function saveArcFromEditor() {
         const char = arcCharEl?.value?.trim() || '';
         if (!char) return;
-        const outline = adapter.getOutline();
-        adapter.recordHistory?.(outline, 'manual');
-        const updated = editingArcChar
-            ? updateArc(outline, editingArcChar, {
+        adapter.editOutline?.(editingArcChar ? '编辑角色' : '新增角色', (o) => editingArcChar
+            ? updateArc(o, editingArcChar, {
                 desire: arcDesireEl?.value?.trim() || '',
                 flaw: arcFlawEl?.value?.trim() || '',
                 growth: arcGrowthEl?.value?.trim() || '',
                 status: arcStatusEl?.value || 'pending',
             })
-            : createArc(outline, {
+            : createArc(o, {
                 char,
                 desire: arcDesireEl?.value?.trim() || '',
                 flaw: arcFlawEl?.value?.trim() || '',
                 growth: arcGrowthEl?.value?.trim() || '',
                 status: arcStatusEl?.value || 'pending',
-            });
-        adapter.setOutline(updated);
+            }));
         adapter.renderOutline();
         closeArcEditor();
     }
@@ -702,9 +720,7 @@ export function bindUI(ctx, adapter) {
     document.getElementById('sd_arc_editor_close')?.addEventListener('click', closeArcEditor);
     document.getElementById('sd_arc_delete')?.addEventListener('click', () => {
         if (!editingArcChar) return closeArcEditor();
-        const outline = adapter.getOutline();
-        adapter.recordHistory?.(outline, 'manual');
-        adapter.setOutline(removeArc(outline, editingArcChar));
+        adapter.editOutline?.('删除角色', (o) => removeArc(o, editingArcChar));
         adapter.renderOutline();
         closeArcEditor();
     });
@@ -751,18 +767,15 @@ export function bindUI(ctx, adapter) {
     function saveFsFromEditor() {
         const hint = fsHintEl?.value?.trim() || '';
         if (!hint) return;
-        const outline = adapter.getOutline();
-        adapter.recordHistory?.(outline, 'manual');
         const patch = {
             hint,
             status: fsStatusEl?.value || 'pending',
             payoff: fsPayoffEl?.value?.trim() || '',
             beatId: fsBeatEl?.value || '',
         };
-        const updated = editingFsId
-            ? updateForeshadow(outline, editingFsId, patch)
-            : createForeshadow(outline, patch);
-        adapter.setOutline(updated);
+        adapter.editOutline?.(editingFsId ? '编辑伏笔' : '新增伏笔', (o) => editingFsId
+            ? updateForeshadow(o, editingFsId, patch)
+            : createForeshadow(o, patch));
         adapter.renderOutline();
         closeFsEditor();
     }
@@ -772,9 +785,7 @@ export function bindUI(ctx, adapter) {
     document.getElementById('sd_fs_editor_close')?.addEventListener('click', closeFsEditor);
     document.getElementById('sd_fs_delete')?.addEventListener('click', () => {
         if (!editingFsId) return closeFsEditor();
-        const outline = adapter.getOutline();
-        adapter.recordHistory?.(outline, 'manual');
-        adapter.setOutline(removeForeshadow(outline, editingFsId));
+        adapter.editOutline?.('删除伏笔', (o) => removeForeshadow(o, editingFsId));
         adapter.renderOutline();
         closeFsEditor();
     });
@@ -782,9 +793,7 @@ export function bindUI(ctx, adapter) {
     document.getElementById('sd_fs_manager')?.addEventListener('click', (e) => {
         const pay = e.target.closest('[data-fs-pay]');
         if (pay) {
-            const outline = adapter.getOutline();
-            adapter.recordHistory?.(outline, 'manual');
-            adapter.setOutline(updateForeshadow(outline, pay.getAttribute('data-fs-pay'), { status: 'paid' }));
+            adapter.editOutline?.('回收伏笔', (o) => updateForeshadow(o, pay.getAttribute('data-fs-pay'), { status: 'paid' }));
             adapter.renderOutline();
             return;
         }

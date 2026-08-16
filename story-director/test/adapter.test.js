@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSillyTavernAdapter, ensureSettings, normalizeSettings, DEFAULT_SETTINGS, DEFAULT_LLM_SETTINGS } from '../src/adapter.js';
+import { updateBeat, jumpToBeat } from '../src/outline-store.js';
 
 function makeCtx(overrides = {}) {
     return {
@@ -464,4 +465,92 @@ test('custom LLM mode degrades to null when independent API is broken', async ()
     } finally {
         globalThis.fetch = originalFetch;
     }
+});
+
+// ---------- 操作级撤销（内存撤销栈） ----------
+
+test('editOutline applies change through controlled function and records undo', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    const o = adapter.getOutline();
+    o.beats = [{ id: 'b1', title: '开端', summary: 's', status: 'pending' }];
+    adapter.setOutline(o);
+
+    adapter.editOutline('编辑节点', (prev) => updateBeat(prev, 'b1', { title: '改名' }));
+    assert.equal(adapter.getOutline().beats[0].title, '改名');
+    assert.equal(adapter.canUndo(), true);
+
+    const label = adapter.undo();
+    assert.equal(label, '编辑节点');
+    assert.equal(adapter.getOutline().beats[0].title, '开端'); // 还原
+    assert.equal(adapter.canUndo(), false);
+});
+
+test('editOutline with no-op fn does not push undo entry', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    adapter.editOutline('无变更', (o) => o); // 返回同一引用 = 无变更
+    assert.equal(adapter.canUndo(), false);
+});
+
+test('undo stack merges consecutive same-label edits into one step', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    adapter.pushUndo('时间线'); // 第一次输入
+    adapter.pushUndo('时间线'); // 同 label 连续输入 → 合并
+    adapter.pushUndo('时间线');
+    assert.equal(adapter.canUndo(), true);
+    const label = adapter.undo();
+    assert.equal(label, '时间线');
+    assert.equal(adapter.canUndo(), false); // 三步合并成一步
+});
+
+test('undo stack keeps distinct labels as separate steps', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    adapter.pushUndo('新增节点');
+    adapter.pushUndo('删除节点');
+    assert.equal(adapter.undo(), '删除节点');
+    assert.equal(adapter.undo(), '新增节点');
+    assert.equal(adapter.undo(), null); // 栈空
+});
+
+test('undo stack respects UNDO_LIMIT and drops oldest entries', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    for (let i = 0; i < 25; i++) adapter.pushUndo(`op${i}`);
+    let count = 0;
+    while (adapter.undo() != null) count++;
+    assert.equal(count, 20); // 只保留最近 20 步
+});
+
+test('clearUndo resets the stack and notifies callback', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    const seen = [];
+    adapter.setUndoChangeCallback((s) => seen.push({ ...s }));
+    adapter.pushUndo('A');
+    assert.deepEqual(seen[seen.length - 1], { canUndo: true, count: 1 });
+    adapter.clearUndo();
+    assert.deepEqual(seen[seen.length - 1], { canUndo: false, count: 0 });
+    assert.equal(adapter.canUndo(), false);
+});
+
+test('undo restores outline snapshot from before the edit (manual edit + jump)', () => {
+    const ctx = makeCtx();
+    const adapter = createSillyTavernAdapter(ctx);
+    const o = adapter.getOutline();
+    o.theme = '复仇';
+    o.beats = [
+        { id: 'b1', title: '开端', summary: 's', status: 'done' },
+        { id: 'b2', title: '发展', summary: 's', status: 'active' },
+    ];
+    adapter.setOutline(o);
+
+    // 模拟跳转游玩：跳转到 b1 → 撤销应回到跳转前
+    adapter.editOutline('跳转游玩', (prev) => jumpToBeat(prev, 'b1'));
+    assert.equal(adapter.getOutline().focus.currentBeat, 'b1');
+    adapter.undo();
+    assert.equal(adapter.getOutline().focus.currentBeat, 'b2');
+    assert.equal(adapter.getOutline().theme, '复仇'); // 其他字段不变
 });

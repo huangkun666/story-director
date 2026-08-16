@@ -57,10 +57,34 @@ test('buildGeneratePrompt is genre-agnostic and asks for ensemble cast lines', (
 test('buildGeneratePrompt treats mustRead lore as highest priority', () => {
     const { prompt } = buildGeneratePrompt({
         characterCard: {},
-        timeline: { start: '', end: '', note: '', mustRead: '这个世界魔法会消耗寿命' },
+        mustRead: '这个世界魔法会消耗寿命',
     });
     assert.ok(prompt.includes('必读设定（最高优先级'));
     assert.ok(prompt.includes('魔法会消耗寿命'));
+});
+
+test('buildGeneratePrompt reads mustRead from timeline only when not passed top-level (legacy compat)', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        timeline: { start: '', end: '', note: '', mustRead: '旧位置设定' },
+    });
+    assert.ok(prompt.includes('旧位置设定'));
+    // 顶层 mustRead 优先于 timeline 旧值
+    const { prompt: p2 } = buildGeneratePrompt({
+        characterCard: {},
+        mustRead: '顶层设定',
+        timeline: { start: '', end: '', note: '', mustRead: '旧位置设定' },
+    });
+    assert.ok(p2.includes('顶层设定'));
+    assert.ok(!p2.includes('旧位置设定'));
+});
+
+test('buildGeneratePrompt without timeline and without mustRead asks to infer timeline', () => {
+    // 只有必读设定、没有时间线时：时间线块必须走「自行推定」分支，不能误判为有时间线
+    const { prompt } = buildGeneratePrompt({ characterCard: {}, mustRead: '设定A' });
+    assert.ok(prompt.includes('用户未指定时间线'));
+    assert.ok(prompt.includes('自行推定'));
+    assert.ok(prompt.includes('设定A'));
 });
 
 test('buildGeneratePrompt enforces a specified story timeline', () => {

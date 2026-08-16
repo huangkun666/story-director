@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -27,7 +27,8 @@ test('normalizeOutline fills missing fields with defaults', () => {
     assert.ok(Array.isArray(o.beats));
     assert.ok(Array.isArray(o.acts));
     assert.equal(typeof o.focus, 'object');
-    assert.deepEqual(o.timeline, { start: '', end: '', note: '', mustRead: '' });
+    assert.deepEqual(o.timeline, { start: '', end: '', note: '' });
+    assert.equal(o.mustRead, '');
 });
 
 test('normalizeOutline accepts timeline object and string forms', () => {
@@ -35,10 +36,29 @@ test('normalizeOutline accepts timeline object and string forms', () => {
     assert.equal(obj.timeline.start, '200年');
     assert.equal(obj.timeline.end, '208年');
     assert.equal(obj.timeline.note, '含赤壁');
+    assert.equal(obj.mustRead, '');
 
     const str = normalizeOutline({ timeline: '建安五年 - 建安十三年' });
     assert.equal(str.timeline.start, '建安五年');
     assert.equal(str.timeline.end, '建安十三年');
+});
+
+test('normalizeOutline migrates legacy timeline.mustRead to top-level mustRead', () => {
+    // 旧数据/模型输出：必读设定塞在 timeline 里 → 自动搬到顶层独立字段
+    const legacy = normalizeOutline({
+        timeline: { start: '200年', end: '208年', note: '', mustRead: '魔法会消耗寿命' },
+    });
+    assert.equal(legacy.mustRead, '魔法会消耗寿命');
+    assert.equal(legacy.timeline.mustRead, undefined);
+    // 顶层优先于 timeline 内旧值
+    const both = normalizeOutline({
+        mustRead: '顶层设定',
+        timeline: { start: '', end: '', note: '', mustRead: '旧位置' },
+    });
+    assert.equal(both.mustRead, '顶层设定');
+    // 兼容旧别名
+    assert.equal(normalizeOutline({ timeline: { must_read: '蛇形别名' } }).mustRead, '蛇形别名');
+    assert.equal(normalizeOutline({ timeline: { requiredLore: '老字段' } }).mustRead, '老字段');
 });
 
 test('normalizeOutline accepts acts and keeps beat actId', () => {
@@ -555,4 +575,19 @@ test('removeForeshadow deletes and heals activeForeshadow references', () => {
     const out = removeForeshadow(o, 'f1');
     assert.equal(out.foreshadowing.length, 0);
     assert.deepEqual(out.focus.activeForeshadow, []);
+});
+
+test('updateAct edits act title and summary without mutating input', () => {
+    const o = normalizeOutline({
+        acts: [{ id: 'act_1', title: '第一幕', summary: '旧概要', beats: [] }],
+    });
+    const before = JSON.stringify(o);
+    const updated = updateAct(o, 'act_1', { title: '改名幕', summary: '新概要' });
+    assert.equal(updated.acts[0].title, '改名幕');
+    assert.equal(updated.acts[0].summary, '新概要');
+    // 入参不被修改（写时复制）
+    assert.equal(JSON.stringify(o), before);
+    // 不存在的幕 / 空 patch：内容不变（受控函数始终返回新对象，但无实质变更）
+    assert.equal(updateAct(o, 'nope', { title: 'x' }).acts[0].title, '第一幕');
+    assert.equal(updateAct(o, 'act_1', null).acts[0].title, '第一幕');
 });
