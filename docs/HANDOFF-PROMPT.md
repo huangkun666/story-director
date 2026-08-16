@@ -28,7 +28,8 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 ### 当前环境
 
 - **开发目录**：`/mnt/f/deepseek/plugins/story-director`（Windows 侧为 `F:\deepseek\plugins\story-director`）
-- **git 仓库根**：`/mnt/f/deepseek/plugins`，分支 `main`（约 68 个提交）
+- **git 仓库根**：`/mnt/f/deepseek/plugins`，分支 `main`（约 69 个提交）
+- **GitHub 仓库**：https://github.com/huangkun666/story-director（origin，public；token 在 Windows 系统变量 `Git-hub-token`，push 用一次性 credential helper，勿把 token 写进 .git/config）
 - **部署目标**：`/mnt/f/jiuguanai/SillyTavern-Launcher/SillyTavern/public/scripts/extensions/third-party/story-director/`（Windows 为 `F:\jiuguanai\...`）
 - **部署方式**：`deploy.ps1`（**文件必须保持纯 ASCII**，见下方坑）
 - **测试命令**（必须加隔离参数，否则沙箱会 EPERM）：
@@ -44,6 +45,8 @@ node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 最近提交（按新到旧）：
 
 ```
+09993d7 docs: fill homepage with GitHub repo URL
+ff4a320 docs: refresh handoff prompt to current state (210 tests, memory pointer era)
 88b9b99 feat: derive recent dialogue window from yuzuki memory pointer
 7121227 feat: dialogue extraction rules UI - chips, manual add, AI analyze
 61fc229 feat: two-stage retrieval - direction draft before targeted search
@@ -82,7 +85,7 @@ ed6e3d8 feat: remember director window position across sessions
 
 ```
 story-director/
-├── manifest.json          # id: story_director，版本 0.11.1（homepage 待填）
+├── manifest.json          # id: story_director，版本 0.11.1（homepage = GitHub 仓库）
 ├── index.js               # 入口：魔法棒菜单 + 独立大窗口（含位置恢复）+ 事件 + 斜杠命令
 ├── settings.html          # 独立大窗口模板，五个页签
 ├── style.css              # 双主题（白天/夜晚），全部颜色走 CSS 变量，禁止硬编码
@@ -143,7 +146,7 @@ story-director/
 
 ### 尚未完成 / 可继续的方向
 
-- `manifest.json` 的 `homepage` 仍为空，等用户提供 GitHub 仓库地址；版本 0.11.1 未发过 release（68 个提交未治理）。
+- ✅ **发布治理已完成**：仓库 https://github.com/huangkun666/story-director（public），homepage 已填，69 个提交 + `v0.11.1` tag 已推送，release 已发（https://github.com/huangkun666/story-director/releases/tag/v0.11.1 ，含 tgz 附件）。后续发新版：`npm pack` 或 tar 打包 → `gh release create` / REST API 传附件。
 - UI 层测试仍少（ui-render 部分函数有测，事件绑定靠手动验证）。
 - 记忆指针的 UI 展示（如「记忆缺口 N 层」状态显示）——可选。
 - 可选：把「必读设定」从 timeline 中拆出为独立字段。
