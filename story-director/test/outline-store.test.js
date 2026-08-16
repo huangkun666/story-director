@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -354,4 +354,39 @@ test('moveBeatOrder swaps within the same act only', () => {
     assert.equal(down.beats[1].id, 'b1');
     const up = moveBeatOrder(o, 'b1', -1);
     assert.deepEqual(up.beats.map(b => b.id), ['b1', 'b2', 'b3']); // 已在开头，不动
+});
+
+test('renumberActTitles renumbers numbered act titles in current order', () => {
+    const o = createEmptyOutline();
+    o.acts = [
+        { id: 'a1', title: '第一幕：开端', summary: '', beats: [] },
+        { id: 'a2', title: '第2幕 发展', summary: '', beats: [] },
+        { id: 'a3', title: '高潮（未编号，不动）', summary: '', beats: [] },
+    ];
+    const out = renumberActTitles(o);
+    assert.equal(out.acts[0].title, '第一幕：开端'); // 序号没变也规范化
+    assert.equal(out.acts[1].title, '第二幕：发展'); // 中文数字统一
+    assert.equal(out.acts[2].title, '高潮（未编号，不动）'); // 未编号不动
+});
+
+test('renumberActTitles fixes skipped numbers after deletion', () => {
+    const o = createEmptyOutline();
+    o.acts = [
+        { id: 'a1', title: '第一幕', summary: '', beats: [] },
+        { id: 'a2', title: '第三幕', summary: '', beats: [] }, // 第二幕被删过
+        { id: 'a3', title: '第五幕：终局', summary: '', beats: [] },
+    ];
+    const out = renumberActTitles(o);
+    assert.equal(out.acts[0].title, '第一幕：');
+    assert.equal(out.acts[1].title, '第二幕：');
+    assert.equal(out.acts[2].title, '第三幕：终局');
+});
+
+test('renumberActTitles uses arabic numerals beyond ten acts', () => {
+    const o = createEmptyOutline();
+    o.acts = Array.from({ length: 12 }, (_, i) => ({ id: `a${i + 1}`, title: `第${i + 1}幕`, summary: '', beats: [] }));
+    const out = renumberActTitles(o);
+    assert.equal(out.acts[9].title, '第十幕：'); // ≤10 用中文数字
+    assert.equal(out.acts[10].title, '第11幕：'); // >10 用阿拉伯数字
+    assert.equal(out.acts[11].title, '第12幕：');
 });

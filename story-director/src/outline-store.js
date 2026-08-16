@@ -319,3 +319,22 @@ export function moveBeatOrder(outline, beatId, delta) {
     [o.beats[i], o.beats[j]] = [o.beats[j], o.beats[i]];
     return normalizeOutline(o);
 }
+
+const CN_NUM = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+function ordinal(n) {
+    return n <= 10 ? CN_NUM[n] : String(n);
+}
+
+// 标题文本重编号：把幕标题开头的「第X幕/第X章」（X 为数字或中文数字）按当前顺序规范化。
+// 只改编号前缀，标题其余部分与不含编号的标题原样保留。返回新大纲。
+export function renumberActTitles(outline) {
+    const o = normalizeOutline(outline);
+    const pattern = /^第\s*[\d一二三四五六七八九十]+\s*[幕章][：:、\s]*/;
+    o.acts.forEach((act, i) => {
+        if (pattern.test(act.title)) {
+            act.title = act.title.replace(pattern, `第${ordinal(i + 1)}幕：`);
+        }
+    });
+    return o;
+}

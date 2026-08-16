@@ -1,6 +1,6 @@
 // story-director/src/ui.js
 // UI 层：渲染面板、绑定事件、手动编辑。依赖浏览器 DOM 与酒馆 ctx。
-import { createEmptyOutline, normalizeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder } from './outline-store.js';
+import { createEmptyOutline, normalizeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles } from './outline-store.js';
 
 const BEAT_META = {
     pending: { label: '待开始', cls: 'sd_badge_pending', icon: 'fa-regular fa-circle' },
@@ -166,11 +166,14 @@ function foreshadowCardHtml(o) {
 function outlineSectionHtml(o) {
     if (!o.acts.length && !o.beats.length) return '';
     const usedBeatIds = new Set();
-    const actSections = o.acts.map(act => {
+    const actSections = o.acts.map((act, index) => {
         const beats = o.beats.filter(b => b.actId === act.id || (act.beats || []).includes(b.id));
         beats.forEach(b => usedBeatIds.add(b.id));
+        // 幕序号由数组顺序派生：删插/移动幕都不会跳号
+        const numBadge = `<span class="sd_act_badge" title="第 ${index + 1} 幕（按当前顺序）">${index + 1}</span>`;
         return `<div class="sd_act" data-act-id="${escapeHtml(act.id)}">
             <div class="sd_act_head" title="双击编辑幕">
+                ${numBadge}
                 <span class="sd_act_title">${escapeHtml(act.title || act.id)}</span>
                 ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
@@ -862,6 +865,21 @@ export function bindUI(ctx, adapter) {
             adapter.renderOutline();
             adapter.director.refreshInjection();
             renderReport({ verdict: 'sync', changed: false, reason: `已回滚到快照 #${index + 1}` }, '回滚');
+        }
+    });
+
+    document.getElementById('sd_renumber_acts')?.addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        if (btn.classList.contains('sd_loading')) return;
+        setButtonLoading(btn, true);
+        try {
+            const outline = adapter.getOutline();
+            adapter.recordHistory?.(outline, 'manual');
+            adapter.setOutline(renumberActTitles(outline));
+            adapter.renderOutline();
+            renderReport({ verdict: 'sync', changed: false, reason: '幕标题编号已按当前顺序重编（不含编号的标题未动）' }, '重编幕号');
+        } finally {
+            setButtonLoading(btn, false);
         }
     });
 
