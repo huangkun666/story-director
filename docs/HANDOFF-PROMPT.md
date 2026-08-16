@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**260/260 通过**。
+当前测试数：**268/268 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+72e68fe fix: consistency model - active status preserved across all entry points, unified incremental merge (full rewrite only for generate), replan carries current story position
 83dc9a8 feat: act-level replan - per-act 'replan this act' button, only target act beats replaced, structural boundary
 95466e9 fix: partial replan - user-specified timeline no longer overwrites out-of-range planned beats (id-based enforced preservation)
 f76f6fa feat: debug terminal as own tab; per-call LLM logging with context size; vector retrieval split into two visible batches
@@ -140,6 +141,14 @@ story-director/
 19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
 20. **调试终端**：**独立页签**（sd_view_terminal，第 6 个页签）——**LLM 调用逐次打点**（adapter.generateRaw 统一记录：模式/模型/上下文 system+prompt 字符/耗时/返回字符/失败原因，方向草案、正式生成、修订、体检、AI 节点、标签分析全部可见）；**检索分两批独立调用**（模型定向 + 保底，各一次打点，终端可见两次搜索，批次间按文本去重）；另有 memory（指针缺口/生效轮数/正文提取）、engine（大纲保存诊断 diagnoseOutline 自愈清单）、edit（撤销栈编辑流）、lifecycle（就绪/消息触发修订/切换聊天）；分级过滤（debug/info/warn/error + 分类 + 关键字）、点击展开详情、清空、导出 JSON；**环形 500 条仅存内存**，warn/error 同时透传 console。
 21. **并发友好**：director.isRunning() + UI 忙碌提示。
+
+### 一致性模型（所有修改入口共同遵守的不变量）
+
+1. **唯一 active**：全大纲 ≤1 个「进行中」节点；任何入口删除 active 节点时必须转交——幕重规划（被删幕含 active → 新幕首节点承接 + focus 指向）、生成（前情幕兜底）、跳转（唯一化逻辑）。
+2. **事实边界**：done/active 的内容与状态是剧情事实，规划类操作不得改写——mergePlannedOutline 恢复范围外节点时**含 status**；mergeHistoryIntoOutline 保留 active；replaceActBeats 承接 active。
+3. **手动编辑保护（统一增量）**：修订/体检/幕重规划一律增量合并（tracker.applyPatch / checker.mergeCheckOutline / replaceActBeats），只推进状态/焦点/伏笔/时间线顺延，**全量重写只留给「生成大纲」入口**；mergeLockedOutline 防漏删（patch 缺失的既有节点保留，只增不删）；applyPatch 的 allowNewBeats=false（锁定）禁止追加节点。
+4. **AI 入口统一携带「当前剧情位置」**：生成（事实边界块）/修订（最近对话）/体检（最近对话）/幕重规划（currentBeat + nextStep + 时间线块）/AI 节点（大纲序列化）——时间对不上问题的根治。
+5. **部分重规划去重**：generate 部分重规划时先 mergeHistory（excludeIds=模型已保留的旧 id，防双份）→ 再 mergePlannedOutline（按 id 强制恢复含 status）。
 
 ### 关键实现细节与坑
 
