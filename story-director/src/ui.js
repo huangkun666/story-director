@@ -1,7 +1,7 @@
 // story-director/src/ui.js
 // UI 层：事件绑定、节点编辑器、设置、窗口逻辑。渲染函数见 ui-render.js。
-import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles } from './outline-store.js';
-import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml } from './ui-render.js';
+import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from './outline-store.js';
+import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager } from './ui-render.js';
 
 function renderHistoryOptions() {
     const sel = document.getElementById('sd_history_select');
@@ -25,6 +25,10 @@ export function mountUI(ctx, adapter) {
         renderStats(outline);
         syncTimelineInputs(outline);
         renderHistoryOptions();
+        const arcsEl = document.getElementById('sd_arcs_manager');
+        if (arcsEl) arcsEl.innerHTML = renderCharacters(outline.arcs, outline.beats);
+        const fsEl = document.getElementById('sd_fs_manager');
+        if (fsEl) fsEl.innerHTML = renderForeshadowManager(outline.foreshadowing, outline.beats, fsFilter);
     });
 
     // 独立大界面由 index.js 负责加载到 body；若尚未就绪则等待 bindUI 时再补
@@ -69,6 +73,7 @@ async function runAction(btn, { label, isCheck = false, call }) {
 }
 
 let adapterRef = null;
+let fsFilter = ''; // 伏笔管理筛选：'' | pending | active | paid
 
 export function bindUI(ctx, adapter) {
     adapterRef = adapter;
@@ -625,6 +630,185 @@ export function bindUI(ctx, adapter) {
             ctx.saveSettingsDebounced?.();
         });
     }
+
+    // ---------- 角色与伏笔管理 ----------
+    // 高亮跳转公共函数：切到大纲总览页并闪烁目标节点
+    const highlightBeatInOverview = (beatId) => {
+        switchView('sd_view_outline');
+        setTimeout(() => {
+            const beatEl = document.querySelector(`[data-beat-id="${CSS.escape(beatId)}"]`);
+            if (!beatEl) return;
+            beatEl.classList.add('sd_beat_flash');
+            setTimeout(() => beatEl.classList.remove('sd_beat_flash'), 2000);
+            beatEl.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        }, 60);
+    };
+
+    // --- 角色弧光编辑器 ---
+    let editingArcChar = null;
+    const arcEditorEl = document.getElementById('sd_arc_editor');
+    const arcCharEl = document.getElementById('sd_arc_char');
+    const arcDesireEl = document.getElementById('sd_arc_desire');
+    const arcFlawEl = document.getElementById('sd_arc_flaw');
+    const arcGrowthEl = document.getElementById('sd_arc_growth');
+    const arcStatusEl = document.getElementById('sd_arc_status');
+
+    function openArcEditor(char = null) {
+        const outline = adapter.getOutline();
+        const arc = char ? outline.arcs.find(a => a.char === char) : null;
+        editingArcChar = char;
+        if (arcCharEl) {
+            arcCharEl.value = arc?.char || '';
+            arcCharEl.readOnly = !!char; // 改名需删了重建
+        }
+        if (arcDesireEl) arcDesireEl.value = arc?.desire || '';
+        if (arcFlawEl) arcFlawEl.value = arc?.flaw || '';
+        if (arcGrowthEl) arcGrowthEl.value = arc?.growth || '';
+        if (arcStatusEl) arcStatusEl.value = arc?.status || 'pending';
+        arcEditorEl?.classList.add('sd_open');
+    }
+    function closeArcEditor() {
+        arcEditorEl?.classList.remove('sd_open');
+        editingArcChar = null;
+    }
+    function saveArcFromEditor() {
+        const char = arcCharEl?.value?.trim() || '';
+        if (!char) return;
+        const outline = adapter.getOutline();
+        adapter.recordHistory?.(outline, 'manual');
+        const updated = editingArcChar
+            ? updateArc(outline, editingArcChar, {
+                desire: arcDesireEl?.value?.trim() || '',
+                flaw: arcFlawEl?.value?.trim() || '',
+                growth: arcGrowthEl?.value?.trim() || '',
+                status: arcStatusEl?.value || 'pending',
+            })
+            : createArc(outline, {
+                char,
+                desire: arcDesireEl?.value?.trim() || '',
+                flaw: arcFlawEl?.value?.trim() || '',
+                growth: arcGrowthEl?.value?.trim() || '',
+                status: arcStatusEl?.value || 'pending',
+            });
+        adapter.setOutline(updated);
+        adapter.renderOutline();
+        closeArcEditor();
+    }
+    document.getElementById('sd_add_arc')?.addEventListener('click', () => openArcEditor(null));
+    document.getElementById('sd_arc_save')?.addEventListener('click', saveArcFromEditor);
+    document.getElementById('sd_arc_cancel')?.addEventListener('click', closeArcEditor);
+    document.getElementById('sd_arc_editor_close')?.addEventListener('click', closeArcEditor);
+    document.getElementById('sd_arc_delete')?.addEventListener('click', () => {
+        if (!editingArcChar) return closeArcEditor();
+        const outline = adapter.getOutline();
+        adapter.recordHistory?.(outline, 'manual');
+        adapter.setOutline(removeArc(outline, editingArcChar));
+        adapter.renderOutline();
+        closeArcEditor();
+    });
+    // 角色卡：点击编辑；出场节点 chip 跳转
+    document.getElementById('sd_arcs_manager')?.addEventListener('click', (e) => {
+        const beatChip = e.target.closest('[data-arc-beat]');
+        if (beatChip) {
+            highlightBeatInOverview(beatChip.getAttribute('data-arc-beat'));
+            return;
+        }
+        const card = e.target.closest('[data-arc-char]');
+        if (card) openArcEditor(card.getAttribute('data-arc-char'));
+    });
+
+    // --- 伏笔编辑器与筛选 ---
+    let editingFsId = null;
+    const fsEditorEl = document.getElementById('sd_fs_editor');
+    const fsHintEl = document.getElementById('sd_fs_hint');
+    const fsStatusEl = document.getElementById('sd_fs_status');
+    const fsBeatEl = document.getElementById('sd_fs_beat');
+    const fsPayoffEl = document.getElementById('sd_fs_payoff');
+
+    function fillFsBeatOptions(outline) {
+        if (!fsBeatEl) return;
+        const beats = outline.beats || [];
+        fsBeatEl.innerHTML = '<option value="">（未指定）</option>' + beats.map(b =>
+            `<option value="${escapeHtml(b.id)}">${escapeHtml(b.title || b.id)}</option>`).join('');
+    }
+    function openFsEditor(id = null) {
+        const outline = adapter.getOutline();
+        const fs = id ? outline.foreshadowing.find(f => f.id === id) : null;
+        editingFsId = id;
+        fillFsBeatOptions(outline);
+        if (fsHintEl) fsHintEl.value = fs?.hint || '';
+        if (fsStatusEl) fsStatusEl.value = fs?.status || 'pending';
+        if (fsPayoffEl) fsPayoffEl.value = fs?.payoff || '';
+        if (fsBeatEl) fsBeatEl.value = fs?.beatId || '';
+        fsEditorEl?.classList.add('sd_open');
+    }
+    function closeFsEditor() {
+        fsEditorEl?.classList.remove('sd_open');
+        editingFsId = null;
+    }
+    function saveFsFromEditor() {
+        const hint = fsHintEl?.value?.trim() || '';
+        if (!hint) return;
+        const outline = adapter.getOutline();
+        adapter.recordHistory?.(outline, 'manual');
+        const patch = {
+            hint,
+            status: fsStatusEl?.value || 'pending',
+            payoff: fsPayoffEl?.value?.trim() || '',
+            beatId: fsBeatEl?.value || '',
+        };
+        const updated = editingFsId
+            ? updateForeshadow(outline, editingFsId, patch)
+            : createForeshadow(outline, patch);
+        adapter.setOutline(updated);
+        adapter.renderOutline();
+        closeFsEditor();
+    }
+    document.getElementById('sd_add_fs')?.addEventListener('click', () => openFsEditor(null));
+    document.getElementById('sd_fs_save')?.addEventListener('click', saveFsFromEditor);
+    document.getElementById('sd_fs_cancel')?.addEventListener('click', closeFsEditor);
+    document.getElementById('sd_fs_editor_close')?.addEventListener('click', closeFsEditor);
+    document.getElementById('sd_fs_delete')?.addEventListener('click', () => {
+        if (!editingFsId) return closeFsEditor();
+        const outline = adapter.getOutline();
+        adapter.recordHistory?.(outline, 'manual');
+        adapter.setOutline(removeForeshadow(outline, editingFsId));
+        adapter.renderOutline();
+        closeFsEditor();
+    });
+    // 伏笔列表：编辑 / 标记回收 / 回收节点跳转
+    document.getElementById('sd_fs_manager')?.addEventListener('click', (e) => {
+        const pay = e.target.closest('[data-fs-pay]');
+        if (pay) {
+            const outline = adapter.getOutline();
+            adapter.recordHistory?.(outline, 'manual');
+            adapter.setOutline(updateForeshadow(outline, pay.getAttribute('data-fs-pay'), { status: 'paid' }));
+            adapter.renderOutline();
+            return;
+        }
+        const edit = e.target.closest('[data-fs-edit]');
+        if (edit) {
+            openFsEditor(edit.getAttribute('data-fs-edit'));
+            return;
+        }
+        const payoff = e.target.closest('[data-payoff-beat]');
+        if (payoff) highlightBeatInOverview(payoff.getAttribute('data-payoff-beat'));
+    });
+    // 状态筛选
+    const renderFsFilter = () => {
+        const outline = adapter.getOutline();
+        document.querySelectorAll('[data-fs-filter]').forEach(btn => {
+            btn.classList.toggle('sd_fs_filter_active', btn.getAttribute('data-fs-filter') === fsFilter);
+        });
+        const fsEl = document.getElementById('sd_fs_manager');
+        if (fsEl) fsEl.innerHTML = renderForeshadowManager(outline.foreshadowing, outline.beats, fsFilter);
+    };
+    document.getElementById('sd_fs_filter')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-fs-filter]');
+        if (!btn) return;
+        fsFilter = btn.getAttribute('data-fs-filter') || '';
+        renderFsFilter();
+    });
 
     renderHistoryOptions();
 }

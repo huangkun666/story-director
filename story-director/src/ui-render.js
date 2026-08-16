@@ -374,5 +374,61 @@ function renderRetrieval(hits) {
     </section>`;
 }
 
+// 角色弧光管理卡：每个角色一张卡（欲望/缺陷/成长 + 出场节点 chips）
+function renderCharacters(arcs, beats) {
+    const list = Array.isArray(arcs) ? arcs : [];
+    if (!list.length) {
+        return `<div class="sd_empty_state sd_empty_small">
+            <div class="sd_empty_text">还没有角色弧光。点击右上角「加角色」，或先生成大纲。</div>
+        </div>`;
+    }
+    const cards = list.map(a => {
+        const m = arcMeta(a.status);
+        const castBeats = (Array.isArray(beats) ? beats : [])
+            .filter(b => Array.isArray(b.cast) && b.cast.includes(a.char));
+        const beatChips = castBeats.length
+            ? `<div class="sd_arc_beats"><small class="sd_arc_beats_label">出场：</small>${castBeats.map(b => `<span class="sd_chip sd_arc_beat_chip" data-arc-beat="${escapeHtml(b.id)}" title="跳到该节点">${escapeHtml(b.title || b.id)}</span>`).join('')}</div>`
+            : '';
+        const meta = [];
+        if (a.desire) meta.push(`<span class="sd_arc_meta"><b>欲望</b>${escapeHtml(a.desire)}</span>`);
+        if (a.flaw) meta.push(`<span class="sd_arc_meta"><b>缺陷</b>${escapeHtml(a.flaw)}</span>`);
+        return `<div class="sd_arc_card" data-arc-char="${escapeHtml(a.char)}" title="点击编辑弧光">
+            <div class="sd_arc_char"><i class="fa-solid fa-user-large"></i>${escapeHtml(a.char)}<span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span></div>
+            ${meta.length ? `<div class="sd_arc_meta_row">${meta.join('')}</div>` : ''}
+            ${a.growth ? `<div class="sd_arc_growth"><i class="fa-solid fa-arrow-trend-up"></i>${escapeHtml(a.growth)}</div>` : ''}
+            ${beatChips}
+        </div>`;
+    }).join('');
+    return `<div class="sd_arc_grid">${cards}</div>`;
+}
 
-export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml };
+// 伏笔管理列表：状态筛选 + 每条的编辑/回收操作
+function renderForeshadowManager(foreshadowing, beats, filter = '') {
+    const list = (Array.isArray(foreshadowing) ? foreshadowing : [])
+        .filter(f => !filter || f.status === filter);
+    if (!list.length) {
+        return `<div class="sd_empty_state sd_empty_small"><div class="sd_empty_text">${filter ? '该状态下暂无伏笔。' : '还没有伏笔。点击右上角「加伏笔」，或先生成大纲。'}</div></div>`;
+    }
+    const items = list.map(f => {
+        const m = foreshadowMeta(f.status);
+        const beat = f.beatId ? (Array.isArray(beats) ? beats : []).find(b => b.id === f.beatId) : null;
+        const payoffLink = beat
+            ? `<a class="sd_fs_payoff_link" data-payoff-beat="${escapeHtml(beat.id)}" title="跳到该节点">回收于 ${escapeHtml(beat.title || beat.id)}</a>`
+            : (f.payoff ? `<small class="sd_fs_payoff">${escapeHtml(f.payoff)}</small>` : '');
+        const actions = f.status === 'paid'
+            ? `<span class="sd_fs_actions"><span class="sd_fs_edit" data-fs-edit="${escapeHtml(f.id)}" title="编辑"><i class="fa-regular fa-pen-to-square"></i></span></span>`
+            : `<span class="sd_fs_actions">
+                <span class="sd_fs_edit" data-fs-edit="${escapeHtml(f.id)}" title="编辑"><i class="fa-regular fa-pen-to-square"></i></span>
+                <span class="sd_fs_pay" data-fs-pay="${escapeHtml(f.id)}" title="标记为已回收"><i class="fa-solid fa-check-double"></i></span>
+              </span>`;
+        return `<div class="sd_fs_item sd_fs_item_manage">
+            <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
+            <span class="sd_fs_hint">${escapeHtml(f.hint || f.id)}${payoffLink ? `<small class="sd_fs_payoff">${payoffLink}</small>` : ''}</span>
+            ${actions}
+        </div>`;
+    }).join('');
+    return `<div class="sd_fs_list">${items}</div>`;
+}
+
+
+export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager };

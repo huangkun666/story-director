@@ -54,6 +54,9 @@
                 <div class="sd_tab" data-sd-view="sd_view_generation">
                     <i class="fa-solid fa-sliders"></i><span>生成与记忆</span>
                 </div>
+                <div class="sd_tab" data-sd-view="sd_view_characters">
+                    <i class="fa-solid fa-users"></i><span>角色与伏笔</span>
+                </div>
                 <div class="sd_tab" data-sd-view="sd_view_api_tools">
                     <i class="fa-solid fa-plug"></i><span>API 与工具</span>
                 </div>
@@ -126,8 +129,6 @@
 
                 <div class="sd_story_grid">
                     <div id="sd_sidebar_story" class="sd_sidebar_slot"></div>
-                    <div id="sd_sidebar_arcs" class="sd_sidebar_slot"></div>
-                    <div id="sd_sidebar_foreshadow" class="sd_sidebar_slot"></div>
                 </div>
             </section>
 
@@ -262,6 +263,47 @@
                             <input id="sd_vector_memory_limit" type="number" min="1000" max="30000" step="500" />
                             <small>字符数</small>
                         </label>
+                    </div>
+                </section>
+            </section>
+
+            <section id="sd_view_characters" class="sd_view sd_hidden">
+                <div class="sd_page_head">
+                    <div>
+                        <h4>角色与伏笔</h4>
+                        <p>角色弧光与伏笔的可视化管理：手动新增、编辑与标记回收。</p>
+                    </div>
+                </div>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-users"></i></span>
+                        <div class="sd_card_titles">
+                            <b>角色弧光</b>
+                            <small>欲望、缺陷与成长轨迹；出场节点自动从大纲派生</small>
+                        </div>
+                        <div id="sd_add_arc" class="menu_button sd_btn" title="新增一个角色弧光"><i class="fa-solid fa-plus"></i><span>加角色</span></div>
+                    </header>
+                    <div class="sd_card_body" id="sd_arcs_manager"></div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-eye"></i></span>
+                        <div class="sd_card_titles">
+                            <b>伏笔管理</b>
+                            <small>埋设、推进与回收，手动掌控节奏</small>
+                        </div>
+                        <div id="sd_add_fs" class="menu_button sd_btn" title="新增一条伏笔"><i class="fa-solid fa-plus"></i><span>加伏笔</span></div>
+                    </header>
+                    <div class="sd_card_body">
+                        <div class="sd_fs_filter" id="sd_fs_filter">
+                            <span class="sd_fs_filter_btn sd_fs_filter_active" data-fs-filter="">全部</span>
+                            <span class="sd_fs_filter_btn" data-fs-filter="pending">待揭晓</span>
+                            <span class="sd_fs_filter_btn" data-fs-filter="active">活跃</span>
+                            <span class="sd_fs_filter_btn" data-fs-filter="paid">已回收</span>
+                        </div>
+                        <div id="sd_fs_manager"></div>
                     </div>
                 </section>
             </section>
@@ -404,6 +446,86 @@
                         <div id="sd_beat_delete" class="menu_button sd_btn sd_btn_danger" title="删除该节点"><i class="fa-solid fa-trash-can"></i><span>删除</span></div>
                         <div id="sd_beat_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
                         <div id="sd_beat_save" class="menu_button sd_btn sd_btn_primary" title="保存"><i class="fa-solid fa-check"></i><span>保存</span></div>
+                    </footer>
+                </div>
+            </div>
+
+            <div id="sd_arc_editor" class="sd_modal">
+                <div class="sd_modal_card">
+                    <header class="sd_modal_header">
+                        <i class="fa-solid fa-user-large"></i>
+                        <b>编辑角色弧光</b>
+                        <div id="sd_arc_editor_close" class="sd_window_close" title="关闭"><i class="fa-solid fa-xmark"></i></div>
+                    </header>
+                    <div class="sd_modal_body">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">角色名</span>
+                            <input id="sd_arc_char" type="text" placeholder="例如：黄坤" />
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">欲望</span>
+                            <input id="sd_arc_desire" type="text" placeholder="该角色想要什么" />
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">缺陷</span>
+                            <input id="sd_arc_flaw" type="text" placeholder="阻碍其达成欲望的内在问题" />
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">成长轨迹</span>
+                            <textarea id="sd_arc_growth" rows="3" placeholder="从何处到何处、如何成长"></textarea>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">弧光状态</span>
+                            <select id="sd_arc_status">
+                                <option value="pending">未启动</option>
+                                <option value="active">进行中</option>
+                                <option value="done">已完成</option>
+                            </select>
+                        </label>
+                    </div>
+                    <footer class="sd_modal_footer">
+                        <span class="sd_expander"></span>
+                        <div id="sd_arc_delete" class="menu_button sd_btn sd_btn_danger" title="删除该角色弧光"><i class="fa-solid fa-trash-can"></i><span>删除</span></div>
+                        <div id="sd_arc_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
+                        <div id="sd_arc_save" class="menu_button sd_btn sd_btn_primary" title="保存"><i class="fa-solid fa-check"></i><span>保存</span></div>
+                    </footer>
+                </div>
+            </div>
+
+            <div id="sd_fs_editor" class="sd_modal">
+                <div class="sd_modal_card">
+                    <header class="sd_modal_header">
+                        <i class="fa-solid fa-eye"></i>
+                        <b>编辑伏笔</b>
+                        <div id="sd_fs_editor_close" class="sd_window_close" title="关闭"><i class="fa-solid fa-xmark"></i></div>
+                    </header>
+                    <div class="sd_modal_body">
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">伏笔内容</span>
+                            <textarea id="sd_fs_hint" rows="2" placeholder="一句话描述这个伏笔"></textarea>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">状态</span>
+                            <select id="sd_fs_status">
+                                <option value="pending">待揭晓</option>
+                                <option value="active">活跃</option>
+                                <option value="paid">已回收</option>
+                            </select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">回收节点</span>
+                            <select id="sd_fs_beat"><option value="">（未指定）</option></select>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">回收方式</span>
+                            <input id="sd_fs_payoff" type="text" placeholder="如何揭晓（可选）" />
+                        </label>
+                    </div>
+                    <footer class="sd_modal_footer">
+                        <span class="sd_expander"></span>
+                        <div id="sd_fs_delete" class="menu_button sd_btn sd_btn_danger" title="删除该伏笔"><i class="fa-solid fa-trash-can"></i><span>删除</span></div>
+                        <div id="sd_fs_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
+                        <div id="sd_fs_save" class="menu_button sd_btn sd_btn_primary" title="保存"><i class="fa-solid fa-check"></i><span>保存</span></div>
                     </footer>
                 </div>
             </div>

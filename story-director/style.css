@@ -1739,6 +1739,167 @@
     border-radius: 9px;
 }
 
+/* 角色弧光管理卡 */
+.sd_arc_grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+}
+
+.sd_arc_card {
+    border: 1px solid var(--sd-border-soft);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--sd-card-soft);
+    cursor: pointer;
+    transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.sd_arc_card:hover {
+    border-color: var(--sd-amber-border);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.sd_arc_char {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: var(--sd-text);
+}
+
+.sd_arc_char .sd_badge {
+    margin-left: auto;
+}
+
+.sd_arc_meta_row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin-top: 6px;
+}
+
+.sd_arc_meta {
+    font-size: 0.82em;
+    color: var(--sd-text-2);
+}
+
+.sd_arc_meta b {
+    color: var(--sd-em);
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.sd_arc_growth {
+    margin-top: 6px;
+    font-size: 0.85em;
+    color: var(--sd-text-2);
+    line-height: 1.45;
+}
+
+.sd_arc_beats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.sd_arc_beats_label {
+    color: var(--sd-muted);
+    font-size: 0.75em;
+}
+
+.sd_arc_beat_chip {
+    cursor: pointer;
+}
+
+.sd_arc_beat_chip:hover {
+    background: var(--sd-blue-bg);
+    color: var(--sd-blue);
+}
+
+.sd_empty_small {
+    padding: 18px 8px;
+}
+
+/* 伏笔管理 */
+.sd_fs_filter {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.sd_fs_filter_btn {
+    padding: 3px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--sd-border-soft);
+    color: var(--sd-muted);
+    font-size: 0.8em;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s;
+}
+
+.sd_fs_filter_btn:hover {
+    border-color: var(--sd-amber-border);
+    color: var(--sd-em);
+}
+
+.sd_fs_filter_active {
+    background: var(--sd-amber-soft);
+    border-color: var(--sd-amber-border);
+    color: var(--sd-em);
+    font-weight: 600;
+}
+
+.sd_fs_list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sd_fs_item_manage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--sd-border-soft);
+    border-radius: 8px;
+    padding: 7px 10px;
+}
+
+.sd_fs_item_manage .sd_fs_hint {
+    flex: 1;
+    min-width: 0;
+}
+
+.sd_fs_actions {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.sd_fs_actions span {
+    cursor: pointer;
+    padding: 3px 7px;
+    border-radius: 6px;
+    color: var(--sd-muted);
+    font-size: 0.85em;
+}
+
+.sd_fs_actions span:hover {
+    background: var(--sd-card-soft);
+    color: var(--sd-text-2);
+}
+
+.sd_fs_pay {
+    color: var(--sd-green) !important;
+}
+
+.sd_fs_pay:hover {
+    background: color-mix(in srgb, var(--sd-green) 12%, transparent) !important;
+}
+
 /* 工具 */
 .sd_tool_row {
     color: var(--sd-text-2);
