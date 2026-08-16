@@ -320,3 +320,24 @@ test('director.generate skips history merge when preserveHistory is false', asyn
     assert.ok(!stored.acts.some(a => a.id === 'act_history'));
     assert.deepEqual(stored.beats.map(b => b.id), ['beat_1']);
 });
+
+test('director.generate passes the ongoing beat as fact boundary to the prompt', async () => {
+    let receivedPrompt = '';
+    const prev = createEmptyOutline();
+    prev.beats = [{ id: 'b1', title: '追查阴谋', summary: '主角潜入都城', status: 'active' }];
+    let stored = prev;
+    const { deps } = makeDeps({
+        generateRaw: async (opts) => {
+            receivedPrompt = opts.prompt;
+            return JSON.stringify({ theme: '新', beats: [{ id: 'beat_1', title: '新节点', status: 'active' }] });
+        },
+        getSettings: () => ({ enabled: true, recentTurns: 5 }),
+    });
+    deps.getOutline = () => stored;
+    deps.setOutline = (o) => { stored = o; };
+    const d = createDirector(deps);
+    await d.generate({ userRequest: '测试', timeline: { start: '建安五年', end: '建安十三年' } });
+    assert.ok(receivedPrompt.includes('事实边界'));
+    assert.ok(receivedPrompt.includes('追查阴谋'));
+    assert.ok(receivedPrompt.includes('主角潜入都城'));
+});

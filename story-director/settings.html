@@ -170,10 +170,10 @@
                         <label class="sd_setting">
                             <span class="sd_setting_label">保留已发生剧情</span>
                             <select id="sd_preserve_history">
-                                <option value="true">保留（旧 done 节点收进前情幕）</option>
-                                <option value="false">不保留（全新大纲）</option>
+                                <option value="true">保留（只能规划当前进行中节点之后）</option>
+                                <option value="false">不保留（全新大纲，已发生剧情一并覆盖）</option>
                             </select>
-                            <small>重新生成时把旧大纲中已发生的节点作为「前情·已完成」幕保留并衔接</small>
+                            <small>保留模式下时间线只能规划未来：进行中的剧情是事实边界，起点早于它会自动顺延。重玩请用快照回滚；推翻重来请选不保留或清空。</small>
                         </label>
                     </div>
                 </section>

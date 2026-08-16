@@ -164,7 +164,7 @@ function cardToText(card) {
     ].filter(Boolean).join('\n');
 }
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', memoryContext = '', vectorContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -175,6 +175,13 @@ export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 
     const historyBlock = historyText ? `${historyText}
 
 注意：以上旧剧情中，发生在新时间线开始之前的属于既定事实，新大纲必须与之衔接、不得矛盾；发生在新时间线内或之后的旧规划一律作废，按本次要求重新设计；旧大纲中的伏笔若尚未揭晓，可重新设计为新伏笔。\n` : '';
+    // 事实边界：当前进行中的节点是不可重规划的既定事实，时间线只能规划它之后
+    const ongoingText = String(ongoingBeatText || '').trim();
+    const ongoingBlock = ongoingText ? `【事实边界（必须遵守）】
+当前剧情正在进行：「${ongoingText}」。该节点及它之前的一切是既定事实，不可重新规划，大纲只能规划它之后（含收束该节点）的未来：
+- 若用户指定的时间线开始时间早于该节点所处时间，请自动把 timeline.start 顺延到该节点结束之后，并相应调整整个时间线跨度；
+- 新 beats 全部落在顺延后的时间线内，不得与已发生或正在进行的剧情在时间上重叠；
+- 第一个新 beat 应衔接该节点的收尾。\n` : '';
     const hasTimeline = !!(t.start || t.end || t.note || t.mustRead);
     const mustReadBlock = t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
     const timelineBlock = (t.start || t.end || t.note)
@@ -209,7 +216,7 @@ ${mustReadBlock}${timelineBlock}
 
 ${pacingBlock}
 
-${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
+${ongoingBlock}${historyBlock}${memoryBlock}${vectorBlock}【角色卡】
 ${cardToText(characterCard)}
 
 【用户要求】

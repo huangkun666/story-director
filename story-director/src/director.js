@@ -71,9 +71,14 @@ export function createDirector(deps) {
             deps.setRetrievalHits?.(vectorHits);
 
             // 保留已发生剧情：旧大纲的 done 节点作为前情参考传入（prompt），
-            // 生成后由 mergeHistoryIntoOutline 收进「前情·已完成」幕
+            // 生成后由 mergeHistoryIntoOutline 收进「前情·已完成」幕。
+            // 进行中节点是事实边界：时间线只能规划它之后（prompt 硬约束 + 合并兜底）。
             const preserveHistory = String(settings.preserveHistory) !== 'false';
             const historyContext = preserveHistory ? buildHistoryContext(currentOutline) : '';
+            const ongoingBeat = preserveHistory ? currentOutline.beats.find(b => b.status === 'active') : null;
+            const ongoingBeatText = ongoingBeat
+                ? `${ongoingBeat.title || ongoingBeat.id}（${ongoingBeat.summary || '进行中'}）`
+                : '';
 
             const bundle = buildGeneratePrompt({
                 characterCard: card,
@@ -82,6 +87,7 @@ export function createDirector(deps) {
                 timeline: requestedTimeline,
                 pacing: settings.beatPacing || 'balanced',
                 historyContext,
+                ongoingBeatText,
                 memoryContext: useSummary ? deps.getMemoryContext?.() : '',
                 vectorContext,
             });

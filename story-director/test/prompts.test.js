@@ -301,3 +301,20 @@ test('buildGeneratePrompt includes history block with continuation rules', () =>
     assert.ok(prompt.includes('发生在新时间线开始之前的属于既定事实'));
     assert.ok(prompt.includes('发生在新时间线内或之后的旧规划一律作废'));
 });
+
+test('buildGeneratePrompt adds fact-boundary block when an ongoing beat exists', () => {
+    const { prompt } = buildGeneratePrompt({
+        characterCard: {},
+        timeline: { start: '建安五年', end: '建安十三年' },
+        ongoingBeatText: '追查阴谋（正在进行：主角潜入都城）',
+    });
+    assert.ok(prompt.includes('事实边界'));
+    assert.ok(prompt.includes('追查阴谋'));
+    assert.ok(prompt.includes('timeline.start 顺延'));
+    assert.ok(prompt.includes('不得与已发生或正在进行的剧情在时间上重叠'));
+});
+
+test('buildGeneratePrompt omits fact-boundary block without an ongoing beat', () => {
+    const { prompt } = buildGeneratePrompt({ characterCard: {} });
+    assert.ok(!prompt.includes('事实边界'));
+});
