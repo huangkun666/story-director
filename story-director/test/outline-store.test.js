@@ -196,7 +196,14 @@ test('jumpToBeat returns same outline when beat not found', () => {
     const out = jumpToBeat(o, 'nonexistent');
     assert.equal(out.theme, 'X');
     assert.equal(out.beats[0].status, 'active'); // 状态未被改动
-    assert.equal(out.focus.currentBeat, '');
+    assert.equal(out.focus.currentBeat, 'b1'); // normalize 自愈补上当前节点
+});
+
+test('normalizeOutline fills missing currentBeat from first active beat', () => {
+    const o = normalizeOutline({
+        beats: [{ id: 'b2', title: '进行中', status: 'active' }],
+    });
+    assert.equal(o.focus.currentBeat, 'b2');
 });
 
 test('jumpToBeat does not mutate the input outline', () => {
@@ -419,7 +426,7 @@ test('mergeHistoryIntoOutline moves done beats into a leading history act', () =
     assert.deepEqual(out.acts[1].beats, ['beat_1']);
 });
 
-test('mergeHistoryIntoOutline keeps in-progress beats without marking them done', () => {
+test('mergeHistoryIntoOutline keeps in-progress beats as the single active focus', () => {
     const oldOutline = createEmptyOutline();
     oldOutline.beats = [
         { id: 'b1', title: '已发生', status: 'done' },
@@ -427,13 +434,30 @@ test('mergeHistoryIntoOutline keeps in-progress beats without marking them done'
         { id: 'b3', title: '未发生', status: 'pending' },
     ];
     const newOutline = createEmptyOutline();
-    newOutline.beats = [{ id: 'beat_1', title: '新节点', status: 'active' }];
+    newOutline.beats = [{ id: 'beat_1', title: '新节点', status: 'active' }]; // 模型输出的第一个 active
+
     const out = mergeHistoryIntoOutline(newOutline, oldOutline);
     assert.equal(out.beats.length, 3); // b1 + b2 保留 + 新节点
     assert.equal(out.beats[0].status, 'done');
     assert.equal(out.beats[1].id, 'hist_b2');
-    assert.equal(out.beats[1].status, 'active'); // 进行中状态保留，不改成完成
+    assert.equal(out.beats[1].status, 'active'); // 进行中保留
     assert.equal(out.beats[2].id, 'beat_1');
+    assert.equal(out.beats[2].status, 'pending'); // 新大纲的 active 降为 pending
+    assert.equal(out.focus.currentBeat, 'hist_b2'); // 焦点指向进行中节点
+    // 全大纲唯一 active
+    assert.equal(out.beats.filter(b => b.status === 'active').length, 1);
+});
+
+test('mergeHistoryIntoOutline keeps only done beats when nothing is ongoing', () => {
+    const oldOutline = createEmptyOutline();
+    oldOutline.beats = [{ id: 'b1', title: '已发生', status: 'done' }];
+    const newOutline = createEmptyOutline();
+    newOutline.beats = [{ id: 'beat_1', title: '新起点', status: 'active' }];
+    const out = mergeHistoryIntoOutline(newOutline, oldOutline);
+    assert.equal(out.beats[0].id, 'hist_b1');
+    assert.equal(out.beats[1].id, 'beat_1');
+    assert.equal(out.beats[1].status, 'active'); // 无进行中节点时新大纲起点保持 active
+    assert.equal(out.focus.currentBeat, 'beat_1');
 });
 
 test('mergeHistoryIntoOutline is idempotent on repeated merge', () => {

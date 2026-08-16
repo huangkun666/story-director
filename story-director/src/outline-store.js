@@ -188,8 +188,8 @@ export function normalizeOutline(raw) {
         : [];
     base.focus.avoidOffTopic = asString(focus.avoidOffTopic, '');
 
-    // 修复悬空的 currentBeat
-    if (base.focus.currentBeat && !base.beats.some(b => b.id === base.focus.currentBeat)) {
+    // 修复悬空或缺失的 currentBeat：指向第一个进行中/待开始节点
+    if (!base.focus.currentBeat || !base.beats.some(b => b.id === base.focus.currentBeat)) {
         const firstActiveOrPending = base.beats.find(b => b.status === 'active' || b.status === 'pending');
         base.focus.currentBeat = firstActiveOrPending ? firstActiveOrPending.id : '';
     }
@@ -342,18 +342,22 @@ export function renumberActTitles(outline) {
 const HISTORY_ACT_ID = 'act_history';
 
 // 生成新大纲时保留「已发生/正在进行」剧情：旧大纲中 status=done 或 active 的节点
-// 收进前情幕，置于新大纲最前。done 保持 done；active 保持 active（进度不丢，不改成完成）。
+// 收进前情幕，置于新大纲最前。done 保持 done。
+// 进行中的节点（active）保留原状态并成为新大纲的唯一焦点：新大纲自身的第一个
+// active 节点降为 pending，focus.currentBeat 指向它——「保留现在，重规划未来」。
 // 旧节点 id 加 hist_ 前缀防冲突（已是 hist_ 的保持原名，幂等）。
 // 旧伏笔/弧光/焦点/时间线一律以新大纲为准（生成 prompt 已把旧剧情作为前情参考传入）。
 export function mergeHistoryIntoOutline(newOutline, oldOutline) {
     const o = normalizeOutline(newOutline);
     if (!oldOutline || typeof oldOutline !== 'object') return o;
     const old = normalizeOutline(oldOutline);
-    const historyBeats = old.beats.filter(b => b.status === 'done' || b.status === 'active');
-    if (!historyBeats.length) return o;
+    const keptBeats = old.beats.filter(b => b.status === 'done' || b.status === 'active');
+    if (!keptBeats.length) return o;
 
-    const keptBeats = historyBeats.map((b) => {
+    let ongoingId = '';
+    const mappedBeats = keptBeats.map((b) => {
         const newId = String(b.id).startsWith('hist_') ? b.id : `hist_${b.id || 'b'}`;
+        if (b.status === 'active') ongoingId = newId;
         return { ...b, id: newId, actId: HISTORY_ACT_ID, status: b.status };
     });
     // 前情幕幂等：新大纲已带前情幕时替换其内容，而不是叠加
@@ -370,6 +374,14 @@ export function mergeHistoryIntoOutline(newOutline, oldOutline) {
     } else {
         o.acts.unshift(historyAct);
     }
-    o.beats = [...keptBeats, ...o.beats];
+    o.beats = [...mappedBeats, ...o.beats];
+
+    // 有保留的进行中节点时：新大纲自身的第一个 active 降为 pending，
+    // 焦点指向进行中节点，保证全大纲只有一个「进行中」
+    if (ongoingId) {
+        const firstNewActive = o.beats.find(b => b.status === 'active' && b.id !== ongoingId);
+        if (firstNewActive) firstNewActive.status = 'pending';
+        o.focus.currentBeat = ongoingId;
+    }
     return normalizeOutline(o);
 }
