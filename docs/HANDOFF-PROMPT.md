@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**249/249 通过**。
+当前测试数：**250/250 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+008110d fix: AI tag analysis shows tags reliably (parse tag from sample fallback); extraction UI is input-only, no buttons or chips
 42a5795 feat: dialogue extraction blacklist mode - strip excluded tags (think), keep full text; whitelist+blacklist stackable
 e0b8688 fix: dialogue extraction understands HTML tags (content/think), not char pairs; compact API settings card
 050bb15 feat: debug terminal - ring-buffered event log with LLM budget, retrieval, memory pointer and self-healing visibility
@@ -122,7 +123,7 @@ story-director/
 5. **时间线约束**：`timeline {start,end,note}`，所有节点必须落在区间内；**必读设定**是顶层独立字段（`outline.mustRead`，世界观级硬约束，旧数据 `timeline.mustRead` 由 normalize 自动迁移），最高优先级；**节点节奏**（beatPacing 相对跨度三档）。
 6. **事实边界 + 前情保留**：`preserveHistory`（默认 true）——重新生成时旧 done/active 节点收进「前情·已完成」幕（默认折叠）；active 保持 active 并成为唯一焦点（新大纲第一个 active 降为 pending）；prompt 硬约束 start 早于进行中节点自动顺延。关掉 = 弃史重来；重玩 = 用户快照回滚。
 7. **近期对话上下文（记忆指针驱动）**：记忆插件每 N 轮（默认 20）更新一次并维护记忆指针。`adapter.getMemoryGap()` 只读调用 `YuzukiMemory.Storage.loadState()` 读 `settings.manualPointers.summary`，`getRecentDialogue` 的轮数 = **指针之后缺失楼层数（+1 轮余量，clamp 60 轮）**，无指针（记忆未启用/无状态/读取失败）回落 `recentTurns`。对话**始终携带**（生成/修订/体检）。
-8. **对话正文提取（白名单 + 黑名单）**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数，**HTML 标签规则分两种**——① 白名单 `{ tag: 'content' }`：只提取 `<content>…</content>`（可带属性、跨行）；② 黑名单 `{ tag: 'think', exclude: true }`：**删除 `<think>` 等无用标签块、保留其余全文**（正文没标签包裹时的兜底）。先黑名单清理、再白名单提取（可叠加）；无规则/白名单无匹配 → 返回清理后的全文（默认提取全文）。标签名不硬编码；字符对模式（{ open, close }）兼容旧规则。UI 双输入框（保留/排除，chips 黑名单红色底 + ban 图标）；「AI 分析」让模型识别正文标签（exclude: false）与应排除标签（exclude: true），用户逐条确认后生效；作用于生成/修订/体检。
+8. **对话正文提取（白名单 + 黑名单，输入即生效）**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数，**HTML 标签规则分两种**——① 白名单 `{ tag: 'content' }`：只提取 `<content>…</content>`（可带属性、跨行）；② 黑名单 `{ tag: 'think', exclude: true }`：**删除 `<think>` 等无用标签块、保留其余全文**（正文没标签包裹时的兜底）。先黑名单清理、再白名单提取（可叠加）；无规则/白名单无匹配 → 返回清理后的全文（默认提取全文）。标签名不硬编码；字符对模式（{ open, close }）兼容旧规则。**UI 无按钮无 chips**：两个输入框（保留/排除，逗号分隔多标签）输入即生效（300ms 防抖写设置）；「AI 分析」识别正文标签（exclude: false）与应排除标签（exclude: true），**归一化容错**：兼容 tag/html_tag/tagName 字段名、模型没给 tag 时从 sample 里的 `<标签>` 兜底解析，用户逐条确认后生效；作用于生成/修订/体检。
 9. **保守修订**：prompt 明确「大纲不是剧情日志」——常规轮次只校准 focus，里程碑才推进节点；锁定模式用增量补丁（buildRevisePatchPrompt + applyPatch，输出省 ~90%）；输入侧压缩 done 节点（compactOutlineForRevision），合并时恢复细节。
 10. **向量检索**：多路 query（模型定向优先 + 时间线/角色前5/焦点保底），**每路 top 3** 防低相关占预算；命中清单实时展示（总览页「本次检索命中」卡）。
 11. **上下文预算**：cardContextLimit（12000）、dialogueContextLimit（8000）、memoryContextLimit（8000）、vectorMemoryLimit（6000）。
