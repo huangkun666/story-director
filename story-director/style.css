@@ -2261,3 +2261,12 @@
     color: var(--sd-text);
     font-size: 13px;
 }
+
+/* 模态底部按钮统一规格：等宽、文字居中——不再随内容长度忽大忽小。
+   所有 sd_modal 的 footer 按钮（节点/角色/伏笔/幕重规划）共用此规格。 */
+.sd_modal_footer .menu_button.sd_btn {
+    min-width: 96px;
+    justify-content: center;
+    padding: 6px 14px;
+    white-space: nowrap;
+}
