@@ -352,40 +352,7 @@ test('getVectorMemoryHits caps each query at top 3 results', async () => {
     }
 });
 
-test('director retrieval hits reach setRetrievalCallback end to end', async () => {
-    const originalWindow = globalThis.window;
-    globalThis.window = {
-        YuzukiMemory: {
-            VectorStore: {
-                search: async () => [{ text: '赤壁之战资料', source: '三国资料 #1' }],
-            },
-        },
-    };
-    try {
-        const ctx = makeCtx();
-        ctx.extensionSettings.story_director = { useVectorMemory: true, vectorMemoryLimit: 6000 };
-        const adapter = createSillyTavernAdapter(ctx);
-        let received = 'unset';
-        adapter.setRetrievalCallback((hits) => { received = hits; });
-        await adapter.director.generate({ userRequest: '测试' });
-        assert.ok(Array.isArray(received));
-        assert.equal(received.length, 1);
-        assert.equal(received[0].source, '三国资料 #1');
-        assert.equal(received[0].text, '赤壁之战资料');
-    } finally {
-        if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow;
-    }
-});
 
-test('director pushes empty hits when vector store is absent', async () => {
-    const ctx = makeCtx();
-    ctx.extensionSettings.story_director = { useVectorMemory: true };
-    const adapter = createSillyTavernAdapter(ctx);
-    let received = 'unset';
-    adapter.setRetrievalCallback((hits) => { received = hits; });
-    await adapter.director.generate({ userRequest: '测试' });
-    assert.deepEqual(received, []);
-});
 
 test('adapter records and restores outline history snapshots', () => {    const ctx = makeCtx();
     const adapter = createSillyTavernAdapter(ctx);

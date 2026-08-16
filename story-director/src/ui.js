@@ -1,7 +1,7 @@
 // story-director/src/ui.js
 // UI 层：事件绑定、节点编辑器、设置、窗口逻辑。渲染函数见 ui-render.js。
 import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from './outline-store.js';
-import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermList } from './ui-render.js';
+import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermList } from './ui-render.js';
 import { logger } from './logger.js';
 
 function renderHistoryOptions() {
@@ -78,7 +78,6 @@ let fsFilter = ''; // 伏笔管理筛选：'' | pending | active | paid
 
 export function bindUI(ctx, adapter) {
     adapterRef = adapter;
-    adapter.setRetrievalCallback?.(renderRetrieval);
 
     // 独立窗口：关闭按钮 + Esc 关闭
     const windowEl = document.getElementById('story_director_window');
@@ -1041,4 +1040,4 @@ export function bindUI(ctx, adapter) {
 }
 
 
-export { clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, renderBeatItem, foreshadowCardHtml };
+export { clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, renderBeatItem, foreshadowCardHtml };

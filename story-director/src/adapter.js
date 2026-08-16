@@ -319,19 +319,6 @@ export function createSillyTavernAdapter(ctx) {
         return (await searchVectorMemory(query)).hits;
     }
 
-    // 检索命中回调：director 每次生成/修订/体检后把命中清单推给 UI 展示
-    let retrievalCallback = null;
-    function setRetrievalCallback(fn) {
-        retrievalCallback = fn;
-    }
-    function setRetrievalHits(hits) {
-        try {
-            retrievalCallback?.(Array.isArray(hits) ? hits : []);
-        } catch (err) {
-            console.warn('[story-director] retrieval callback failed:', err);
-        }
-    }
-
     // 记忆缺口：yuzuki-Memory 每 N 轮（默认 20）才更新一次记忆，期间维护一个
     // 「记忆指针」（manualPointers.summary = 已存储楼层）。缺失楼层数 = 聊天楼层数 - 指针，
     // 这是聊天历史需要精确覆盖的范围。只读调用公开 API（Storage.loadState），
@@ -470,7 +457,6 @@ export function createSillyTavernAdapter(ctx) {
         getCharacterCard,
         getMemoryContext,
         getVectorMemory: searchVectorMemory,
-        setRetrievalHits,
         recordHistory,
         renderOutline,
     });
@@ -554,7 +540,7 @@ export function createSillyTavernAdapter(ctx) {
         getHistory,
         recordHistory,
         restoreHistory,
-        load: () => { setRetrievalHits([]); director.refreshInjection(); renderOutline(); },
+        load: () => { director.refreshInjection(); renderOutline(); },
         save: () => { director.refreshInjection(); },
         getCharacterCard,
         getRecentDialogue,
@@ -564,7 +550,6 @@ export function createSillyTavernAdapter(ctx) {
         getVectorMemoryHits,
         listModels,
         testApiConnection,
-        setRetrievalCallback,
         renderOutline,
         setRenderCallback,
         pushUndo,

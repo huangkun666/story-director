@@ -38,7 +38,7 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**268/268 通过**。
+当前测试数：**264/264 通过**。
 
 ### 最新 git 状态
 
@@ -131,7 +131,7 @@ story-director/
 7. **近期对话上下文（记忆指针驱动）**：记忆插件每 N 轮（默认 20）更新一次并维护记忆指针。`adapter.getMemoryGap()` 只读调用 `YuzukiMemory.Storage.loadState()` 读 `settings.manualPointers.summary`，`getRecentDialogue` 的轮数 = **指针之后缺失楼层数（+1 轮余量，clamp 60 轮）**，无指针（记忆未启用/无状态/读取失败）回落 `recentTurns`。对话**始终携带**（生成/修订/体检）。
 8. **对话正文提取（白名单 + 黑名单，输入即生效）**：`dialogueExtractRules` 设置（全局）；`dialogue-extract.js` 纯函数，**HTML 标签规则分两种**——① 白名单 `{ tag: 'content' }`：只提取 `<content>…</content>`（可带属性、跨行）；② 黑名单 `{ tag: 'think', exclude: true }`：**删除 `<think>` 等无用标签块、保留其余全文**（正文没标签包裹时的兜底）。先黑名单清理、再白名单提取（可叠加）；无规则/白名单无匹配 → 返回清理后的全文（默认提取全文）。标签名不硬编码；字符对模式（{ open, close }）兼容旧规则。**UI 无按钮无 chips**：两个输入框（保留/排除，逗号分隔多标签）输入即生效（300ms 防抖写设置）；「AI 分析」识别正文标签（exclude: false）与应排除标签（exclude: true），**归一化容错**：兼容 tag/html_tag/tagName 字段名、模型没给 tag 时从 sample 里的 `<标签>` 兜底解析，用户逐条确认后生效；作用于生成/修订/体检。
 9. **保守修订**：prompt 明确「大纲不是剧情日志」——常规轮次只校准 focus，里程碑才推进节点；锁定模式用增量补丁（buildRevisePatchPrompt + applyPatch，输出省 ~90%）；输入侧压缩 done 节点（compactOutlineForRevision），合并时恢复细节。
-10. **向量检索**：多路 query（模型定向优先 + 时间线/角色前5/焦点保底），**每路 top 3** 防低相关占预算；命中清单实时展示（总览页「本次检索命中」卡）。
+10. **向量检索**：多路 query（模型定向优先 + 时间线/角色前5/焦点保底），**每路 top 3** 防低相关占预算；命中详情在**调试终端**查看（总览页的「本次检索命中」卡已移除——终端有完整 query + 命中文本）。
 11. **上下文预算**：cardContextLimit（12000）、dialogueContextLimit（8000）、memoryContextLimit（8000）、vectorMemoryLimit（6000）。
 12. **受控编辑 + 引用自愈**：beat.actId 唯一事实来源，acts[].beats 派生；normalize 自愈悬空引用（伏笔 beatId、focus.currentBeat 缺失/悬空、activeForeshadow）。纯函数：createBeat/updateBeat/removeBeat/moveBeatOrder/jumpToBeat/renumberActTitles/mergeHistoryIntoOutline/createArc/updateArc/removeArc/createForeshadow/updateForeshadow/removeForeshadow——全部不可变、可测试。
 13. **角色与伏笔页签**：角色卡网格（欲望/缺陷/成长 + 状态 + **出场节点派生 chips 跳转高亮**）+ 编辑/新增/删除（arc 编辑器 modal）；伏笔管理（状态筛选 + 编辑/一键回收/删除 + 回收节点选择器 + 跳转高亮）。

@@ -346,36 +346,6 @@ function renderReport(report, label = '大纲体检') {
     </section>`;
 }
 
-// 向量检索命中展示：生成/修订/体检后由 adapter.setRetrievalCallback 推送
-function renderRetrieval(hits) {
-    const el = document.getElementById('sd_retrieval');
-    if (!el) return;
-    const list = (Array.isArray(hits) ? hits : [])
-        .filter(h => h && typeof h === 'object' && (h.text || h.source))
-        .map(h => ({
-            query: String(h.query || '').trim(),
-            source: String(h.source || '向量资料'),
-            text: String(h.text || '').trim(),
-        }));
-    if (!list.length) {
-        el.innerHTML = '';
-        return;
-    }
-    const items = list.map(h => `
-        <div class="sd_retrieval_hit">
-            <span class="sd_chip sd_retrieval_source">${escapeHtml(h.source)}</span>
-            <div class="sd_retrieval_text" title="${escapeHtml(h.text)}">${escapeHtml(h.text)}</div>
-            ${h.query ? `<small class="sd_retrieval_query">查询：${escapeHtml(h.query.slice(0, 80))}</small>` : ''}
-        </div>`).join('');
-    el.innerHTML = `<section class="sd_card sd_retrieval_card">
-        <header class="sd_card_header">
-            <i class="fa-solid fa-database"></i>本次检索命中
-            <span class="sd_retrieval_count">${list.length} 条</span>
-        </header>
-        <div class="sd_card_body sd_retrieval_list">${items}</div>
-    </section>`;
-}
-
 // 角色弧光管理卡：每个角色一张卡（欲望/缺陷/成长 + 出场节点 chips）
 function renderCharacters(arcs, beats) {
     const list = Array.isArray(arcs) ? arcs : [];
@@ -469,4 +439,4 @@ function renderTermList(entries, total = entries.length) {
 }
 
 
-export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, renderRetrieval, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermEntry, renderTermList };
+export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermEntry, renderTermList };

@@ -123,25 +123,16 @@ export function createDirector(deps) {
                 currentOutline.focus?.nextStep || currentOutline.theme || '',
             ].filter(q => String(q || '').trim());
             let vectorContext = '';
-            let vectorHits = [];
             if (useVector) {
                 const groups = [];
                 if (modelQueries.length) groups.push(['模型定向', modelQueries]);
                 if (baseQueries.length) groups.push(['保底', baseQueries]);
                 const textLimit = Math.max(1000, Number(settings.vectorMemoryLimit) || 6000);
                 const mergedTexts = [];
-                const seenHit = new Set();
                 for (const [label, queries] of groups) {
                     const retrieval = await deps.getVectorMemory?.(queries) || null;
-                    if (retrieval && (retrieval.text || (Array.isArray(retrieval.hits) && retrieval.hits.length))) {
-                        if (retrieval.text) mergedTexts.push(retrieval.text);
-                        for (const hit of (Array.isArray(retrieval.hits) ? retrieval.hits : [])) {
-                            const key = String(hit?.text || '');
-                            if (key && !seenHit.has(key)) {
-                                seenHit.add(key);
-                                vectorHits.push(hit);
-                            }
-                        }
+                    if (retrieval && retrieval.text) {
+                        mergedTexts.push(retrieval.text);
                     } else {
                         // 兼容旧 deps：只有 getVectorMemoryContext 的宿主
                         const t = await deps.getVectorMemoryContext?.(queries) || '';
@@ -150,7 +141,6 @@ export function createDirector(deps) {
                 }
                 vectorContext = mergedTexts.join('\n').slice(0, textLimit);
             }
-            deps.setRetrievalHits?.(vectorHits);
 
             const bundle = buildGeneratePrompt({
                 characterCard: card,
@@ -353,7 +343,6 @@ export function createDirector(deps) {
             ].filter(q => String(q || '').trim());
             const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
             const vectorContext = retrieval ? (retrieval.text || '') : (await deps.getVectorMemoryContext?.(vectorQueries) || '');
-            deps.setRetrievalHits?.(retrieval ? (Array.isArray(retrieval.hits) ? retrieval.hits : []) : []);
             const locked = settings.lockOutline === true;
             // 统一增量补丁修订：只推进状态/焦点/伏笔/弧光，不改写任何现有内容
             // （手动编辑永远安全）；全量重写只留给「生成大纲」入口。
@@ -404,7 +393,6 @@ export function createDirector(deps) {
             ].filter(q => String(q || '').trim());
             const retrieval = await deps.getVectorMemory?.(vectorQueries) || null;
             const vectorContext = retrieval ? (retrieval.text || '') : (await deps.getVectorMemoryContext?.(vectorQueries) || '');
-            deps.setRetrievalHits?.(retrieval ? (Array.isArray(retrieval.hits) ? retrieval.hits : []) : []);
             const bundle = buildCheckPrompt({
                 recentDialogue: dialogue,
                 outline,
