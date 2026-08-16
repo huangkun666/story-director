@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -479,4 +479,80 @@ test('mergeHistoryIntoOutline returns new outline unchanged when no done beats',
     const out = mergeHistoryIntoOutline(newOutline, oldOutline);
     assert.deepEqual(out.acts.map(a => a.id), []);
     assert.deepEqual(out.beats.map(b => b.id), ['beat_1']);
+});
+
+test('createArc adds a new arc and normalizes status', () => {
+    const o = createEmptyOutline();
+    const out = createArc(o, { char: '黄坤', desire: '复仇', growth: '从复仇到释然', status: 'active' });
+    assert.equal(out.arcs.length, 1);
+    assert.equal(out.arcs[0].char, '黄坤');
+    assert.equal(out.arcs[0].status, 'active');
+    assert.equal(o.arcs.length, 0); // 入参未修改
+    // 非法状态回落
+    const bad = createArc(o, { char: 'X', status: 'bogus' });
+    assert.equal(bad.arcs[0].status, 'pending');
+});
+
+test('createArc upserts when the character already exists', () => {
+    const o = createEmptyOutline();
+    o.arcs = [{ char: '黄坤', desire: '旧', flaw: '', growth: '', status: 'active' }];
+    const out = createArc(o, { char: ' 黄坤 ', desire: '新', growth: 'g' });
+    assert.equal(out.arcs.length, 1);
+    assert.equal(out.arcs[0].desire, '新');
+});
+
+test('createArc ignores empty char name', () => {
+    const o = createEmptyOutline();
+    const out = createArc(o, { char: '  ' });
+    assert.equal(out.arcs.length, 0);
+});
+
+test('updateArc changes fields by char name only', () => {
+    const o = createEmptyOutline();
+    o.arcs = [{ char: 'A', desire: 'd1', flaw: '', growth: 'g1', status: 'pending' }];
+    const out = updateArc(o, 'A', { desire: 'd2', status: 'done' });
+    assert.equal(out.arcs[0].desire, 'd2');
+    assert.equal(out.arcs[0].status, 'done');
+    assert.equal(out.arcs[0].growth, 'g1'); // 未传字段保留
+    const unchanged = updateArc(o, 'NOPE', { desire: 'x' });
+    assert.equal(unchanged.arcs[0].desire, 'd1');
+});
+
+test('removeArc deletes the character arc', () => {
+    const o = createEmptyOutline();
+    o.arcs = [{ char: 'A', desire: '', flaw: '', growth: '', status: 'pending' }];
+    const out = removeArc(o, 'A');
+    assert.equal(out.arcs.length, 0);
+});
+
+test('createForeshadow adds a foreshadow with generated id', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: '回收节点', status: 'pending' }]; // beatId 自愈需要节点存在
+    const out = createForeshadow(o, { hint: '断剑的秘密', status: 'active', beatId: 'b1' });
+    assert.equal(out.foreshadowing.length, 1);
+    assert.equal(out.foreshadowing[0].hint, '断剑的秘密');
+    assert.equal(out.foreshadowing[0].status, 'active');
+    assert.equal(out.foreshadowing[0].beatId, 'b1');
+    assert.ok(out.foreshadowing[0].id.startsWith('fs_'));
+    assert.equal(createForeshadow(o, { hint: '  ' }).foreshadowing.length, 0); // 空 hint 忽略
+});
+
+test('updateForeshadow changes status/payoff/beatId and heals dangling beatId', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: 'x', status: 'pending' }];
+    o.foreshadowing = [{ id: 'f1', hint: 'h', status: 'pending', payoff: '', beatId: 'b1' }];
+    const out = updateForeshadow(o, 'f1', { status: 'paid', payoff: '终局揭晓', beatId: 'b1' });
+    assert.equal(out.foreshadowing[0].status, 'paid');
+    assert.equal(out.foreshadowing[0].payoff, '终局揭晓');
+    const dangling = updateForeshadow(o, 'f1', { beatId: 'beat_gone' });
+    assert.equal(dangling.foreshadowing[0].beatId, ''); // 悬空自愈
+});
+
+test('removeForeshadow deletes and heals activeForeshadow references', () => {
+    const o = createEmptyOutline();
+    o.foreshadowing = [{ id: 'f1', hint: 'h', status: 'active', payoff: '', beatId: '' }];
+    o.focus.activeForeshadow = ['f1'];
+    const out = removeForeshadow(o, 'f1');
+    assert.equal(out.foreshadowing.length, 0);
+    assert.deepEqual(out.focus.activeForeshadow, []);
 });

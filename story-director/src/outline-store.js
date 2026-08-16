@@ -385,3 +385,73 @@ export function mergeHistoryIntoOutline(newOutline, oldOutline) {
     }
     return normalizeOutline(o);
 }
+
+// ---------- 角色（arcs）与伏笔的受控编辑 ----------
+// 与节点编辑同一约定：不可变返回、char 名/id 定位、引用自愈交给 normalize。
+
+// 新增角色弧光（char 是 arcs 的唯一键；重名则更新）
+export function createArc(outline, { char = '', desire = '', flaw = '', growth = '', status = 'pending' } = {}) {
+    const o = normalizeOutline(outline);
+    const name = String(char || '').trim();
+    if (!name) return o;
+    const existing = o.arcs.find(a => a.char === name);
+    if (existing) {
+        existing.desire = desire;
+        existing.flaw = flaw;
+        existing.growth = growth;
+        if (VALID_ARC_STATUS.has(status)) existing.status = status;
+        return normalizeOutline(o);
+    }
+    o.arcs.push({ char: name, desire, flaw, growth, status: VALID_ARC_STATUS.has(status) ? status : 'pending' });
+    return normalizeOutline(o);
+}
+
+// 更新角色弧光（按 char 名定位）
+export function updateArc(outline, char, patch) {
+    const o = normalizeOutline(outline);
+    const arc = o.arcs.find(a => a.char === char);
+    if (!arc || !patch || typeof patch !== 'object') return o;
+    if (typeof patch.desire === 'string') arc.desire = patch.desire;
+    if (typeof patch.flaw === 'string') arc.flaw = patch.flaw;
+    if (typeof patch.growth === 'string') arc.growth = patch.growth;
+    if (VALID_ARC_STATUS.has(patch.status)) arc.status = patch.status;
+    return normalizeOutline(o);
+}
+
+// 删除角色弧光（按 char 名定位）
+export function removeArc(outline, char) {
+    const o = normalizeOutline(outline);
+    o.arcs = o.arcs.filter(a => a.char !== char);
+    return normalizeOutline(o);
+}
+
+// 新增伏笔（id 自动生成，防冲突）
+export function createForeshadow(outline, { hint = '', status = 'pending', payoff = '', beatId = '' } = {}) {
+    const o = normalizeOutline(outline);
+    const hintText = String(hint || '').trim();
+    if (!hintText) return o;
+    const id = `fs_${Date.now()}_${o.foreshadowing.length + 1}`;
+    o.foreshadowing.push(normalizeForeshadow({
+        id, hint: hintText, status, payoff, beatId,
+    }, o.foreshadowing.length));
+    return normalizeOutline(o);
+}
+
+// 更新伏笔（按 id 定位；beatId 悬空时 normalize 自愈清空）
+export function updateForeshadow(outline, id, patch) {
+    const o = normalizeOutline(outline);
+    const fs = o.foreshadowing.find(f => f.id === id);
+    if (!fs || !patch || typeof patch !== 'object') return o;
+    if (typeof patch.hint === 'string' && patch.hint.trim()) fs.hint = patch.hint.trim();
+    if (VALID_FORESHADOW_STATUS.has(patch.status)) fs.status = patch.status;
+    if (typeof patch.payoff === 'string') fs.payoff = patch.payoff;
+    if (typeof patch.beatId === 'string') fs.beatId = patch.beatId;
+    return normalizeOutline(o);
+}
+
+// 删除伏笔（focus.activeForeshadow 悬空引用由 normalize 自愈）
+export function removeForeshadow(outline, id) {
+    const o = normalizeOutline(outline);
+    o.foreshadowing = o.foreshadowing.filter(f => f.id !== id);
+    return normalizeOutline(o);
+}
