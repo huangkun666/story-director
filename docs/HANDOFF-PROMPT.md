@@ -38,13 +38,14 @@ SillyTavern（"酒馆"）是一个开源 AI 角色扮演前端。story-director 
 node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 ```
 
-当前测试数：**250/250 通过**。
+当前测试数：**251/251 通过**。
 
 ### 最新 git 状态
 
 最近提交（按新到旧）：
 
 ```
+f76f6fa feat: debug terminal as own tab; per-call LLM logging with context size; vector retrieval split into two visible batches
 008110d fix: AI tag analysis shows tags reliably (parse tag from sample fallback); extraction UI is input-only, no buttons or chips
 42a5795 feat: dialogue extraction blacklist mode - strip excluded tags (think), keep full text; whitelist+blacklist stackable
 e0b8688 fix: dialogue extraction understands HTML tags (content/think), not char pairs; compact API settings card
@@ -135,7 +136,7 @@ story-director/
 17. **独立 API**：custom 模式 OpenAI 兼容直连；获取模型（/v1/models，兼容 OpenAI/Ollama 格式，chip 面板点选）；测试连接（/models 优先，404 降级最小 chat completion）；**API 卡已压缩**：连接模式与「获取模型/测试连接」同行（sd_llm_mode_row），字段只剩 Base URL / API Key / 模型——API 类型下拉已移除（custom 直连实际只用到这三项，旧设置 `llm.api` 字段仍兼容保留）。
 18. **体检**：verdict/issues/changed/reason + 时间线漂移 + 节点节奏检查点；**体检历史留痕**（meta.checkHistory 10 条，统计行图标序列）；锁定模式下只吸收状态类变更。
 19. **快照/导入导出 + 操作级撤销**：自动留快照 30 条可回滚（触发点：生成/修订/体检/跳转游玩/清空/导入——**手动编辑不再逐个留快照**，由撤销栈接管）；JSON 导出/导入；**撤销栈**（内存 20 步，按钮 + Ctrl+Z）——手动编辑（节点/幕/弧光/伏笔/时间线/导入/清空/跳转）逐步入栈，连续同类输入合并为一步；大操作（生成/修订/体检）只走持久快照，不入撤销栈。**分工**：快照 = 回到过去（重玩/大回滚，跨会话），撤销 = 撤一步（精细编辑，会话内）。切换聊天时清空撤销栈。
-20. **调试终端**：「API 与工具」页签内嵌面板（`sd_term_*`）——**五类日志**：llm（每次生成/修订/体检/方向草案的模型/耗时/结果、角色卡预算占用）、retrieval（方向草案 queries、每路命中数）、memory（记忆指针缺口、生效轮数、正文提取）、engine（大纲保存诊断 diagnoseOutline：节点统计 + normalize 自愈清单）、edit（撤销栈编辑流）、lifecycle（就绪/消息触发修订/切换聊天）；分级过滤（debug/info/warn/error + 分类 + 关键字）、点击展开详情、清空、导出 JSON；**环形 500 条仅存内存**，warn/error 同时透传 console。
+20. **调试终端**：**独立页签**（sd_view_terminal，第 6 个页签）——**LLM 调用逐次打点**（adapter.generateRaw 统一记录：模式/模型/上下文 system+prompt 字符/耗时/返回字符/失败原因，方向草案、正式生成、修订、体检、AI 节点、标签分析全部可见）；**检索分两批独立调用**（模型定向 + 保底，各一次打点，终端可见两次搜索，批次间按文本去重）；另有 memory（指针缺口/生效轮数/正文提取）、engine（大纲保存诊断 diagnoseOutline 自愈清单）、edit（撤销栈编辑流）、lifecycle（就绪/消息触发修订/切换聊天）；分级过滤（debug/info/warn/error + 分类 + 关键字）、点击展开详情、清空、导出 JSON；**环形 500 条仅存内存**，warn/error 同时透传 console。
 21. **并发友好**：director.isRunning() + UI 忙碌提示。
 
 ### 关键实现细节与坑
