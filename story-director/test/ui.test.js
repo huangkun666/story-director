@@ -1,7 +1,8 @@
 // story-director/test/ui.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampWindowPos } from '../src/ui.js';
+import { clampWindowPos, renderBeatItem, foreshadowCardHtml } from '../src/ui.js';
+import { createEmptyOutline } from '../src/outline-store.js';
 
 test('clampWindowPos keeps an in-view position unchanged', () => {
     assert.deepEqual(
@@ -35,4 +36,33 @@ test('clampWindowPos pins window to top-left when it is larger than the viewport
         clampWindowPos({ left: 300, top: 200 }, { viewportW: 500, viewportH: 300, winW: 800, winH: 600 }),
         { left: 0, top: 0 },
     );
+});
+
+test('renderBeatItem shows foreshadow chips for active foreshadowing of the beat', () => {
+    const beat = { id: 'b1', title: '回城', status: 'pending', type: 'conflict', cast: [] };
+    const foreshadowing = [
+        { id: 'f1', hint: '断剑的秘密', status: 'pending', beatId: 'b1' },
+        { id: 'f2', hint: '已回收的伏笔', status: 'paid', beatId: 'b1' },
+        { id: 'f3', hint: '别的节点', status: 'active', beatId: 'b2' },
+    ];
+    const html = renderBeatItem(beat, foreshadowing);
+    assert.ok(html.includes('sd_fs_chip'));
+    assert.ok(html.includes('断剑的秘密'));
+    assert.ok(!html.includes('已回收的伏笔')); // paid 不显示
+    assert.ok(!html.includes('别的节点')); // 不指向本节点的不显示
+});
+
+test('renderBeatItem renders no foreshadow section without matches', () => {
+    const html = renderBeatItem({ id: 'b1', title: 'x', status: 'pending', type: 'setup', cast: [] }, []);
+    assert.ok(!html.includes('sd_beat_fs'));
+});
+
+test('foreshadowCardHtml renders clickable payoff link with data attribute', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: '终局之战', status: 'pending' }];
+    o.foreshadowing = [{ id: 'f1', hint: '断剑的秘密', status: 'pending', payoff: '', beatId: 'b1' }];
+    const html = foreshadowCardHtml(o);
+    assert.ok(html.includes('data-payoff-beat="b1"'));
+    assert.ok(html.includes('sd_fs_payoff_link'));
+    assert.ok(html.includes('终局之战'));
 });

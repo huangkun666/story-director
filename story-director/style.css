@@ -1640,6 +1640,48 @@
     color: #d64545;
 }
 
+/* 伏笔回收点：节点上的伏笔标记 + 卡片跳转链接 */
+.sd_beat_fs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+
+.sd_fs_chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #fdf3e3;
+    color: #a06a12;
+    font-size: 0.75em;
+    border: 1px dashed #e3c58a;
+    cursor: help;
+}
+
+.sd_fs_payoff_link {
+    color: #4a6cf7;
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.sd_fs_payoff_link:hover {
+    color: #2f4fd8;
+}
+
+/* 节点闪烁高亮（伏笔跳转定位） */
+@keyframes sdBeatFlash {
+    0%, 100% { background: transparent; box-shadow: none; }
+    25%, 75% { background: #fff6d8; box-shadow: 0 0 0 2px #e2b05a; }
+}
+
+.sd_beat_flash {
+    animation: sdBeatFlash 0.9s ease-in-out 2;
+    border-radius: 9px;
+}
+
 /* 工具 */
 .sd_tool_row {
     color: #2d3542;

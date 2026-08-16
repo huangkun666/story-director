@@ -79,9 +79,14 @@ export function clampWindowPos(pos, { viewportW = 0, viewportH = 0, winW = 0, wi
     };
 }
 
-function renderBeatItem(b) {
+function renderBeatItem(b, foreshadowing = []) {
     const m = beatMeta(b.status);
     const tm = beatTypeMeta(b.type);
+    // 指向该节点的活跃伏笔（已回收的伏笔不在节点上重复显示）
+    const fsChips = (Array.isArray(foreshadowing) ? foreshadowing : [])
+        .filter(f => f.beatId === b.id && f.status !== 'paid')
+        .map(f => `<span class="sd_fs_chip" title="伏笔：${escapeHtml(f.hint || f.id)}"><i class="fa-solid fa-link"></i>${escapeHtml(String(f.hint || f.id).slice(0, 18))}</span>`)
+        .join('');
     return `<div class="sd_beat_item sd_beat_${escapeHtml(b.status)}" data-beat-id="${escapeHtml(b.id)}" title="点击编辑节点">
         <div class="sd_beat_rail"><span class="sd_beat_dot"></span></div>
         <div class="sd_beat_body">
@@ -96,6 +101,7 @@ function renderBeatItem(b) {
             </div>
             ${b.summary ? `<div class="sd_beat_summary">${escapeHtml(b.summary)}</div>` : ''}
             ${(b.cast || []).length ? `<div class="sd_beat_cast">${b.cast.map(c => `<span class="sd_chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+            ${fsChips ? `<div class="sd_beat_fs">${fsChips}</div>` : ''}
         </div>
     </div>`;
 }
@@ -154,7 +160,7 @@ function foreshadowCardHtml(o) {
         const beat = f.beatId ? o.beats.find(b => b.id === f.beatId) : null;
         return `<div class="sd_fs_item">
             <span class="sd_badge ${m.cls}"><i class="${m.icon}"></i>${m.label}</span>
-            <span class="sd_fs_hint">${escapeHtml(f.hint || f.id)}${beat ? `<small class="sd_fs_payoff">回收于 ${escapeHtml(beat.title || beat.id)}</small>` : ''}</span>
+            <span class="sd_fs_hint">${escapeHtml(f.hint || f.id)}${beat ? `<small class="sd_fs_payoff">回收于 <a class="sd_fs_payoff_link" data-payoff-beat="${escapeHtml(beat.id)}" title="跳转到该节点">${escapeHtml(beat.title || beat.id)}</a></small>` : ''}</span>
         </div>`;
     }).join('');
     return `<section class="sd_card sd_card_foreshadow">
@@ -177,7 +183,7 @@ function outlineSectionHtml(o) {
                 ${act.summary ? `<span class="sd_act_summary">${escapeHtml(act.summary)}</span>` : ''}
                 <i class="fa-regular fa-pen-to-square sd_edit_hint"></i>
             </div>`;
-        const body = beats.length ? `<div class="sd_timeline">${beats.map(renderBeatItem).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>';
+        const body = beats.length ? `<div class="sd_timeline">${beats.map(b => renderBeatItem(b, o.foreshadowing)).join('')}</div>` : '<small class="sd_act_empty">本幕暂无节点</small>';
         // 前情幕默认折叠（原生 details/summary，零 JS）
         const isHistory = String(act.id).startsWith('act_history');
         if (isHistory) {
@@ -195,7 +201,7 @@ function outlineSectionHtml(o) {
 
     const unassigned = o.beats.filter(b => !usedBeatIds.has(b.id));
     const unassignedSection = unassigned.length
-        ? `<div class="sd_act"><div class="sd_act_head"><span class="sd_act_title">未分幕节点</span></div><div class="sd_timeline">${unassigned.map(renderBeatItem).join('')}</div></div>`
+        ? `<div class="sd_act"><div class="sd_act_head"><span class="sd_act_title">未分幕节点</span></div><div class="sd_timeline">${unassigned.map(b => renderBeatItem(b, o.foreshadowing)).join('')}</div></div>`
         : '';
 
     return `<section class="sd_card sd_card_beats sd_card_outline">
@@ -841,6 +847,21 @@ export function bindUI(ctx, adapter) {
         renderReport({ verdict: 'sync', changed: false, reason: `已跳转到「${beat.title || beat.id}」，从此处开始游玩` }, '跳转');
     }
 
+    // 伏笔回收点跳转：点击「回收于 X」→ 切到大纲总览并闪烁高亮该节点
+    document.getElementById('sd_sidebar_foreshadow')?.addEventListener('click', (e) => {
+        const payoff = e.target.closest('[data-payoff-beat]');
+        if (!payoff) return;
+        const beatId = payoff.getAttribute('data-payoff-beat');
+        switchView('sd_view_outline');
+        setTimeout(() => {
+            const beatEl = document.querySelector(`[data-beat-id="${CSS.escape(beatId)}"]`);
+            if (!beatEl) return;
+            beatEl.classList.add('sd_beat_flash');
+            setTimeout(() => beatEl.classList.remove('sd_beat_flash'), 2000);
+            beatEl.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+        }, 60);
+    });
+
     // 主区事件委托：空状态生成按钮 / 点击节点编辑 / 跳转按钮 / 双击幕编辑
     document.getElementById('sd_overview')?.addEventListener('click', (e) => {
         const emptyCta = e.target.closest('#sd_generate_empty');
@@ -957,4 +978,4 @@ export function bindUI(ctx, adapter) {
     renderHistoryOptions();
 }
 
-export { renderOverview, renderFocus, renderReport, renderRetrieval };
+export { renderOverview, renderFocus, renderReport, renderRetrieval, renderBeatItem, foreshadowCardHtml };
