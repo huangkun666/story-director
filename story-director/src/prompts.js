@@ -47,6 +47,25 @@ export const OUTLINE_SCHEMA = {
                 },
             },
         },
+        worldEvents: {
+            type: 'array',
+            description: '世界事件（世界模式）：主角之外的世界/NPC 活动，含时间表与触发时机',
+            items: {
+                type: 'object',
+                required: ['id', 'title', 'status'],
+                properties: {
+                    id: { type: 'string' },
+                    time: { type: 'string', description: '事件发生的时间点（如 197年冬）' },
+                    title: { type: 'string' },
+                    description: { type: 'string', description: '事件内容：谁在做什么、进展如何' },
+                    actors: { type: 'array', items: { type: 'string' }, description: '参与行动的角色/势力' },
+                    trigger: { type: 'string', description: '触发时机：什么条件下与主角相遇或被主角察觉' },
+                    impact: { type: 'string', enum: ['direct', 'ambient'], description: 'direct=会与主角相遇；ambient=背景发生' },
+                    status: { type: 'string', enum: ['pending', 'active', 'paid'] },
+                    outcome: { type: 'string', description: '事件结果（paid 后记录）' },
+                },
+            },
+        },
         acts: {
             type: 'array',
             description: '大纲分幕（起承转合），每幕包含若干 beat id',
@@ -298,6 +317,104 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
     return { system, prompt };
 }
 
+// 世界模式生成模板：只规划世界状态、NPC 计划与世界事件表——
+// **严禁规划主角的任何行动**（主角做什么由用户完全自由决定）。
+// 主角在 RP 中由用户扮演：大纲只提供「世界在发生什么 + 什么时候会撞上主角」，
+// 绝不替用户决定「主角要去做什么」。beats 仅作环境线索（事件触发节点），
+// 不描述主角行为；弧光（arcs）即 NPC 的独立计划。
+export function buildWorldGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '' } = {}) {
+    const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
+    const t = (timeline && typeof timeline === 'object') ? timeline : {};
+    const memoryText = String(memoryContext || '').trim();
+    const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
+    const vectorText = String(vectorContext || '').trim();
+    const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
+    const historyText = String(historyContext || '').trim();
+    const historyBlock = historyText ? `${historyText}\n` : '';
+    const dialogueText = String(recentDialogue || '').trim();
+    const dialogueBlock = dialogueText ? `【最近对话（当前剧情位置的最新事实）】
+${dialogueText}
+
+注意：以上对话发生在当前剧情位置，世界事件表必须与这些事实衔接，不得矛盾。\n` : '';
+    const directionText = String(direction || '').trim();
+    const directionBlock = directionText ? `【世界方向（先行草案，请按此展开并细化）】
+${directionText}\n` : '';
+    const mustReadText = String(mustRead || '').trim();
+    const mustReadBlock = mustReadText ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${mustReadText}\n` : '';
+    const timelineBlock = (t.start || t.end || t.note)
+        ? `【时间线约束（世界活动必须落在该区间内）】
+- 开始时间：${t.start || '（未指定，请根据故事背景推定）'}
+- 结束时间：${t.end || '（未指定，请根据故事背景推定）'}
+${t.note ? `- 补充约束：${t.note}` : ''}\n`
+        : '【时间线约束】用户未指定时间线，请自行推定世界活动的时间跨度。\n';
+    const pacingMeta = pacingInfo(pacing);
+    const pacingBlock = `【事件节奏（档位：${pacingMeta.label}）】
+${pacingMeta.desc}；事件表内的事件时间随世界时钟自然推进，不得回退。`;
+
+    const system = '你是世界导演（World Director）：维护一个活的虚构世界，而不是替主角写剧本。你规划世界各方势力的计划与事件时间表，但从不替主角做任何决定。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const prompt = `请为以下角色扮演构建一份${detailWord}的「世界大纲」。题材不限（历史、科幻、奇幻、现代、悬疑等），按角色卡和用户要求来。
+
+【最高准则：严禁规划主角的任何行动】
+- 主角由用户扮演，主角要做什么完全由用户决定，大纲不得出现任何「主角应该/将会/必须做什么」的内容；
+- 不写主角的行程、选择、战斗、交涉——这些都留给用户；
+- 大纲只写：世界现状、各方势力的计划与进展、世界事件时间表（含触发时机）。
+
+世界大纲的构成：
+1) 世界现状（world/theme/tone）：当前局势与冲突根源；
+2) NPC 计划（arcs）：每个重要角色/势力的独立欲望、计划与进展——他们在主角不在场时也在行动；
+3) 世界事件表（worldEvents）：3-6 条世界事件，每条含时间点、内容、参与方、**触发时机**（什么条件下与主角相遇或被主角察觉）、impact（direct=会撞上主角 / ambient=背景发生）——世界有自己的节奏，不必事事撞主角；
+4) 环境线索（beats/acts）：少量节点只描述「世界变化/事件触发」的环境事实（如"许都传来大军集结的消息"），**同样不得包含主角的行动**；
+5) 伏笔（foreshadowing）：世界的暗流与未解之谜。
+
+${mustReadBlock}${timelineBlock}
+
+${pacingBlock}
+
+${dialogueBlock}${historyBlock}${directionBlock}${memoryBlock}${vectorBlock}【角色卡】
+${cardToText(characterCard)}
+
+【新人物许可（允许但须交代）】
+世界需要时允许引入新势力/新角色，但不得与角色名录中的既有角色重名冲突；新人物的身份、动机与计划必须在 arcs 或 worldEvents 中交代清楚。
+
+【用户要求】
+${userRequest || '（未指定，请自行设计一个活的世界与各方计划）'}
+
+请严格按以下 JSON 结构输出（字段名必须完全一致，不要增删字段，不要用 markdown 代码块包裹）：
+
+{
+  "theme": "故事主题",
+  "tone": "情绪基调",
+  "world": "世界观与当前局势",
+  "mustRead": "必读设定（没有则留空）",
+  "timeline": { "start": "世界活动开始时间", "end": "世界活动结束时间", "note": "时间线说明" },
+  "arcs": [
+    { "character": "势力/角色一", "arc": "其独立欲望、计划与结局方向", "status": "active" },
+    { "character": "势力/角色二", "arc": "其独立欲望、计划与结局方向", "status": "pending" }
+  ],
+  "foreshadowing": [
+    { "id": "f1", "hint": "世界暗流一句话描述", "status": "pending", "payoff": "揭晓方式", "beatId": "beat_2" }
+  ],
+  "worldEvents": [
+    { "id": "ev_1", "time": "197年冬", "title": "曹军集结于许都", "description": "曹操调集五万大军，剑指徐州", "actors": ["曹操", "曹军"], "trigger": "主角抵达许都周边时", "impact": "direct", "status": "pending", "outcome": "" }
+  ],
+  "acts": [
+    { "id": "act_1", "title": "第一阶段（时间：起止）", "summary": "世界这一阶段发生什么", "beats": ["beat_1"] }
+  ],
+  "beats": [
+    { "id": "beat_1", "actId": "act_1", "title": "环境线索", "summary": "世界变化/事件触发的事实（不得写主角行动）", "type": "setup", "status": "pending", "cast": ["曹操"] }
+  ],
+  "focus": {
+    "currentBeat": "beat_1",
+    "nextStep": "当前世界动态与环境线索（供注入提示，不是给主角的命令）",
+    "activeForeshadow": ["f1"],
+    "avoidOffTopic": "需要避免偏离的内容"
+  }
+}
+
+要求：worldEvents 3-6 条且时间随世界时钟推进；每条必须写 trigger（触发时机）与 impact；arcs 覆盖主要势力/NPC（2-4 条）并写清独立计划；beats 只写环境事实、不写主角行动；focus.nextStep 是「世界动态描述」而非主角指令；严禁出现「主角应该/将会/必须」类表述。`;
+    return { system, prompt };
+}
+
 // 修订输入压缩：已完成节点只保留骨架（id/title/status/actId），省略 summary/cast 等细节。
 // 修订时这些节点的细节对「判断下一步」没有信息量，却能占掉大纲 token 的大头。
 // 注意：tracker.applyRevision 会在合并后从旧大纲恢复这些细节（见 tracker.js）。
@@ -434,6 +551,52 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 ${newBeatsInstruction}
 5) 禁止任何字段修改现有 beat/act/timeline 的标题、概要、类型与时间线；
 6) 对话中出现的名录外新角色（新对手/新势力等）：允许将其纳入 arcs 或后续节点，但须简要交代其身份与动机；不得与既有角色重名冲突。`;
+    return { system, prompt };
+}
+
+// 世界模式修订模板：推进世界时钟与 NPC 计划，记录事件结果。
+// 与导演模式修订相同的不变量——不改写任何现有内容，只推进状态；
+// 额外约束：主角行动永不写入大纲（主角做什么是用户的自由）。
+// 补丁结构新增 eventChanges（世界事件状态流转）。
+export function buildWorldRevisePatchPrompt({ recentDialogue = '', outline, driftTolerance = 'loose', memoryContext = '', vectorContext = '' }) {
+    const system = '你是世界导演（World Director）。只能推进世界状态与 NPC 计划，禁止改写任何现有内容，也禁止规划主角行动。根据最近对话输出最小变更补丁（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
+    const memoryText = String(memoryContext || '').trim();
+    const memoryBlock = memoryText ? `【长时记忆（来自记忆插件，优先采信）】\n${memoryText}\n` : '';
+    const vectorText = String(vectorContext || '').trim();
+    const vectorBlock = vectorText ? `【向量检索到的相关资料（来自记忆插件资料库）】\n${vectorText}\n` : '';
+    const driftInstruction = driftTolerance === 'strict'
+        ? '若剧情偏离世界设定，请严格拉回：只调整世界动态描述与事件状态，不要为偏离新增内容。'
+        : '若剧情偏离世界设定，请宽松吸收：把新走向写进世界动态与事件结果。';
+    const prompt = `【最近对话】
+${recentDialogue}
+
+${memoryBlock}${vectorBlock}【当前世界大纲（禁止改动任何现有内容，只能推进状态）】
+${serializeOutline(compactOutlineForRevision(outline))}
+
+（注：大纲中标记为 "done" 的已完成节点与 "paid" 的已发生事件已省略细节，无需处理它们。）
+
+${driftInstruction} 若世界时钟已越过 timeline.end，把 focus.nextStep 写成“已超出当前世界时间线，建议生成下一段世界大纲”。
+
+【世界时钟推进规则】
+- 对话中主角的行动**永远不写入大纲**（主角自由）；只根据对话推进世界事件与 NPC 计划的状态；
+- 事件被对话触及/展开 → 该事件置 "active"（进行中）；事件落幕 → 置 "paid" 并写 outcome（结果）；
+- 主角到达某地/听说某消息 → 对应事件的 trigger 条件达成，事件可转 active。
+
+请只输出变更补丁，严格按以下 JSON 结构（字段名完全一致，不要 markdown 代码块；没有变化的字段省略，不要输出完整大纲）：
+
+{
+  "statusChanges": [ { "beatId": "beat_1", "status": "done" } ],
+  "eventChanges": [ { "id": "ev_1", "status": "active", "outcome": "事件结果（置 paid 时必填）" } ],
+  "focus": { "currentBeat": "beat_1", "nextStep": "当前世界动态与环境线索（供注入提示，不是给主角的命令）", "activeForeshadow": ["f1"] },
+  "foreshadowing": [ { "id": "f1", "status": "active" } ],
+  "arcs": [ { "char": "曹操", "status": "active" } ]
+}
+
+规则：
+1) eventChanges：只推进事件状态与结果；没有变化的省略；outcome 只在置 "paid" 时写；
+2) focus.nextStep 是「世界动态描述」（如"许都方向传来大军集结的消息"），不是主角指令；
+3) 禁止任何字段修改现有 beat/act/timeline/worldEvents 的标题、概要、类型与时间线；
+4) 禁止输出任何涉及主角行动的内容（主角要做什么由用户决定）。`;
     return { system, prompt };
 }
 

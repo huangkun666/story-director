@@ -70,6 +70,8 @@ export function applyRevision(prevOutline, revisionPatch, { lockOutline = false 
 }
 
 const VALID_STATUS = new Set(['pending', 'active', 'done']);
+// 世界事件状态机复用伏笔三态（pending/active/paid）——与节点状态（done）不同
+const VALID_EVENT_STATUS = new Set(['pending', 'active', 'paid']);
 
 // 锁定模式的增量补丁合并（见 prompts.buildRevisePatchPrompt）。
 // 只应用状态类变更与追加节点，不改写任何现有内容。
@@ -108,6 +110,15 @@ export function applyPatch(prevOutline, patch, { allowNewBeats = true } = {}) {
         if (!item) continue;
         if (VALID_STATUS.has(fs.status)) item.status = fs.status;
         if (typeof fs.payoff === 'string' && fs.payoff) item.payoff = fs.payoff;
+    }
+
+    // 世界事件推进（世界模式）：只推进状态与结果（状态机 pending/active/paid）
+    for (const ec of Array.isArray(patch.eventChanges) ? patch.eventChanges : []) {
+        if (!ec || typeof ec !== 'object') continue;
+        const ev = base.worldEvents.find(x => x.id === ec.id);
+        if (!ev) continue;
+        if (VALID_EVENT_STATUS.has(ec.status)) ev.status = ec.status;
+        if (typeof ec.outcome === 'string' && ec.outcome) ev.outcome = ec.outcome;
     }
 
     for (const a of Array.isArray(patch.arcs) ? patch.arcs : []) {

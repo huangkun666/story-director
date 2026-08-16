@@ -2201,3 +2201,71 @@
     padding: 6px 14px;
     white-space: nowrap;
 }
+
+/* ---------- 世界模式：世界动态总览 + 事件管理 ---------- */
+.sd_card_world {
+    border-left: 3px solid var(--sd-green);
+    margin-bottom: 10px;
+}
+.sd_ev_list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.sd_ev_item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 4px 8px;
+    border: 1px solid var(--sd-border-soft);
+    border-radius: 6px;
+    background: var(--sd-card);
+    font-size: 12px;
+}
+.sd_ev_time {
+    color: var(--sd-muted);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.sd_ev_title {
+    font-weight: 600;
+    color: var(--sd-text);
+}
+.sd_ev_impact {
+    flex-shrink: 0;
+    font-size: 10px;
+    padding: 0 6px;
+    border-radius: 8px;
+}
+.sd_ev_direct {
+    background: var(--sd-red-soft);
+    color: var(--sd-red-strong);
+}
+.sd_ev_ambient {
+    background: var(--sd-card-soft);
+    color: var(--sd-muted);
+}
+.sd_ev_actors {
+    color: var(--sd-muted);
+}
+.sd_ev_trigger,
+.sd_ev_outcome {
+    color: var(--sd-muted);
+    width: 100%;
+}
+.sd_ev_direct_tag,
+.sd_ev_ambient_tag {
+    font-size: 10px;
+    padding: 0 5px;
+    margin-right: 4px;
+    border-radius: 8px;
+}
+.sd_ev_direct_tag {
+    background: var(--sd-red-soft);
+    color: var(--sd-red-strong);
+}
+.sd_ev_ambient_tag {
+    background: var(--sd-card-soft);
+    color: var(--sd-muted);
+}

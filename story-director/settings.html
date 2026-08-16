@@ -107,6 +107,14 @@
                                     <input id="sd_timeline_note" type="text" placeholder="必须包含的关键事件（可选）" />
                                 </label>
                                 <label class="sd_setting sd_setting_wide">
+                                    <span class="sd_setting_label">大纲模式</span>
+                                    <select id="sd_outline_mode">
+                                        <option value="director">导演模式（规划主角行动与剧情走向）</option>
+                                        <option value="world">世界模式（只规划世界与 NPC，主角完全自由）</option>
+                                    </select>
+                                    <small>世界模式：大纲只写世界事件表与各方计划（含触发时机），永不规划主角的行动——主角做什么由你决定。</small>
+                                </label>
+                                <label class="sd_setting sd_setting_wide">
                                     <span class="sd_setting_label">节点节奏</span>
                                     <select id="sd_beat_pacing">
                                         <option value="balanced">均衡（均匀分布）</option>
@@ -340,6 +348,26 @@
                             <span class="sd_fs_filter_btn" data-fs-filter="paid">已回收</span>
                         </div>
                         <div id="sd_fs_manager"></div>
+                    </div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-earth-asia"></i></span>
+                        <div class="sd_card_titles">
+                            <b>世界事件管理</b>
+                            <small>世界模式：主角之外的活动，含时间表与触发时机</small>
+                        </div>
+                        <div id="sd_add_world_ev" class="menu_button sd_btn" title="新增一条世界事件"><i class="fa-solid fa-plus"></i><span>加事件</span></div>
+                    </header>
+                    <div class="sd_card_body">
+                        <div class="sd_fs_filter" id="sd_ev_filter">
+                            <span class="sd_fs_filter_btn sd_fs_filter_active" data-ev-filter="">全部</span>
+                            <span class="sd_fs_filter_btn" data-ev-filter="pending">待触发</span>
+                            <span class="sd_fs_filter_btn" data-ev-filter="active">进行中</span>
+                            <span class="sd_fs_filter_btn" data-ev-filter="paid">已发生</span>
+                        </div>
+                        <div id="sd_ev_manager"></div>
                     </div>
                 </section>
             </section>
@@ -612,6 +640,67 @@
                         <div id="sd_fs_delete" class="menu_button sd_btn sd_btn_danger" title="删除该伏笔"><i class="fa-solid fa-trash-can"></i><span>删除</span></div>
                         <div id="sd_fs_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
                         <div id="sd_fs_save" class="menu_button sd_btn sd_btn_primary" title="保存"><i class="fa-solid fa-check"></i><span>保存</span></div>
+                    </footer>
+                </div>
+            </div>
+
+            <div id="sd_ev_editor" class="sd_modal">
+                <div class="sd_modal_card">
+                    <header class="sd_modal_header">
+                        <i class="fa-solid fa-earth-asia"></i>
+                        <b>编辑世界事件</b>
+                        <div id="sd_ev_editor_close" class="sd_window_close" title="关闭"><i class="fa-solid fa-xmark"></i></div>
+                    </header>
+                    <div class="sd_modal_body">
+                        <div class="sd_modal_grid">
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">时间点</span>
+                                <input id="sd_ev_time" type="text" placeholder="如：197年冬" />
+                            </label>
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">状态</span>
+                                <select id="sd_ev_status">
+                                    <option value="pending">待触发</option>
+                                    <option value="active">进行中</option>
+                                    <option value="paid">已发生</option>
+                                </select>
+                            </label>
+                        </div>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">事件标题</span>
+                            <input id="sd_ev_title" type="text" placeholder="如：曹军集结于许都" />
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">事件内容</span>
+                            <textarea id="sd_ev_desc" rows="2" placeholder="谁在做什么、进展如何"></textarea>
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">参与方（逗号分隔）</span>
+                            <input id="sd_ev_actors" type="text" placeholder="如：曹操，曹军" />
+                        </label>
+                        <label class="sd_setting">
+                            <span class="sd_setting_label">触发时机</span>
+                            <input id="sd_ev_trigger" type="text" placeholder="如：主角抵达许都周边时" />
+                        </label>
+                        <div class="sd_modal_grid">
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">影响</span>
+                                <select id="sd_ev_impact">
+                                    <option value="ambient">背景（主角不在场也在发生）</option>
+                                    <option value="direct">相遇（会与主角遭遇）</option>
+                                </select>
+                            </label>
+                            <label class="sd_setting">
+                                <span class="sd_setting_label">事件结果</span>
+                                <input id="sd_ev_outcome" type="text" placeholder="已发生后填写结果（可选）" />
+                            </label>
+                        </div>
+                    </div>
+                    <footer class="sd_modal_footer">
+                        <span class="sd_expander"></span>
+                        <div id="sd_ev_delete" class="menu_button sd_btn sd_btn_danger" title="删除该事件"><i class="fa-solid fa-trash-can"></i><span>删除</span></div>
+                        <div id="sd_ev_cancel" class="menu_button sd_btn" title="取消"><i class="fa-solid fa-xmark"></i><span>取消</span></div>
+                        <div id="sd_ev_save" class="menu_button sd_btn sd_btn_primary" title="保存"><i class="fa-solid fa-check"></i><span>保存</span></div>
                     </footer>
                 </div>
             </div>

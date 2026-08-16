@@ -208,3 +208,20 @@ test('mergeLockedOutline enforces single active from patch', () => {
     assert.equal(actives.length, 1);
     assert.equal(actives[0].id, 'b3');
 });
+
+test('applyPatch advances world events via eventChanges', () => {
+    const prev = createEmptyOutline();
+    prev.worldEvents = [
+        { id: 'ev_1', time: '197年冬', title: '曹军集结', description: '', actors: [], trigger: '', impact: 'direct', status: 'pending', outcome: '' },
+    ];
+    const out = applyPatch(prev, {
+        eventChanges: [
+            { id: 'ev_1', status: 'active' },
+            { id: 'ghost', status: 'paid' }, // 不存在的事件被忽略
+        ],
+    });
+    assert.equal(out.worldEvents[0].status, 'active');
+    const out2 = applyPatch(prev, { eventChanges: [{ id: 'ev_1', status: 'paid', outcome: '占领许都' }] });
+    assert.equal(out2.worldEvents[0].status, 'paid');
+    assert.equal(out2.worldEvents[0].outcome, '占领许都');
+});

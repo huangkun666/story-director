@@ -214,6 +214,33 @@ function outlineSectionHtml(o) {
     </section>`;
 }
 
+// 世界事件区块（世界模式）：总览页展示世界动态时间轴——只读，管理在「角色与伏笔」页
+function worldEventsSectionHtml(o) {
+    const events = Array.isArray(o.worldEvents) ? o.worldEvents : [];
+    if (!events.length) return '';
+    const order = { active: 0, pending: 1, paid: 2 };
+    const sorted = [...events].sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+    const items = sorted.map(e => {
+        const statusCls = `sd_badge ${e.status === 'active' ? 'sd_badge_active' : (e.status === 'paid' ? 'sd_badge_paid' : 'sd_badge_pending')}`;
+        const statusLabel = e.status === 'active' ? '⚡进行中' : (e.status === 'paid' ? '✓已发生' : '⏳待触发');
+        const impactCls = e.impact === 'direct' ? ' sd_ev_direct' : ' sd_ev_ambient';
+        const impactLabel = e.impact === 'direct' ? '会相遇' : '背景';
+        return `<div class="sd_ev_item">
+            <span class="sd_badge ${statusCls}">${statusLabel}</span>
+            <span class="sd_ev_time">${escapeHtml(e.time || '?')}</span>
+            <span class="sd_ev_title">${escapeHtml(e.title || e.id)}</span>
+            <span class="sd_ev_impact${impactCls}">${impactLabel}</span>
+            ${e.actors?.length ? `<span class="sd_ev_actors">（${escapeHtml(e.actors.join('、'))}）</span>` : ''}
+            ${e.trigger ? `<small class="sd_ev_trigger">触发：${escapeHtml(e.trigger)}</small>` : ''}
+            ${e.outcome ? `<small class="sd_ev_outcome">结果：${escapeHtml(e.outcome)}</small>` : ''}
+        </div>`;
+    }).join('');
+    return `<section class="sd_card sd_card_world">
+        <header class="sd_card_header"><i class="fa-solid fa-earth-asia"></i>世界动态 <small class="sd_hint">主角行动完全自由，世界会回应</small></header>
+        <div class="sd_card_body sd_ev_list">${items}</div>
+    </section>`;
+}
+
 function renderOverview(outline) {
     const el = document.getElementById('sd_overview');
     if (!el) return;
@@ -235,12 +262,13 @@ function renderOverview(outline) {
         if (sideStory) sideStory.innerHTML = storyCardHtml(o);
         if (sideArcs) sideArcs.innerHTML = arcsCardHtml(o);
         if (sideForeshadow) sideForeshadow.innerHTML = foreshadowCardHtml(o);
-        el.innerHTML = outlineSectionHtml(o);
+        // 世界模式：世界动态时间轴置顶（环境，非主角指令）
+        el.innerHTML = `${worldEventsSectionHtml(o)}${outlineSectionHtml(o)}`;
         return;
     }
 
     // 旧版单栏兜底：全部塞进主区域
-    el.innerHTML = `<div class="sd_grid">${storyCardHtml(o)}${arcsCardHtml(o)}${foreshadowCardHtml(o)}</div>${outlineSectionHtml(o)}`;
+    el.innerHTML = `<div class="sd_grid">${storyCardHtml(o)}${arcsCardHtml(o)}${foreshadowCardHtml(o)}</div>${worldEventsSectionHtml(o)}${outlineSectionHtml(o)}`;
 }
 
 function renderStats(outline) {
@@ -402,6 +430,31 @@ function renderForeshadowManager(foreshadowing, beats, filter = '') {
     return `<div class="sd_fs_list">${items}</div>`;
 }
 
+// 世界事件管理列表（世界模式）：状态筛选 + 编辑/标记发生/删除
+function renderWorldEventsManager(events, filter = '') {
+    const list = (Array.isArray(events) ? events : [])
+        .filter(e => !filter || e.status === filter);
+    if (!list.length) {
+        return `<div class="sd_empty_state sd_empty_small"><div class="sd_empty_text">${filter ? '该状态下暂无事件。' : '还没有世界事件。切到「世界模式」生成大纲，或手动添加。'}</div></div>`;
+    }
+    const items = list.map(e => {
+        const m = e.status === 'active' ? { cls: 'sd_badge_active', label: '⚡进行中' }
+            : (e.status === 'paid' ? { cls: 'sd_badge_paid', label: '✓已发生' } : { cls: 'sd_badge_pending', label: '⏳待触发' });
+        const actions = e.status === 'paid'
+            ? `<span class="sd_fs_actions"><span class="sd_ev_edit" data-ev-edit="${escapeHtml(e.id)}" title="编辑"><i class="fa-regular fa-pen-to-square"></i></span></span>`
+            : `<span class="sd_fs_actions">
+                <span class="sd_ev_edit" data-ev-edit="${escapeHtml(e.id)}" title="编辑"><i class="fa-regular fa-pen-to-square"></i></span>
+                <span class="sd_ev_pay" data-ev-pay="${escapeHtml(e.id)}" title="标记为已发生"><i class="fa-solid fa-check-double"></i></span>
+              </span>`;
+        return `<div class="sd_fs_item sd_fs_item_manage">
+            <span class="sd_badge ${m.cls}">${m.label}</span>
+            <span class="sd_fs_hint">${e.impact === 'direct' ? '<span class="sd_ev_direct_tag">相遇</span>' : '<span class="sd_ev_ambient_tag">背景</span>'}${escapeHtml(e.time || '?')}｜${escapeHtml(e.title || e.id)}${e.trigger ? `<small class="sd_fs_payoff">触发：${escapeHtml(e.trigger)}</small>` : ''}${e.outcome ? `<small class="sd_fs_payoff">结果：${escapeHtml(e.outcome)}</small>` : ''}</span>
+            ${actions}
+        </div>`;
+    }).join('');
+    return `<div class="sd_fs_list">${items}</div>`;
+}
+
 
 const TERM_CAT_LABELS = {
     llm: 'LLM',
@@ -439,4 +492,4 @@ function renderTermList(entries, total = entries.length) {
 }
 
 
-export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermEntry, renderTermList };
+export { escapeHtml, renderOverview, renderFocus, renderStats, renderReport, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderWorldEventsManager, renderTermEntry, renderTermList };

@@ -1,7 +1,7 @@
 // story-director/src/director.js
 // 纯编排逻辑：生成/修订/体检/注入。所有酒馆能力经 deps 注入。
 import { normalizeOutline, createEmptyOutline, mergeHistoryIntoOutline, replaceActBeats } from './outline-store.js';
-import { buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildBeatPrompt, buildReplanActPrompt, buildCheckPrompt, buildHistoryContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
+import { buildGeneratePrompt, buildWorldGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildWorldRevisePatchPrompt, buildBeatPrompt, buildReplanActPrompt, buildCheckPrompt, buildHistoryContext, buildDialogueAnalyzePrompt, buildDirectionPrompt, OUTLINE_SCHEMA, CHECK_SCHEMA, DIRECTION_SCHEMA } from './prompts.js';
 import { makeStructuredGenerator } from './llm-client.js';
 import { applyRevision, applyPatch } from './tracker.js';
 import { applyCheckResult } from './checker.js';
@@ -33,6 +33,7 @@ export function createDirector(deps) {
         const text = renderInstruction(outline, {
             strength: settings.controlStrength,
             tokenLimit: settings.injectTokenLimit,
+            mode: settings.outlineMode === 'world' ? 'world' : 'director',
         });
         deps.setInjectedInstruction(text);
     }
@@ -142,20 +143,35 @@ export function createDirector(deps) {
                 vectorContext = mergedTexts.join('\n').slice(0, textLimit);
             }
 
-            const bundle = buildGeneratePrompt({
-                characterCard: card,
-                userRequest,
-                detail: settings.outlineDetail || 'medium',
-                timeline: requestedTimeline,
-                mustRead: requestedMustRead,
-                pacing: settings.beatPacing || 'balanced',
-                historyContext,
-                ongoingBeatText,
-                recentDialogue,
-                direction,
-                memoryContext: useSummary ? deps.getMemoryContext?.() : '',
-                vectorContext,
-            });
+            const bundle = settings.outlineMode === 'world'
+                ? buildWorldGeneratePrompt({
+                    characterCard: card,
+                    userRequest,
+                    detail: settings.outlineDetail || 'medium',
+                    timeline: requestedTimeline,
+                    mustRead: requestedMustRead,
+                    pacing: settings.beatPacing || 'balanced',
+                    historyContext,
+                    ongoingBeatText,
+                    recentDialogue,
+                    direction,
+                    memoryContext: useSummary ? deps.getMemoryContext?.() : '',
+                    vectorContext,
+                })
+                : buildGeneratePrompt({
+                    characterCard: card,
+                    userRequest,
+                    detail: settings.outlineDetail || 'medium',
+                    timeline: requestedTimeline,
+                    mustRead: requestedMustRead,
+                    pacing: settings.beatPacing || 'balanced',
+                    historyContext,
+                    ongoingBeatText,
+                    recentDialogue,
+                    direction,
+                    memoryContext: useSummary ? deps.getMemoryContext?.() : '',
+                    vectorContext,
+                });
             const result = await gen(bundle);
             if (result) {
                 let next = normalizeOutline(result);
@@ -347,20 +363,30 @@ export function createDirector(deps) {
             // 统一增量补丁修订：只推进状态/焦点/伏笔/弧光，不改写任何现有内容
             // （手动编辑永远安全）；全量重写只留给「生成大纲」入口。
             // 锁定 = 连追加节点都禁止（纯状态推进）。
-            const bundle = buildRevisePatchPrompt({
-                recentDialogue: dialogue,
-                outline,
-                driftTolerance: settings.driftTolerance || 'loose',
-                memoryContext: deps.getMemoryContext?.(),
-                vectorContext,
-                allowNewBeats: !locked,
-            });
+            // 世界模式：推进世界时钟（eventChanges）与 NPC 计划，永不规划主角行动。
+            const worldMode = settings.outlineMode === 'world';
+            const bundle = worldMode
+                ? buildWorldRevisePatchPrompt({
+                    recentDialogue: dialogue,
+                    outline,
+                    driftTolerance: settings.driftTolerance || 'loose',
+                    memoryContext: deps.getMemoryContext?.(),
+                    vectorContext,
+                })
+                : buildRevisePatchPrompt({
+                    recentDialogue: dialogue,
+                    outline,
+                    driftTolerance: settings.driftTolerance || 'loose',
+                    memoryContext: deps.getMemoryContext?.(),
+                    vectorContext,
+                    allowNewBeats: !locked,
+                });
             const result = await gen(bundle);
             if (result) {
                 recordHistory('revise');
                 deps.setOutline(applyPatch(outline, result, { allowNewBeats: !locked }));
                 deps.renderOutline();
-                log('info', 'llm', `修订完成${locked ? '（锁定·不追加节点）' : ''}`, `耗时 ${Date.now() - t0}ms`);
+                log('info', 'llm', `修订完成${worldMode ? '（世界时钟）' : ''}${locked ? '（锁定·不追加节点）' : ''}`, `耗时 ${Date.now() - t0}ms`);
             } else {
                 log('warn', 'llm', '修订失败，沿用旧大纲', `耗时 ${Date.now() - t0}ms；LLM 未返回有效结果`);
             }

@@ -22,6 +22,7 @@ export function createEmptyOutline() {
             end: '',
             note: '',
         },
+        worldEvents: [],
         arcs: [],
         foreshadowing: [],
         acts: [],
@@ -130,6 +131,42 @@ function normalizeArc(a) {
     };
 }
 
+// 世界事件（世界模式）：主角之外的世界/NPC 活动，有自己的时间表与触发时机。
+// 状态机复用伏笔三态：pending（待触发）/ active（进行中）/ paid（已发生）。
+// impact: 'direct' = 会与主角相遇；'ambient' = 背景发生（主角不在场也在进行）。
+function normalizeWorldEvent(e, index) {
+    // 兼容字符串形式："197年冬：曹军集结于许都"
+    if (typeof e === 'string') {
+        const s = e.trim();
+        if (!s) return null;
+        const ci = s.indexOf('：');
+        const hi = s.indexOf(':');
+        const sepIdx = ci >= 0 ? ci : hi;
+        if (sepIdx >= 0) {
+            const time = s.slice(0, sepIdx).trim();
+            const title = s.slice(sepIdx + 1).trim();
+            if (!title) return null;
+            return { id: `ev_${index + 1}`, time, title, description: '', actors: [], trigger: '', impact: 'ambient', status: 'pending', outcome: '' };
+        }
+        return { id: `ev_${index + 1}`, time: '', title: s, description: '', actors: [], trigger: '', impact: 'ambient', status: 'pending', outcome: '' };
+    }
+    if (!e || typeof e !== 'object') return null;
+    const id = asString(e.id, '') || `ev_${index + 1}`;
+    const title = asString(e.title, '') || asString(e.name, '');
+    if (!title) return null;
+    return {
+        id,
+        time: asString(e.time, ''),
+        title,
+        description: asString(e.description, '') || asString(e.desc, ''),
+        actors: asStringList(e.actors),
+        trigger: asString(e.trigger, ''),
+        impact: e.impact === 'direct' ? 'direct' : 'ambient',
+        status: VALID_FORESHADOW_STATUS.has(e.status) ? e.status : 'pending',
+        outcome: asString(e.outcome, ''),
+    };
+}
+
 function normalizeTimeline(raw) {
     const t = (raw && typeof raw === 'object') ? raw : {};
     // 兼容字符串形式："建安五年 - 建安十三年"
@@ -169,6 +206,7 @@ export function normalizeOutline(raw) {
     base.timeline = normalizeTimeline(raw.timeline);
     base.arcs = Array.isArray(raw.arcs) ? raw.arcs.map(normalizeArc).filter(Boolean) : [];
     base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map((f, i) => normalizeForeshadow(f, i)).filter(Boolean) : [];
+    base.worldEvents = Array.isArray(raw.worldEvents) ? raw.worldEvents.map((e, i) => normalizeWorldEvent(e, i)).filter(Boolean) : [];
     base.acts = Array.isArray(raw.acts) ? raw.acts.map((a, i) => normalizeAct(a, i)).filter(Boolean) : [];
     base.beats = Array.isArray(raw.beats) ? raw.beats.map((b, i) => normalizeBeat(b, i)).filter(Boolean) : [];
 
@@ -581,5 +619,48 @@ export function updateForeshadow(outline, id, patch) {
 export function removeForeshadow(outline, id) {
     const o = normalizeOutline(outline);
     o.foreshadowing = o.foreshadowing.filter(f => f.id !== id);
+    return normalizeOutline(o);
+}
+
+// ---------- 世界事件（世界模式）受控编辑 ----------
+// 与伏笔同一约定：不可变返回、id 定位、normalize 兜底。
+
+export function createWorldEvent(outline, { time = '', title = '', description = '', actors = [], trigger = '', impact = 'ambient', status = 'pending', outcome = '' } = {}) {
+    const o = normalizeOutline(outline);
+    const name = String(title || '').trim();
+    if (!name) return o;
+    const ev = normalizeWorldEvent({
+        id: `ev_${Date.now()}_${o.worldEvents.length + 1}`,
+        time,
+        title: name,
+        description,
+        actors,
+        trigger,
+        impact,
+        status,
+        outcome,
+    }, o.worldEvents.length);
+    o.worldEvents.push(ev);
+    return normalizeOutline(o);
+}
+
+export function updateWorldEvent(outline, eventId, patch) {
+    const o = normalizeOutline(outline);
+    const ev = o.worldEvents.find(e => e.id === eventId);
+    if (!ev || !patch || typeof patch !== 'object') return o;
+    if (typeof patch.time === 'string') ev.time = patch.time;
+    if (typeof patch.title === 'string') ev.title = patch.title;
+    if (typeof patch.description === 'string') ev.description = patch.description;
+    if (Array.isArray(patch.actors)) ev.actors = patch.actors.map(x => String(x).trim()).filter(Boolean);
+    if (typeof patch.trigger === 'string') ev.trigger = patch.trigger;
+    if (patch.impact === 'direct' || patch.impact === 'ambient') ev.impact = patch.impact;
+    if (VALID_FORESHADOW_STATUS.has(patch.status)) ev.status = patch.status;
+    if (typeof patch.outcome === 'string') ev.outcome = patch.outcome;
+    return normalizeOutline(o);
+}
+
+export function removeWorldEvent(outline, eventId) {
+    const o = normalizeOutline(outline);
+    o.worldEvents = o.worldEvents.filter(e => e.id !== eventId);
     return normalizeOutline(o);
 }

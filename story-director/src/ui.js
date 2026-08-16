@@ -1,7 +1,7 @@
 // story-director/src/ui.js
 // UI 层：事件绑定、节点编辑器、设置、窗口逻辑。渲染函数见 ui-render.js。
-import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow } from './outline-store.js';
-import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderTermList } from './ui-render.js';
+import { createEmptyOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, createWorldEvent, updateWorldEvent, removeWorldEvent } from './outline-store.js';
+import { escapeHtml, clampWindowPos, renderOverview, renderFocus, renderStats, renderReport, syncTimelineInputs, renderBeatItem, foreshadowCardHtml, renderCharacters, renderForeshadowManager, renderWorldEventsManager, renderTermList } from './ui-render.js';
 import { logger } from './logger.js';
 
 function renderHistoryOptions() {
@@ -30,6 +30,7 @@ export function mountUI(ctx, adapter) {
         if (arcsEl) arcsEl.innerHTML = renderCharacters(outline.arcs, outline.beats);
         const fsEl = document.getElementById('sd_fs_manager');
         if (fsEl) fsEl.innerHTML = renderForeshadowManager(outline.foreshadowing, outline.beats, fsFilter);
+        renderEvManager(outline, evFilter);
     });
 
     // 独立大界面由 index.js 负责加载到 body；若尚未就绪则等待 bindUI 时再补
@@ -75,6 +76,17 @@ async function runAction(btn, { label, isCheck = false, call }) {
 
 let adapterRef = null;
 let fsFilter = ''; // 伏笔管理筛选：'' | pending | active | paid
+let evFilter = ''; // 世界事件管理筛选：'' | pending | active | paid
+
+// 世界事件管理渲染（模块级：mountUI 渲染回调与 bindUI 编辑操作共用）
+function renderEvManager(outline, filter) {
+    const el = document.getElementById('sd_ev_manager');
+    if (!el) return;
+    el.innerHTML = renderWorldEventsManager(outline?.worldEvents, filter);
+    document.querySelectorAll('[data-ev-filter]').forEach(btn => {
+        btn.classList.toggle('sd_fs_filter_active', btn.getAttribute('data-ev-filter') === filter);
+    });
+}
 
 export function bindUI(ctx, adapter) {
     adapterRef = adapter;
@@ -265,6 +277,7 @@ export function bindUI(ctx, adapter) {
     setSelect('sd_revise_frequency', adapter.settings.reviseFrequency);
     setSelect('sd_drift_tolerance', adapter.settings.driftTolerance);
     setSelect('sd_outline_detail', adapter.settings.outlineDetail);
+    setSelect('sd_outline_mode', adapter.settings.outlineMode === 'world' ? 'world' : 'director');
     setSelect('sd_beat_pacing', adapter.settings.beatPacing || 'balanced');
     setSelect('sd_preserve_history', adapter.settings.preserveHistory === false ? 'false' : 'true');
     setSelect('sd_generate_memory_mode', adapter.settings.generateMemoryMode || 'auto');
@@ -303,6 +316,7 @@ export function bindUI(ctx, adapter) {
     bindNumber('sd_revise_every_n', 'reviseEveryN', { min: 1, max: 20 });
     bindSelect('sd_drift_tolerance', 'driftTolerance');
     bindSelect('sd_outline_detail', 'outlineDetail');
+    bindSelect('sd_outline_mode', 'outlineMode', () => adapter.director.refreshInjection());
     bindSelect('sd_beat_pacing', 'beatPacing');
     bindSelect('sd_preserve_history', 'preserveHistory', () => {
         // bindSelect 存的是字符串 'true'/'false'，这里转回布尔
@@ -969,6 +983,85 @@ export function bindUI(ctx, adapter) {
         syncExtractInputs(); // tag 规则被采用后回填输入框
         adopt.closest('.sd_extract_suggest')?.remove();
     });
+
+    // 世界事件管理（世界模式）：增删改 + 状态筛选 + 标记发生
+    const evEditorEl = document.getElementById('sd_ev_editor');
+    const evTimeEl = document.getElementById('sd_ev_time');
+    const evTitleEl = document.getElementById('sd_ev_title');
+    const evDescEl = document.getElementById('sd_ev_desc');
+    const evActorsEl = document.getElementById('sd_ev_actors');
+    const evTriggerEl = document.getElementById('sd_ev_trigger');
+    const evImpactEl = document.getElementById('sd_ev_impact');
+    const evStatusEl = document.getElementById('sd_ev_status');
+    const evOutcomeEl = document.getElementById('sd_ev_outcome');
+    let editingEvId = null;
+    const refreshEvManager = () => renderEvManager(adapter.getOutline(), evFilter);
+    const openEvEditor = (id = null) => {
+        const outline = adapter.getOutline();
+        const ev = id ? outline.worldEvents.find(e => e.id === id) : null;
+        editingEvId = id;
+        if (evTimeEl) evTimeEl.value = ev?.time || '';
+        if (evTitleEl) evTitleEl.value = ev?.title || '';
+        if (evDescEl) evDescEl.value = ev?.description || '';
+        if (evActorsEl) evActorsEl.value = (ev?.actors || []).join('，');
+        if (evTriggerEl) evTriggerEl.value = ev?.trigger || '';
+        if (evImpactEl) evImpactEl.value = ev?.impact || 'ambient';
+        if (evStatusEl) evStatusEl.value = ev?.status || 'pending';
+        if (evOutcomeEl) evOutcomeEl.value = ev?.outcome || '';
+        evEditorEl?.classList.add('sd_open');
+    };
+    const closeEvEditor = () => {
+        evEditorEl?.classList.remove('sd_open');
+        editingEvId = null;
+    };
+    const saveEvFromEditor = () => {
+        const title = evTitleEl?.value?.trim() || '';
+        if (!title) return;
+        const patch = {
+            time: evTimeEl?.value?.trim() || '',
+            description: evDescEl?.value?.trim() || '',
+            actors: String(evActorsEl?.value || '').split(/[,，、;；]/).map(x => x.trim()).filter(Boolean),
+            trigger: evTriggerEl?.value?.trim() || '',
+            impact: evImpactEl?.value === 'direct' ? 'direct' : 'ambient',
+            status: evStatusEl?.value || 'pending',
+            outcome: evOutcomeEl?.value?.trim() || '',
+        };
+        adapter.editOutline?.(editingEvId ? '编辑世界事件' : '新增世界事件', (o) => editingEvId
+            ? updateWorldEvent(o, editingEvId, patch)
+            : createWorldEvent(o, { title, ...patch }));
+        adapter.renderOutline();
+        refreshEvManager();
+        closeEvEditor();
+    };
+    document.getElementById('sd_add_world_ev')?.addEventListener('click', () => openEvEditor(null));
+    document.getElementById('sd_ev_save')?.addEventListener('click', saveEvFromEditor);
+    document.getElementById('sd_ev_cancel')?.addEventListener('click', closeEvEditor);
+    document.getElementById('sd_ev_editor_close')?.addEventListener('click', closeEvEditor);
+    document.getElementById('sd_ev_delete')?.addEventListener('click', () => {
+        if (!editingEvId) return closeEvEditor();
+        adapter.editOutline?.('删除世界事件', (o) => removeWorldEvent(o, editingEvId));
+        adapter.renderOutline();
+        refreshEvManager();
+        closeEvEditor();
+    });
+    document.getElementById('sd_ev_manager')?.addEventListener('click', (e) => {
+        const pay = e.target.closest('[data-ev-pay]');
+        if (pay) {
+            adapter.editOutline?.('世界事件发生', (o) => updateWorldEvent(o, pay.getAttribute('data-ev-pay'), { status: 'paid' }));
+            adapter.renderOutline();
+            refreshEvManager();
+            return;
+        }
+        const edit = e.target.closest('[data-ev-edit]');
+        if (edit) openEvEditor(edit.getAttribute('data-ev-edit'));
+    });
+    document.getElementById('sd_ev_filter')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-ev-filter]');
+        if (!btn) return;
+        evFilter = btn.getAttribute('data-ev-filter') || '';
+        refreshEvManager();
+    });
+    refreshEvManager();
 
     // ---------- 调试终端 ----------
     const termListEl = document.getElementById('sd_term_list');

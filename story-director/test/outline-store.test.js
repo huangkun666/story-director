@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, replaceActBeats, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, diagnoseOutline } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, updateAct, removeBeat, moveBeatOrder, renumberActTitles, mergeHistoryIntoOutline, replaceActBeats, createArc, updateArc, removeArc, createForeshadow, updateForeshadow, removeForeshadow, createWorldEvent, updateWorldEvent, removeWorldEvent, diagnoseOutline } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -738,4 +738,44 @@ test('replaceActBeats moves done beats to history act and forces new beats to pe
     assert.equal(newBeat.status, 'pending');
     // 悬空伏笔引用自愈
     assert.equal(next.foreshadowing[0].beatId, '');
+});
+
+// ---------- 世界事件（世界模式） ----------
+
+test('normalizeOutline accepts worldEvents with defaults and string form', () => {
+    const o = normalizeOutline({
+        worldEvents: [
+            { id: 'ev_1', time: '197年冬', title: '曹军集结', description: '调集大军', actors: ['曹操'], trigger: '主角抵达许都时', impact: 'direct', status: 'active', outcome: '' },
+            '198年春：洛阳局势生变', // 字符串形式：时间：标题
+        ],
+    });
+    assert.equal(o.worldEvents.length, 2);
+    assert.equal(o.worldEvents[0].impact, 'direct');
+    assert.equal(o.worldEvents[0].status, 'active');
+    assert.equal(o.worldEvents[1].time, '198年春');
+    assert.equal(o.worldEvents[1].title, '洛阳局势生变');
+    assert.equal(o.worldEvents[1].impact, 'ambient'); // 默认背景
+    // 非法 impact/status 归位
+    const bad = normalizeOutline({ worldEvents: [{ title: 'x', impact: 'boom', status: 'nope' }] });
+    assert.equal(bad.worldEvents[0].impact, 'ambient');
+    assert.equal(bad.worldEvents[0].status, 'pending');
+    // 空大纲默认空数组
+    assert.deepEqual(normalizeOutline({}).worldEvents, []);
+});
+
+test('world event controlled edits create/update/remove without mutation', () => {
+    let o = createEmptyOutline();
+    o = createWorldEvent(o, { time: '197年冬', title: '曹军集结', description: 'd', actors: ['曹操'], trigger: 't', impact: 'direct' });
+    assert.equal(o.worldEvents.length, 1);
+    assert.equal(o.worldEvents[0].id.startsWith('ev_'), true);
+    const before = JSON.stringify(o);
+    o = updateWorldEvent(o, o.worldEvents[0].id, { status: 'paid', outcome: '曹军占领许都' });
+    assert.equal(o.worldEvents[0].status, 'paid');
+    assert.equal(o.worldEvents[0].outcome, '曹军占领许都');
+    assert.equal(JSON.stringify(before) !== JSON.stringify(o), true);
+    o = removeWorldEvent(o, o.worldEvents[0].id);
+    assert.equal(o.worldEvents.length, 0);
+    // 空标题 / 不存在的 id：无变更
+    assert.equal(createWorldEvent(o, { title: '' }).worldEvents.length, 0);
+    assert.equal(updateWorldEvent(o, 'nope', { status: 'paid' }).worldEvents.length, 0);
 });

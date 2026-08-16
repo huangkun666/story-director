@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
     OUTLINE_SCHEMA, CHECK_SCHEMA,
     buildGeneratePrompt, buildRevisePrompt, buildRevisePatchPrompt, buildCheckPrompt, buildDirectorInstruction,
-    buildBeatPrompt, buildReplanActPrompt, buildHistoryContext,
+    buildBeatPrompt, buildReplanActPrompt, buildWorldGeneratePrompt, buildWorldRevisePatchPrompt, buildHistoryContext,
     compactOutlineForRevision,
 } from '../src/prompts.js';
 import { createEmptyOutline } from '../src/outline-store.js';
@@ -428,4 +428,24 @@ test('buildReplanActPrompt carries recent dialogue and pacing band', () => {
     assert.ok(prompt.includes('最近对话（当前剧情位置的最新事实）'));
     assert.ok(prompt.includes('我们出发了'));
     assert.ok(prompt.includes('紧凑'));
+});
+
+test('buildWorldGeneratePrompt forbids planning protagonist actions', () => {
+    const { system, prompt } = buildWorldGeneratePrompt({ characterCard: { name: 'Alice' } });
+    assert.ok(prompt.includes('严禁规划主角的任何行动'));
+    assert.ok(prompt.includes('worldEvents'));
+    assert.ok(prompt.includes('trigger'));
+    assert.ok(prompt.includes('impact'));
+    assert.ok(!prompt.includes('主角应该去')); // 不出现规划性表述
+    assert.ok(system.includes('世界导演'));
+});
+
+test('buildWorldRevisePatchPrompt advances world clock without protagonist actions', () => {
+    const o = createEmptyOutline();
+    o.worldEvents = [{ id: 'ev_1', title: 'x', status: 'pending' }];
+    const { prompt } = buildWorldRevisePatchPrompt({ recentDialogue: '主角: 我决定南下', outline: o });
+    assert.ok(prompt.includes('eventChanges'));
+    assert.ok(prompt.includes('主角的行动'));
+    assert.ok(prompt.includes('永远不写入大纲'));
+    assert.ok(prompt.includes('outcome'));
 });
