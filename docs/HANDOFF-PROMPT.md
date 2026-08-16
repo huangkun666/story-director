@@ -45,6 +45,7 @@ node --test --experimental-test-isolation=none "story-director/test/*.test.js"
 最近提交（按新到旧）：
 
 ```
+ca17446 refactor: drop overview retrieval-hits card (terminal covers it) - remove callback chain
 fb955ff refactor: timeline is constraint-only (drop partial replan), replan protects done beats, single-active enforced everywhere, replan carries dialogue+pacing, generate warns on full rewrite
 72e68fe fix: consistency model - active status preserved across all entry points, unified incremental merge (full rewrite only for generate), replan carries current story position
 83dc9a8 feat: act-level replan - per-act 'replan this act' button, only target act beats replaced, structural boundary
