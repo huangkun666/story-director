@@ -835,8 +835,8 @@ export function bindUI(ctx, adapter) {
             return;
         }
         extractRulesEl.innerHTML = `<div class="sd_extract_chips">${rules.map((r, i) => `
-            <span class="sd_chip sd_extract_chip" title="${escapeHtml(r.sample ? `示例：${r.sample}` : (r.label || '正文'))}">
-                ${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）
+            <span class="sd_chip sd_extract_chip${r.exclude === true ? ' sd_extract_chip_exclude' : ''}" title="${escapeHtml(r.sample ? `示例：${r.sample}` : (r.label || '正文'))}">
+                ${r.exclude === true ? '<i class="fa-solid fa-ban" title="黑名单：排除该标签块"></i> ' : ''}${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）
                 <i class="fa-solid fa-xmark sd_extract_remove" data-extract-remove="${i}" title="删除该规则"></i>
             </span>`).join('')}</div>`;
     };
@@ -852,16 +852,24 @@ export function bindUI(ctx, adapter) {
             renderExtractRules();
         }
     });
-    document.getElementById('sd_extract_add_btn')?.addEventListener('click', () => {
-        const tag = document.getElementById('sd_extract_tag')?.value?.replace(/[<>/]/g, '').trim() || '';
-        const close = document.getElementById('sd_extract_close')?.value?.trim() || '';
-        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(tag)) return;
+    const addExtractRule = (rule, inputId) => {
         const rules = Array.isArray(adapter.settings.dialogueExtractRules) ? [...adapter.settings.dialogueExtractRules] : [];
-        rules.push({ tag, label: '正文', sample: '' });
+        rules.push(rule);
         adapter.settings.dialogueExtractRules = rules;
         ctx.saveSettingsDebounced?.();
-        document.getElementById('sd_extract_tag').value = '';
+        const input = document.getElementById(inputId);
+        if (input) input.value = '';
         renderExtractRules();
+    };
+    document.getElementById('sd_extract_add_btn')?.addEventListener('click', () => {
+        const tag = document.getElementById('sd_extract_tag')?.value?.replace(/[<>/]/g, '').trim() || '';
+        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(tag)) return;
+        addExtractRule({ tag, label: '正文', sample: '' }, 'sd_extract_tag');
+    });
+    document.getElementById('sd_extract_exclude_btn')?.addEventListener('click', () => {
+        const tag = document.getElementById('sd_extract_exclude_tag')?.value?.replace(/[<>/]/g, '').trim() || '';
+        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(tag)) return;
+        addExtractRule({ tag, exclude: true, label: '排除', sample: '' }, 'sd_extract_exclude_tag');
     });
     document.getElementById('sd_extract_analyze')?.addEventListener('click', async (e) => {
         const btn = e.currentTarget;
@@ -874,13 +882,13 @@ export function bindUI(ctx, adapter) {
                 if (extractResultEl) extractResultEl.innerHTML = '<small class="sd_extract_msg">AI 未识别出明显的正文标签，可手动添加规则。</small>';
                 return;
             }
-            const keyOf = (r) => (typeof r.tag === 'string' && r.tag) ? `tag:${r.tag}` : `pair:${r.open}|${r.close}`;
+            const keyOf = (r) => (typeof r.tag === 'string' && r.tag) ? `tag:${r.tag}:${r.exclude === true ? 'ex' : 'keep'}` : `pair:${r.open}|${r.close}`;
             const current = (Array.isArray(adapter.settings.dialogueExtractRules) ? adapter.settings.dialogueExtractRules : []).map(keyOf);
             if (extractResultEl) extractResultEl._suggestion = suggestion; // 供「采用」按钮取用
             const items = suggestion.rules.map((r, i) => {
                 const exists = current.includes(keyOf(r));
                 return `<div class="sd_extract_suggest">
-                    <span class="sd_chip">${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）</span>
+                    <span class="sd_chip${r.exclude === true ? ' sd_extract_chip_exclude' : ''}">${r.exclude === true ? '<i class="fa-solid fa-ban" title="黑名单：排除该标签块"></i> ' : ''}${ruleLabel(r)}（${escapeHtml(r.label || '正文')}）</span>
                     ${r.sample ? `<small class="sd_extract_sample">示例：${escapeHtml(r.sample)}</small>` : ''}
                     ${exists ? '<small class="sd_extract_msg">已存在</small>'
                         : `<span class="sd_extract_adopt" data-extract-adopt="${i}" title="采用这条规则"><i class="fa-solid fa-check"></i>采用</span>`}

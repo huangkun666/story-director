@@ -90,3 +90,41 @@ test('no rules returns full text by default', () => {
     assert.equal(extractDialogueBodies(dialogue, null), dialogue);
     assert.equal(extractDialogueBodies(dialogue, [{ label: '正文', sample: '' }]), dialogue); // 无 tag 也无 open/close
 });
+
+// ---------- 黑名单模式（exclude：删除无用标签块，保留其余全文） ----------
+
+test('blacklist strips excluded tags and keeps the rest of the full text', () => {
+    const dialogue = 'AI: <think>让我想想</think>\n我们直接进城吧，城门今晚就开。\n<reasoning>推理过程</reasoning>后面继续';
+    const out = extractDialogueBodies(dialogue, [{ tag: 'think', exclude: true }, { tag: 'reasoning', exclude: true }]);
+    assert.ok(out.includes('我们直接进城吧，城门今晚就开。'));
+    assert.ok(out.includes('后面继续'));
+    assert.ok(!out.includes('让我想想'));
+    assert.ok(!out.includes('推理过程'));
+    assert.ok(!out.includes('<think>'));
+    assert.ok(!out.includes('<reasoning>'));
+});
+
+test('blacklist with no matching tags returns original text', () => {
+    const dialogue = 'AI: 没有标签的对话';
+    assert.equal(extractDialogueBodies(dialogue, [{ tag: 'think', exclude: true }]), dialogue);
+});
+
+test('blacklist then whitelist: excluded tags removed before extraction', () => {
+    const dialogue = 'AI: <think>思考</think>\n<content>真正的正文</content>\n未包裹的旁白';
+    const rules = [{ tag: 'think', exclude: true }, { tag: 'content' }];
+    const out = extractDialogueBodies(dialogue, rules);
+    assert.equal(out, '真正的正文'); // 白名单只取 content；think 已被黑名单删除
+});
+
+test('blacklist keeps unwrapped text when whitelist has no matches', () => {
+    const dialogue = 'AI: <think>思考</think>\n正文没有标签包裹，直接保留';
+    const rules = [{ tag: 'think', exclude: true }, { tag: 'content' }];
+    const out = extractDialogueBodies(dialogue, rules);
+    assert.ok(out.includes('正文没有标签包裹，直接保留'));
+    assert.ok(!out.includes('思考'));
+});
+
+test('whitelist-only rules remain compatible (no exclude flag)', () => {
+    const dialogue = '<content>正文</content>\n<think>思考</think>';
+    assert.equal(extractDialogueBodies(dialogue, [{ tag: 'content' }]), '正文');
+});

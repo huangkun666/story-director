@@ -2211,3 +2211,10 @@
     text-align: center;
     font-size: 12px;
 }
+
+/* 黑名单（排除）提取规则 chips：与白名单视觉区分 */
+.sd_extract_chip_exclude {
+    border-color: var(--sd-red-soft);
+    background: var(--sd-red-bg);
+    color: var(--sd-text-2);
+}

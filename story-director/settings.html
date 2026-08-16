@@ -292,12 +292,14 @@
                     <div class="sd_card_body">
                         <div class="sd_extract_rules" id="sd_extract_rules"></div>
                         <div class="sd_extract_add">
-                            <input id="sd_extract_tag" type="text" placeholder="正文 HTML 标签名，如 content / speech（不含尖括号）" />
-                            <div id="sd_extract_add_btn" class="menu_button sd_btn" title="手动添加正文标签规则"><i class="fa-solid fa-plus"></i><span>添加</span></div>
-                            <div id="sd_extract_analyze" class="menu_button sd_btn" title="让 AI 扫描最近对话，自动识别正文标签样式，结果由你确认"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI 分析</span></div>
+                            <input id="sd_extract_tag" type="text" placeholder="保留标签（白名单），如 content / speech" />
+                            <div id="sd_extract_add_btn" class="menu_button sd_btn" title="只提取该标签内的内容"><i class="fa-solid fa-plus"></i><span>添加保留</span></div>
+                            <input id="sd_extract_exclude_tag" type="text" placeholder="排除标签（黑名单），如 think / reasoning" />
+                            <div id="sd_extract_exclude_btn" class="menu_button sd_btn" title="删除该标签块及其内容，保留其余全文"><i class="fa-solid fa-ban"></i><span>添加排除</span></div>
+                            <div id="sd_extract_analyze" class="menu_button sd_btn" title="让 AI 扫描最近对话，自动识别正文标签与应排除的标签，结果由你确认"><i class="fa-solid fa-wand-magic-sparkles"></i><span>AI 分析</span></div>
                         </div>
                         <div id="sd_extract_result" class="sd_extract_result"></div>
-                        <small class="sd_hint">正文包裹在 HTML 标签里时填标签名（如 &lt;content&gt;…&lt;/content&gt;）；&lt;think&gt; 等思考标签会自动排除，不设规则 = 提取全文。AI 分析可自动识别对话中的正文标签样式。</small>
+                        <small class="sd_hint">白名单：正文包裹在 &lt;content&gt; 等标签里时，只提取标签内内容；黑名单：正文没标签包裹时，排除 &lt;think&gt; 等无用标签块、保留其余全文。两者可叠加（先排除再提取）；都不设置 = 提取全文。</small>
                     </div>
                 </section>
             </section>

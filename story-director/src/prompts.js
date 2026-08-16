@@ -433,10 +433,12 @@ ${driftInstruction} 若剧情已越过 timeline.end，把 focus.nextStep 写成�
 // 用于节点编辑器的「AI 生成」入口（生成后填入表单，由用户确认再保存）。
 // 对话正文标签分析：让 AI 扫描最近对话，识别正文的包裹标签样式，
 // 返回规则建议供用户检查确认（不做自动生效）。
-// 支持两种正文包裹样式：
-//   HTML 标签（推荐）：如 <content>…</content>、<speech>…</speech>——输出 { type: 'html_tag', tag }
-//   字符对：如 【…】、*…*——输出 { type: 'pair', open, close }
-// 思考/推理过程（如 <think>、<reasoning>）不属于正文，不要识别为正文标签。
+// 支持三种规则形态：
+//   白名单 HTML 标签：正文包裹标签，如 <content>…</content>——{ type: 'html_tag', tag, exclude: false }
+//   黑名单 HTML 标签：无用信息标签，如 <think>…</think>——{ type: 'html_tag', tag, exclude: true }
+//   字符对：如 【…】、*…*——{ type: 'pair', open, close }
+// 思考/推理过程（如 <think>、<reasoning>）不属于正文：有正文标签时建议白名单，
+// 正文没标签包裹时建议把 think 等列为黑名单（排除后保留其余全文）。
 export function buildDialogueAnalyzePrompt({ dialogue = '' } = {}) {
     const system = '你是叙事导演。分析角色扮演对话中「正文」的包裹标签样式，输出 JSON。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `【最近对话】
@@ -446,16 +448,16 @@ ${String(dialogue || '').slice(0, 8000)}
 
 {
   "patterns": [
-    { "type": "html_tag", "tag": "content", "label": "正文", "sample": "从对话中摘一句真实提取结果示例" }
+    { "type": "html_tag", "tag": "content", "exclude": false, "label": "正文", "sample": "从对话中摘一句真实提取结果示例" }
   ],
   "note": "一句话说明这些规则如何工作（可选）"
 }
 
 要求：
-1. 若正文包裹在 HTML 标签中（如 <content>…</content>、<speech>…</speech> 等），输出 type 为 "html_tag"，tag 为标签名（不含尖括号，按对话中真实出现的标签）；
-2. 若正文用字符对包裹（如【…】、*…*），输出 type 为 "pair"，open/close 为真实开始/结束符；
-3. 思考/推理过程（如 <think>、<reasoning>、<thought>）不是正文，不要识别为正文标签；动作旁白与括号注释同样不算正文；
-4. 只输出对话中真实出现的样式（1-3 条）；若对话中没有明显的标签包裹正文，patterns 输出空数组；不要臆造不存在的标签。`;
+1. 若正文包裹在 HTML 标签中（如 <content>…</content>、<speech>…</speech> 等），输出 type 为 "html_tag"、exclude 为 false，tag 为标签名（不含尖括号，按对话中真实出现的标签）；
+2. 若对话中存在明显的非正文标签（如 <think>、<reasoning>、<thought> 等思考/推理内容），也输出为 html_tag 规则且 exclude 为 true（黑名单：提取时删除这些标签块，保留其余全文）——尤其是正文没有标签包裹时，黑名单是唯一可用的清理方式；
+3. 若正文用字符对包裹（如【…】、*…*），输出 type 为 "pair"，open/close 为真实开始/结束符；
+4. 只输出对话中真实出现的样式（1-4 条，白名单与黑名单都算）；若对话中既没有正文标签也没有可排除的标签，patterns 输出空数组；不要臆造不存在的标签。`;
     return { system, prompt };
 }
 
