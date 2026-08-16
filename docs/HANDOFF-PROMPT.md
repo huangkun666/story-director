@@ -180,6 +180,11 @@ story-director/
 
 ### 尚未完成 / 可继续的方向
 
+- 🔜 **世界模式「事件修正」（下一优先）**：世界模式已上线（见功能 22），但主角行动打乱世界预设时，修订还只能推进事件状态、不能改写。需补三块：
+  1. **eventChanges 扩展**：支持 `cancelled`（主角介入导致事件不再发生）+ `newEvents`（主角引发的新事件）——「预设被打乱」= 世界对主角的反应，修订时把事件表改写成新现实，而非删除；
+  2. **ambient 自动推进**：修订 prompt 明确「背景事件按世界时钟自动推进（不依赖主角位置/行为），时间到就转 active/paid」，direct 事件才看主角行为——解决"主角不去许都，曹军集结永远挂着"的假死；
+  3. **outcome 记录变化原因**：事件变形时写明「因主角 X 行动」，总览页可见世界如何被主角改变（玩家行动留下可见痕迹——RP 爽点）。
+  schema/applyPatch/世界修订 prompt/总览渲染四层都要动，测试同步补。
 - ✅ **发布治理已完成**：仓库 https://github.com/huangkun666/story-director（public），homepage 已填，69 个提交 + `v0.11.1` tag 已推送，release 已发（https://github.com/huangkun666/story-director/releases/tag/v0.11.1 ，含 tgz 附件）。后续发新版：`npm pack` 或 tar 打包 → `gh release create` / REST API 传附件。
 - UI 层测试仍少（ui-render 部分函数有测，事件绑定靠手动验证）。
 - 记忆指针的 UI 展示（如「记忆缺口 N 层」状态显示）——可选。
