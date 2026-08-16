@@ -299,9 +299,11 @@ export function createSillyTavernAdapter(ctx) {
             const merged = blocks.join('\n').slice(0, limit);
             const perQuery = queries.map(q => {
                 const n = hits.filter(h => h.query === q).length;
-                return `${q.slice(0, 40)}${q.length > 40 ? '…' : ''}×${n}`;
-            }).join('；');
-            log('info', 'retrieval', '向量检索', `查询 ${queries.length} 路：${perQuery}；命中 ${hits.length} 条 / 文本 ${merged.length} 字符`);
+                return `${q}×${n}`;
+            }).join('\n');
+            const hitSamples = hits.slice(0, 5).map(h => `- [${h.source || '向量资料'}] ${String(h.text || '').slice(0, 300)}`).join('\n');
+            log('info', 'retrieval', '向量检索',
+                `查询 ${queries.length} 路（每路 top 3）：\n${perQuery}\n命中 ${hits.length} 条 / 文本 ${merged.length} 字符${hitSamples ? `\n${hitSamples}` : ''}`);
             return { text: merged, hits };
         } catch (err) {
             console.warn('[story-director] vector memory search failed:', err);
@@ -413,18 +415,33 @@ export function createSillyTavernAdapter(ctx) {
         return testConnectionApi({ fetchImpl: (...args) => fetch(...args), ...llmConfigFor(opts) });
     }
 
+    // 终端内容详情限长：prompt/返回各存前 N 字符（展开详情可看全文片段），防环形缓冲内存膨胀
+    const LLM_LOG_PREVIEW = 4000;
+
     function generateRaw(opts) {
         const llm = getLlmSettings();
         const t0 = Date.now();
         const promptChars = String(opts?.prompt || '').length;
         const systemChars = String(opts?.systemPrompt || '').length;
         // 所有 LLM 调用（方向草案/生成/修订/体检/AI 节点/标签分析）统一打点，
-        // 终端可看到每次调用的模式/模型/上下文体积/耗时/返回
+        // 终端可看到每次调用的模式/模型/上下文体积/耗时/返回 + prompt/返回内容片段
         const logCall = (result, err) => {
             const ms = Date.now() - t0;
-            const resultChars = result != null ? String(typeof result === 'string' ? result : JSON.stringify(result) || '').length : 0;
-            log('info', 'llm', 'LLM 调用',
-                `${llm.mode === 'custom' ? `独立模式${llm.model ? ` / ${llm.model}` : ''}` : '主 API'}；上下文 ${(systemChars + promptChars).toLocaleString()} 字符（system ${systemChars.toLocaleString()} + prompt ${promptChars.toLocaleString()}）；耗时 ${ms}ms；返回 ${resultChars.toLocaleString()} 字符${err ? `；失败：${String(err?.message || err)}` : ''}`);
+            const resultStr = result != null ? String(typeof result === 'string' ? result : JSON.stringify(result) || '') : '';
+            const resultChars = resultStr.length;
+            const promptStr = String(opts?.prompt || '');
+            const promptPreview = promptStr.slice(0, LLM_LOG_PREVIEW);
+            const resultPreview = resultStr.slice(0, LLM_LOG_PREVIEW);
+            const parts = [
+                `${llm.mode === 'custom' ? `独立模式${llm.model ? ` / ${llm.model}` : ''}` : '主 API'}；上下文 ${(systemChars + promptChars).toLocaleString()} 字符（system ${systemChars.toLocaleString()} + prompt ${promptChars.toLocaleString()}）；耗时 ${ms}ms；返回 ${resultChars.toLocaleString()} 字符${err ? `；失败：${String(err?.message || err)}` : ''}`,
+            ];
+            if (promptPreview) {
+                parts.push(`【prompt（前 ${LLM_LOG_PREVIEW} 字符）】\n${promptPreview}${promptChars > LLM_LOG_PREVIEW ? '\n…（已截断）' : ''}`);
+            }
+            if (resultPreview) {
+                parts.push(`【返回（前 ${LLM_LOG_PREVIEW} 字符）】\n${resultPreview}${resultChars > LLM_LOG_PREVIEW ? '\n…（已截断）' : ''}`);
+            }
+            log('info', 'llm', 'LLM 调用', parts.join('\n'));
             return result;
         };
         if (llm.mode === 'custom') {
