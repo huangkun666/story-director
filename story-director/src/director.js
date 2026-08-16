@@ -37,7 +37,7 @@ export function createDirector(deps) {
         deps.setInjectedInstruction(text);
     }
 
-    async function generate({ userRequest = '', timeline } = {}) {
+    async function generate({ userRequest = '', timeline, mustRead } = {}) {
         if (running) return null;
         running = true;
         try {
@@ -46,6 +46,8 @@ export function createDirector(deps) {
             const currentOutline = deps.getOutline();
             const storedTimeline = currentOutline.timeline || {};
             const requestedTimeline = (timeline && typeof timeline === 'object') ? timeline : storedTimeline;
+            // 必读设定是顶层独立字段：显式传入（UI 输入）优先，否则沿用大纲已有值
+            const requestedMustRead = typeof mustRead === 'string' ? mustRead : (currentOutline.mustRead || '');
 
             // 生成大纲的记忆模式：auto = 摘要+向量；summary = 只读记忆表；vector = 只检索资料；none = 只看角色卡和用户要求
             const memoryMode = settings.generateMemoryMode || 'auto';
@@ -81,6 +83,7 @@ export function createDirector(deps) {
                         characterCard: card,
                         userRequest,
                         timeline: requestedTimeline,
+                        mustRead: requestedMustRead,
                         pacing: settings.beatPacing || 'balanced',
                         historyContext,
                         ongoingBeatText,
@@ -100,7 +103,7 @@ export function createDirector(deps) {
 
             // 向量检索：模型定向查询优先 + 保底查询（时间线/角色/焦点）
             const baseQueries = [
-                [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedTimeline?.mustRead].filter(Boolean).join(' '),
+                [userRequest, requestedTimeline?.start, requestedTimeline?.end, requestedTimeline?.note, requestedMustRead].filter(Boolean).join(' '),
                 // 角色查询词精简：全量名录会让 query 过长过泛，只取前 5 个主要角色
                 card.cast ? `角色与关系：${String(card.cast).split('；').slice(0, 5).join('；')}` : '',
                 currentOutline.focus?.nextStep || currentOutline.theme || '',
@@ -125,6 +128,7 @@ export function createDirector(deps) {
                 userRequest,
                 detail: settings.outlineDetail || 'medium',
                 timeline: requestedTimeline,
+                mustRead: requestedMustRead,
                 pacing: settings.beatPacing || 'balanced',
                 historyContext,
                 ongoingBeatText,
@@ -137,14 +141,17 @@ export function createDirector(deps) {
             if (result) {
                 let next = normalizeOutline(result);
                 // 用户显式指定过时间线时，以用户输入为准（模型输出只补漏）
-                const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note || requestedTimeline?.mustRead);
+                const hasRequestedTimeline = !!(requestedTimeline?.start || requestedTimeline?.end || requestedTimeline?.note);
                 if (hasRequestedTimeline) {
                     next.timeline = {
                         start: requestedTimeline.start || next.timeline.start,
                         end: requestedTimeline.end || next.timeline.end,
                         note: requestedTimeline.note || next.timeline.note,
-                        mustRead: requestedTimeline.mustRead || next.timeline.mustRead,
                     };
+                }
+                // 必读设定同样以用户输入为准（模型输出只补漏）
+                if (requestedMustRead) {
+                    next.mustRead = requestedMustRead;
                 }
                 if (preserveHistory) {
                     next = mergeHistoryIntoOutline(next, currentOutline);

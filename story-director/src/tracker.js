@@ -11,6 +11,7 @@ export function mergeLockedOutline(prevOutline, patch) {
     const merged = normalizeOutline(patch);
 
     merged.timeline = base.timeline;
+    merged.mustRead = base.mustRead;
     const baseActIds = new Set(base.acts.map(a => a.id));
     const extraActs = merged.acts.filter(a => !baseActIds.has(a.id));
     merged.acts = base.acts.map(baseAct => {

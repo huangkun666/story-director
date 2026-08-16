@@ -60,7 +60,7 @@ function arcMeta(status) {
 }
 
 function hasOutlineContent(o) {
-    return !!(o.theme || o.tone || o.world || o.timeline?.start || o.timeline?.end || o.timeline?.mustRead || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
+    return !!(o.theme || o.tone || o.world || o.mustRead || o.timeline?.start || o.timeline?.end || o.arcs.length || o.foreshadowing.length || o.acts.length || o.beats.length);
 }
 
 // 窗口位置视口钳制：把 {left, top} 夹进可视区域，保证窗口不会开在屏幕外。
@@ -125,7 +125,7 @@ function storyCardHtml(o) {
         const range = [o.timeline.start, o.timeline.end].filter(Boolean).join(' → ');
         rows.push(`<div class="sd_kv sd_kv_timeline"><span class="sd_kv_key">时间线</span><span class="sd_kv_value">${escapeHtml(range)}${o.timeline.note ? `（${escapeHtml(o.timeline.note)}）` : ''}</span></div>`);
     }
-    if (o.timeline?.mustRead) rows.push(`<div class="sd_kv sd_kv_mustread"><span class="sd_kv_key">必读设定</span><span class="sd_kv_value">${escapeHtml(o.timeline.mustRead)}</span></div>`);
+    if (o.mustRead) rows.push(`<div class="sd_kv sd_kv_mustread"><span class="sd_kv_key">必读设定</span><span class="sd_kv_value">${escapeHtml(o.mustRead)}</span></div>`);
     if (o.theme) rows.push(`<div class="sd_kv"><span class="sd_kv_key">主题</span><span class="sd_kv_value">${escapeHtml(o.theme)}</span></div>`);
     if (o.tone) rows.push(`<div class="sd_kv"><span class="sd_kv_key">基调</span><span class="sd_kv_value">${escapeHtml(o.tone)}</span></div>`);
     if (o.world) rows.push(`<div class="sd_kv sd_kv_world"><span class="sd_kv_key">世界观</span><span class="sd_kv_value">${escapeHtml(o.world)}</span></div>`);
@@ -309,7 +309,7 @@ function syncTimelineInputs(outline) {
     set('sd_timeline_start', o.timeline?.start);
     set('sd_timeline_end', o.timeline?.end);
     set('sd_timeline_note', o.timeline?.note);
-    set('sd_timeline_must_read', o.timeline?.mustRead);
+    set('sd_must_read', o.mustRead);
 }
 function renderReport(report, label = '大纲体检') {
     const el = document.getElementById('sd_report');

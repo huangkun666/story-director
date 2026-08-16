@@ -10,6 +10,7 @@ export const OUTLINE_SCHEMA = {
         theme: { type: 'string', description: '故事主题' },
         tone: { type: 'string', description: '情绪基调' },
         world: { type: 'string', description: '世界观与冲突根源' },
+        mustRead: { type: 'string', description: '必读设定（最高优先级的世界观硬约束，没有则留空）' },
         timeline: {
             type: 'object',
             required: ['start', 'end', 'note'],
@@ -17,7 +18,6 @@ export const OUTLINE_SCHEMA = {
                 start: { type: 'string', description: '大纲覆盖的故事内开始时间' },
                 end: { type: 'string', description: '大纲覆盖的故事内结束时间' },
                 note: { type: 'string', description: '时间线补充约束' },
-                mustRead: { type: 'string', description: '必读设定，最高优先级' },
             },
         },
         arcs: {
@@ -183,7 +183,7 @@ export const DIRECTION_SCHEMA = {
     },
 };
 
-export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '' } = {}) {
+export function buildGeneratePrompt({ characterCard, userRequest = '', detail = 'medium', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '', direction = '', memoryContext = '', vectorContext = '' } = {}) {
     const detailWord = { low: '简洁', medium: '适中', high: '详尽' }[detail] || '适中';
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
     const memoryText = String(memoryContext || '').trim();
@@ -212,8 +212,10 @@ ${dialogueText}
     const directionText = String(direction || '').trim();
     const directionBlock = directionText ? `【大纲方向（先行草案，请按此展开并细化）】
 ${directionText}\n` : '';
-    const hasTimeline = !!(t.start || t.end || t.note || t.mustRead);
-    const mustReadBlock = t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
+    const hasTimeline = !!(t.start || t.end || t.note);
+    // 必读设定：顶层独立字段优先；兼容旧调用把 mustRead 放在 timeline 对象里
+    const mustReadText = String(mustRead || '').trim() || String(t.mustRead || '').trim();
+    const mustReadBlock = mustReadPrompt(mustReadText);
     const timelineBlock = (t.start || t.end || t.note)
         ? `【时间线约束（必须遵守）】
 - 开始时间：${t.start || '（未指定，请根据故事背景推定）'}
@@ -264,7 +266,8 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
   "theme": "故事主题",
   "tone": "情绪基调",
   "world": "世界观与冲突根源",
-  "timeline": { "start": "大纲开始时间", "end": "大纲结束时间", "note": "时间线说明", "mustRead": "必读设定（没有则留空）" },
+  "mustRead": "必读设定（没有则留空）",
+  "timeline": { "start": "大纲开始时间", "end": "大纲结束时间", "note": "时间线说明" },
   "arcs": [
     { "character": "主角", "arc": "完整弧光：欲望、缺陷、成长与结局方向", "status": "active" },
     { "character": "主要对手/反派", "arc": "其独立动机、行动与结局方向", "status": "pending" },
@@ -311,8 +314,9 @@ export function compactOutlineForRevision(outline) {
 // 两阶段生成第一步：方向草案。输入与正式生成相同的上下文（不含向量结果），
 // 让模型先「想清楚怎么写」并输出精准检索词，再执行第二轮检索，最后正式生成。
 // 解决「query 在还没想好写什么时执行」导致的检索不准确问题。
-export function buildDirectionPrompt({ characterCard, userRequest = '', timeline, pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '' } = {}) {
+export function buildDirectionPrompt({ characterCard, userRequest = '', timeline, mustRead = '', pacing = 'balanced', historyContext = '', ongoingBeatText = '', recentDialogue = '' } = {}) {
     const t = (timeline && typeof timeline === 'object') ? timeline : {};
+    const mustReadText = String(mustRead || '').trim() || String(t.mustRead || '').trim();
     const historyText = String(historyContext || '').trim();
     const historyBlock = historyText ? `【已发生的剧情事实（来自旧大纲，时间线调整前的既定历史）】\n${historyText}\n` : '';
     const ongoingText = String(ongoingBeatText || '').trim();
@@ -330,7 +334,7 @@ ${t.note ? `- 补充约束：${t.note}` : ''}\n`
     const system = '你是叙事导演。先想清楚新大纲的方向，再列出为写出这个方向需要查证哪些资料（JSON）。只输出 JSON，不要 markdown 代码块，不要任何解释文字。';
     const prompt = `请为以下角色扮演规划新大纲的方向。方向由故事逻辑与上下文决定，不要只围绕已有资料写。
 
-${mustReadPrompt(t)}${timelineBlock}【节点节奏（档位：${pacingMeta.label}）】
+${mustReadPrompt(mustReadText)}${timelineBlock}【节点节奏（档位：${pacingMeta.label}）】
 ${pacingMeta.desc}。
 
 ${ongoingBlock}${dialogueBlock}${historyBlock}【角色卡】
@@ -353,8 +357,9 @@ ${userRequest || '（未指定，请自行设计一个有深度的完整故事�
     return { system, prompt };
 }
 
-function mustReadPrompt(t) {
-    return t.mustRead ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t.mustRead}\n` : '';
+function mustReadPrompt(text) {
+    const t = String(text || '').trim();
+    return t ? `【必读设定（最高优先级，与任何其他设定冲突时以此为准）】\n${t}\n` : '';
 }
 
 export function buildRevisePrompt({ recentDialogue = '', outline, driftTolerance = 'loose', locked = false, pacing = 'balanced', memoryContext = '', vectorContext = '' }) {

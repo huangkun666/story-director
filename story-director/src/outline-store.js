@@ -16,11 +16,11 @@ export function createEmptyOutline() {
         theme: '',
         tone: '',
         world: '',
+        mustRead: '',
         timeline: {
             start: '',
             end: '',
             note: '',
-            mustRead: '',
         },
         arcs: [],
         foreshadowing: [],
@@ -135,20 +135,18 @@ function normalizeTimeline(raw) {
     // 兼容字符串形式："建安五年 - 建安十三年"
     if (typeof raw === 'string') {
         const s = raw.trim();
-        if (!s) return { start: '', end: '', note: '', mustRead: '' };
+        if (!s) return { start: '', end: '', note: '' };
         const parts = s.split(/\s*[-–—~至到]\s*/);
         return {
             start: parts[0]?.trim() || '',
             end: parts[1]?.trim() || '',
             note: parts.length > 2 ? parts.slice(2).join(' - ').trim() : '',
-            mustRead: '',
         };
     }
     return {
         start: asString(t.start, ''),
         end: asString(t.end, ''),
         note: asString(t.note, '') || asString(t.constraint, ''),
-        mustRead: asString(t.mustRead, '') || asString(t.must_read, '') || asString(t.requiredLore, ''),
     };
 }
 
@@ -160,6 +158,14 @@ export function normalizeOutline(raw) {
     base.theme = asString(raw.theme, '');
     base.tone = asString(raw.tone, '');
     base.world = asString(raw.world, '');
+    // 必读设定是顶层独立字段（世界观级硬约束，与时间线无关）。
+    // 兼容迁移：旧数据/模型输出把 mustRead 放在 timeline 里，自动搬到顶层。
+    const rawTimeline = (raw.timeline && typeof raw.timeline === 'object') ? raw.timeline : {};
+    base.mustRead = asString(raw.mustRead, '')
+        || asString(raw.must_read, '')
+        || asString(rawTimeline.mustRead, '')
+        || asString(rawTimeline.must_read, '')
+        || asString(rawTimeline.requiredLore, '');
     base.timeline = normalizeTimeline(raw.timeline);
     base.arcs = Array.isArray(raw.arcs) ? raw.arcs.map(normalizeArc).filter(Boolean) : [];
     base.foreshadowing = Array.isArray(raw.foreshadowing) ? raw.foreshadowing.map((f, i) => normalizeForeshadow(f, i)).filter(Boolean) : [];

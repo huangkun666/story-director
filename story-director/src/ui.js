@@ -133,17 +133,19 @@ export function bindUI(ctx, adapter) {
         ctx.saveSettingsDebounced?.();
     });
 
-    // 时间线约束：存进当前聊天的大纲（chat_metadata），生成时作为硬约束传给模型
+    // 时间线约束：存进当前聊天的大纲（chat_metadata），生成时作为硬约束传给模型。
+    // 必读设定是顶层独立字段（世界观级硬约束），同样存进大纲。
     const timelineField = (id) => document.getElementById(id);
     const readTimeline = () => ({
         start: timelineField('sd_timeline_start')?.value?.trim() || '',
         end: timelineField('sd_timeline_end')?.value?.trim() || '',
         note: timelineField('sd_timeline_note')?.value?.trim() || '',
-        mustRead: timelineField('sd_timeline_must_read')?.value?.trim() || '',
     });
+    const readMustRead = () => timelineField('sd_must_read')?.value?.trim() || '';
     const persistTimeline = () => {
         const outline = adapter.getOutline();
         outline.timeline = readTimeline();
+        outline.mustRead = readMustRead();
         adapter.setOutline(outline);
         return outline.timeline;
     };
@@ -154,13 +156,13 @@ export function bindUI(ctx, adapter) {
     bindTimelineField('sd_timeline_start');
     bindTimelineField('sd_timeline_end');
     bindTimelineField('sd_timeline_note');
-    bindTimelineField('sd_timeline_must_read');
+    bindTimelineField('sd_must_read');
 
     const runGenerate = (btn) => runAction(btn, {
         label: '生成',
         call: () => {
             persistTimeline();
-            return adapter.director.generate({ userRequest: '', timeline: readTimeline() });
+            return adapter.director.generate({ userRequest: '', timeline: readTimeline(), mustRead: readMustRead() });
         },
     });
     const runRevise = (btn) => runAction(btn, {

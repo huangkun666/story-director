@@ -102,10 +102,6 @@
                                     <input id="sd_timeline_note" type="text" placeholder="必须包含的关键事件（可选）" />
                                 </label>
                                 <label class="sd_setting sd_setting_wide">
-                                    <span class="sd_setting_label">必读设定</span>
-                                    <textarea id="sd_timeline_must_read" rows="2" placeholder="最高优先级设定，例如：这个世界魔法会消耗寿命"></textarea>
-                                </label>
-                                <label class="sd_setting sd_setting_wide">
                                     <span class="sd_setting_label">节点节奏</span>
                                     <select id="sd_beat_pacing">
                                         <option value="balanced">均衡（均匀分布）</option>
@@ -124,6 +120,22 @@
                                 </label>
                             </div>
                         </div>
+                    </div>
+                </section>
+
+                <section class="sd_card sd_section_card">
+                    <header class="sd_card_header">
+                        <span class="sd_card_icon"><i class="fa-solid fa-bookmark"></i></span>
+                        <div class="sd_card_titles">
+                            <b>必读设定</b>
+                            <small>世界观级硬约束，独立于时间线；生成 / 修订 / 体检强制执行</small>
+                        </div>
+                    </header>
+                    <div class="sd_card_body">
+                        <label class="sd_setting sd_setting_wide">
+                            <span class="sd_setting_label">必读设定</span>
+                            <textarea id="sd_must_read" rows="3" placeholder="最高优先级设定，例如：这个世界魔法会消耗寿命。无论时间线如何变化都必须遵守"></textarea>
+                        </label>
                     </div>
                 </section>
 
