@@ -174,6 +174,12 @@ export function normalizeOutline(raw) {
         }
     }
 
+    // 引用完整性：beat.actId 是唯一事实来源，acts[].beats 一律派生重建，
+    // 消灭「两边各存一份、只改一边就过时」的双向不一致
+    for (const act of base.acts) {
+        act.beats = base.beats.filter(b => b.actId === act.id).map(b => b.id);
+    }
+
     const focus = (raw.focus && typeof raw.focus === 'object') ? raw.focus : {};
     base.focus.currentBeat = asString(focus.currentBeat, '') || asString(focus.current_beat, '');
     base.focus.nextStep = asString(focus.nextStep, '') || asString(focus.immediate_goal, '') || asString(focus.goal, '');
@@ -187,6 +193,13 @@ export function normalizeOutline(raw) {
         const firstActiveOrPending = base.beats.find(b => b.status === 'active' || b.status === 'pending');
         base.focus.currentBeat = firstActiveOrPending ? firstActiveOrPending.id : '';
     }
+
+    // 引用自愈：伏笔的回收节点已不存在 → 清空 beatId（由下次修订重新安排回收点）
+    for (const f of base.foreshadowing) {
+        if (f.beatId && !base.beats.some(b => b.id === f.beatId)) f.beatId = '';
+    }
+    // 引用自愈：焦点里活跃伏笔已不存在 → 过滤
+    base.focus.activeForeshadow = base.focus.activeForeshadow.filter(id => base.foreshadowing.some(f => f.id === id));
 
     const meta = (raw.meta && typeof raw.meta === 'object') ? raw.meta : {};
     base.meta.updatedAt = asString(meta.updatedAt, '');
@@ -238,4 +251,71 @@ export function jumpToBeat(outline, beatId) {
     o.focus.nextStep = '';
     o.meta.updatedAt = new Date().toISOString();
     return o;
+}
+
+// ---------- 受控编辑纯函数 ----------
+// 所有修改都返回新大纲（不修改入参），引用完整性由 normalizeOutline 统一保证：
+// beat.actId 是唯一事实，acts[].beats 派生；悬空引用自愈。
+
+// 确保 actId 指向的幕存在（手动编辑时用户意图明确，自动补幕）
+function ensureAct(o, actId) {
+    if (!actId) return o;
+    if (o.acts.some(a => a.id === actId)) return o;
+    o.acts.push({ id: actId, title: actId, summary: '', beats: [] });
+    return o;
+}
+
+export function createBeat(outline, { title = '未命名节点', summary = '', type = 'setup', status = 'pending', actId = '', cast = [] } = {}) {
+    const o = normalizeOutline(outline);
+    ensureAct(o, actId);
+    const beat = normalizeBeat({
+        id: `beat_${Date.now()}_${o.beats.length + 1}`,
+        title,
+        summary,
+        type,
+        status,
+        actId,
+        cast,
+    }, o.beats.length);
+    o.beats.push(beat);
+    return normalizeOutline(o);
+}
+
+export function updateBeat(outline, beatId, patch) {
+    const o = normalizeOutline(outline);
+    const beat = o.beats.find(b => b.id === beatId);
+    if (!beat || !patch || typeof patch !== 'object') return o;
+    if (typeof patch.title === 'string') beat.title = patch.title;
+    if (typeof patch.summary === 'string') beat.summary = patch.summary;
+    if (VALID_BEAT_TYPE.has(patch.type)) beat.type = patch.type;
+    if (Array.isArray(patch.cast)) beat.cast = patch.cast.map(x => String(x).trim()).filter(Boolean);
+    if (typeof patch.actId === 'string' && patch.actId !== beat.actId) {
+        beat.actId = patch.actId;
+        ensureAct(o, patch.actId);
+    }
+    return normalizeOutline(o);
+}
+
+export function removeBeat(outline, beatId) {
+    const o = normalizeOutline(outline);
+    const idx = o.beats.findIndex(b => b.id === beatId);
+    if (idx < 0) return o;
+    o.beats.splice(idx, 1);
+    // 伏笔回收点、焦点节点等悬空引用由 normalizeOutline 自愈
+    return normalizeOutline(o);
+}
+
+// 同幕内上移/下移（delta = -1 / +1），数组顺序即时间线顺序
+export function moveBeatOrder(outline, beatId, delta) {
+    const o = normalizeOutline(outline);
+    const beat = o.beats.find(b => b.id === beatId);
+    if (!beat) return o;
+    const siblings = o.beats.filter(b => b.actId === beat.actId);
+    const idx = siblings.findIndex(b => b.id === beatId);
+    const target = siblings[idx + delta];
+    if (idx < 0 || !target) return o;
+    const i = o.beats.indexOf(beat);
+    const j = o.beats.indexOf(target);
+    [o.beats[i], o.beats[j]] = [o.beats[j], o.beats[i]];
+    return normalizeOutline(o);
 }

@@ -1,6 +1,6 @@
 // story-director/src/ui.js
 // UI 层：渲染面板、绑定事件、手动编辑。依赖浏览器 DOM 与酒馆 ctx。
-import { createEmptyOutline, normalizeOutline, jumpToBeat } from './outline-store.js';
+import { createEmptyOutline, normalizeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder } from './outline-store.js';
 
 const BEAT_META = {
     pending: { label: '待开始', cls: 'sd_badge_pending', icon: 'fa-regular fa-circle' },
@@ -735,35 +735,12 @@ export function bindUI(ctx, adapter) {
 
         adapter.recordHistory?.(outline, 'manual');
 
-        let beat;
-        if (editingBeatId) {
-            beat = outline.beats.find(b => b.id === editingBeatId);
-            if (!beat) return;
-        } else {
-            beat = { id: `beat_${Date.now()}`, title, summary, type, status: 'pending', actId, cast: [] };
-            outline.beats.push(beat);
-        }
-        beat.title = title;
-        beat.summary = summary;
-        beat.type = type;
-        beat.actId = actId;
-        beat.cast = cast;
+        // 受控纯函数：actId 是唯一事实，acts.beats 派生；自动补幕
+        const updated = editingBeatId
+            ? updateBeat(outline, editingBeatId, { title, summary, type, actId, cast })
+            : createBeat(outline, { title, summary, type, actId, cast });
 
-        // 同步 acts.beats 列表
-        let act = outline.acts.find(a => a.id === actId);
-        if (!act && actId) {
-            act = { id: actId, title: actId, summary: '', beats: [] };
-            outline.acts.push(act);
-        }
-        for (const a of outline.acts) {
-            if (a.beats?.includes(beat.id) && a.id !== actId) a.beats = a.beats.filter(x => x !== beat.id);
-        }
-        if (act) {
-            act.beats = act.beats || [];
-            if (!act.beats.includes(beat.id)) act.beats.push(beat.id);
-        }
-
-        adapter.setOutline(outline);
+        adapter.setOutline(updated);
         adapter.renderOutline();
         adapter.director.refreshInjection();
         closeBeatEditor();
@@ -772,18 +749,11 @@ export function bindUI(ctx, adapter) {
     function moveEditingBeat(delta) {
         if (!editingBeatId) return;
         const outline = adapter.getOutline();
-        const beat = outline.beats.find(b => b.id === editingBeatId);
-        if (!beat) return;
-        const siblings = outline.beats.filter(b => b.actId === beat.actId);
-        const idx = siblings.findIndex(b => b.id === beat.id);
-        const target = siblings[idx + delta];
-        if (idx < 0 || !target) return;
-        const arr = outline.beats;
-        const i = arr.indexOf(beat);
-        const j = arr.indexOf(target);
+        const updated = moveBeatOrder(outline, editingBeatId, delta);
+        // 已在边界时顺序不变，不产生无效快照
+        if (updated.beats.map(b => b.id).join() === outline.beats.map(b => b.id).join()) return;
         adapter.recordHistory?.(outline, 'manual');
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-        adapter.setOutline(outline);
+        adapter.setOutline(updated);
         adapter.renderOutline();
     }
 
@@ -828,15 +798,10 @@ export function bindUI(ctx, adapter) {
     document.getElementById('sd_beat_delete')?.addEventListener('click', () => {
         if (!editingBeatId) return closeBeatEditor();
         const outline = adapter.getOutline();
-        const idx = outline.beats.findIndex(b => b.id === editingBeatId);
-        if (idx < 0) return closeBeatEditor();
         adapter.recordHistory?.(outline, 'manual');
-        outline.beats.splice(idx, 1);
-        for (const act of outline.acts) act.beats = (act.beats || []).filter(x => x !== editingBeatId);
-        if (outline.focus.currentBeat === editingBeatId) {
-            outline.focus.currentBeat = outline.beats.find(b => b.status === 'active' || b.status === 'pending')?.id || '';
-        }
-        adapter.setOutline(outline);
+        // 受控删除：伏笔回收点 / 焦点节点等悬空引用由 normalize 自愈
+        const updated = removeBeat(outline, editingBeatId);
+        adapter.setOutline(updated);
         adapter.renderOutline();
         adapter.director.refreshInjection();
         closeBeatEditor();

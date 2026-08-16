@@ -1,7 +1,7 @@
 // story-director/test/outline-store.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat } from '../src/outline-store.js';
+import { createEmptyOutline, normalizeOutline, serializeOutline, deserializeOutline, jumpToBeat, createBeat, updateBeat, removeBeat, moveBeatOrder } from '../src/outline-store.js';
 
 test('createEmptyOutline returns valid empty structure', () => {
     const o = createEmptyOutline();
@@ -241,4 +241,117 @@ test('normalizeOutline caps checkHistory at 10 entries', () => {
     const entries = Array.from({ length: 15 }, (_, i) => ({ at: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`, verdict: 'sync' }));
     const o = normalizeOutline({ meta: { checkHistory: entries } });
     assert.equal(o.meta.checkHistory.length, 10);
+});
+
+test('normalizeOutline derives acts.beats from beat.actId as single source of truth', () => {
+    const o = normalizeOutline({
+        acts: [
+            { id: 'a1', title: '第一幕', beats: ['b1', 'b2'] }, // 陈旧列表
+            { id: 'a2', title: '第二幕', beats: [] },
+        ],
+        beats: [
+            { id: 'b1', actId: 'a1', title: '一', status: 'pending' },
+            { id: 'b2', actId: 'a2', title: '二', status: 'pending' }, // actId 说在 a2
+        ],
+    });
+    assert.deepEqual(o.acts[0].beats, ['b1']); // b2 按 actId 归入 a2
+    assert.deepEqual(o.acts[1].beats, ['b2']);
+});
+
+test('normalizeOutline clears foreshadowing beatId pointing at a missing beat', () => {
+    const o = normalizeOutline({
+        beats: [{ id: 'b1', title: '一', status: 'pending' }],
+        foreshadowing: [
+            { id: 'f1', hint: '回收于已删节点', status: 'pending', beatId: 'beat_gone' },
+            { id: 'f2', hint: '回收于现存节点', status: 'pending', beatId: 'b1' },
+        ],
+    });
+    assert.equal(o.foreshadowing[0].beatId, '');
+    assert.equal(o.foreshadowing[1].beatId, 'b1');
+});
+
+test('normalizeOutline filters dangling activeForeshadow ids', () => {
+    const o = normalizeOutline({
+        foreshadowing: [{ id: 'f1', hint: 'x', status: 'active' }],
+        focus: { activeForeshadow: ['f1', 'f_gone'] },
+    });
+    assert.deepEqual(o.focus.activeForeshadow, ['f1']);
+});
+
+test('createBeat appends a normalized beat and derives act lists', () => {
+    const o = createEmptyOutline();
+    o.acts = [{ id: 'a1', title: '第一幕', beats: [] }];
+    const out = createBeat(o, { title: '新节点', summary: '内容', type: 'twist', actId: 'a1', cast: ['主角'] });
+    assert.equal(out.beats.length, 1);
+    assert.equal(out.beats[0].title, '新节点');
+    assert.equal(out.beats[0].type, 'twist');
+    assert.deepEqual(out.acts[0].beats, [out.beats[0].id]);
+    assert.equal(o.beats.length, 0); // 入参未修改
+});
+
+test('createBeat auto-creates the act when actId does not exist', () => {
+    const o = createEmptyOutline();
+    const out = createBeat(o, { title: 'x', actId: 'act_new' });
+    assert.ok(out.acts.some(a => a.id === 'act_new'));
+    assert.equal(out.beats[0].actId, 'act_new');
+});
+
+test('updateBeat changes fields and re-derives act membership on actId change', () => {
+    const o = createEmptyOutline();
+    o.acts = [{ id: 'a1', title: '一', beats: [] }, { id: 'a2', title: '二', beats: [] }];
+    o.beats = [{ id: 'b1', actId: 'a1', title: '旧', summary: 's', type: 'setup', status: 'pending', cast: [] }];
+    const out = updateBeat(o, 'b1', { title: '新标题', type: 'climax', actId: 'a2', cast: ['主角', '配角'] });
+    assert.equal(out.beats[0].title, '新标题');
+    assert.equal(out.beats[0].type, 'climax');
+    assert.equal(out.beats[0].actId, 'a2');
+    assert.deepEqual(out.acts[0].beats, []); // 旧幕移除
+    assert.deepEqual(out.acts[1].beats, ['b1']); // 新幕加入
+    assert.deepEqual(o.acts[0].beats, []); // 入参未修改
+});
+
+test('updateBeat ignores unknown beat and invalid type', () => {
+    const o = createEmptyOutline();
+    o.beats = [{ id: 'b1', title: 'x', type: 'setup', status: 'pending' }];
+    const out = updateBeat(o, 'nope', { title: 'y' });
+    assert.equal(out.beats[0].title, 'x');
+    const out2 = updateBeat(o, 'b1', { type: 'bogus' });
+    assert.equal(out2.beats[0].type, 'setup');
+});
+
+test('removeBeat deletes beat and heals dangling references', () => {
+    const o = createEmptyOutline();
+    o.acts = [{ id: 'a1', title: '一', beats: ['b1'] }];
+    o.beats = [{ id: 'b1', actId: 'a1', title: '旧', status: 'active' }];
+    o.foreshadowing = [{ id: 'f1', hint: 'h', status: 'pending', payoff: '', beatId: 'b1' }];
+    o.focus.currentBeat = 'b1';
+    const out = removeBeat(o, 'b1');
+    assert.equal(out.beats.length, 0);
+    assert.deepEqual(out.acts[0].beats, []); // 派生列表同步
+    assert.equal(out.foreshadowing[0].beatId, ''); // 伏笔引用自愈
+    assert.equal(out.focus.currentBeat, ''); // 焦点自愈（无剩余节点）
+});
+
+test('removeBeat heals focus to the next active/pending beat', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', title: '当前', status: 'active' },
+        { id: 'b2', title: '下一个', status: 'pending' },
+    ];
+    o.focus.currentBeat = 'b1';
+    const out = removeBeat(o, 'b1');
+    assert.equal(out.focus.currentBeat, 'b2');
+});
+
+test('moveBeatOrder swaps within the same act only', () => {
+    const o = createEmptyOutline();
+    o.beats = [
+        { id: 'b1', actId: 'a1', title: '一', status: 'pending' },
+        { id: 'b2', actId: 'a1', title: '二', status: 'pending' },
+        { id: 'b3', actId: 'a2', title: '三', status: 'pending' },
+    ];
+    const down = moveBeatOrder(o, 'b1', 1);
+    assert.equal(down.beats[0].id, 'b2'); // 与 b2 交换
+    assert.equal(down.beats[1].id, 'b1');
+    const up = moveBeatOrder(o, 'b1', -1);
+    assert.deepEqual(up.beats.map(b => b.id), ['b1', 'b2', 'b3']); // 已在开头，不动
 });
